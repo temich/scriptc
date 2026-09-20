@@ -510,7 +510,11 @@ static ScrBigInt *bi_parse_fail(const ScrStr *s) {
   return NULL;
 }
 
-ScrBigInt *scr_bigint_parse(ScrStr *s) {
+static ScrBigInt *bi_parse_invalid(const ScrStr *s, bool report_error) {
+  return report_error ? bi_parse_fail(s) : NULL;
+}
+
+static ScrBigInt *bi_parse_string(ScrStr *s, bool report_error) {
   size_t lo = 0, hi = s->len;
   size_t width;
   while (lo < hi && (width = bi_space_prefix(s->data + lo, hi - lo)) != 0) lo += width;
@@ -521,7 +525,7 @@ ScrBigInt *scr_bigint_parse(ScrStr *s) {
   if (s->data[lo] == '+' || s->data[lo] == '-') {
     signed_input = true;
     if (s->data[lo++] == '-') sign = -1;
-    if (lo == hi) return bi_parse_fail(s);
+    if (lo == hi) return bi_parse_invalid(s, report_error);
   }
   unsigned base = 10;
   if (hi - lo >= 2 && s->data[lo] == '0') {
@@ -530,9 +534,9 @@ ScrBigInt *scr_bigint_parse(ScrStr *s) {
     else if (p == 'o' || p == 'O') base = 8;
     else if (p == 'b' || p == 'B') base = 2;
     if (base != 10) {
-      if (signed_input) return bi_parse_fail(s);
+      if (signed_input) return bi_parse_invalid(s, report_error);
       lo += 2;
-      if (lo == hi) return bi_parse_fail(s);
+      if (lo == hi) return bi_parse_invalid(s, report_error);
     }
   }
   ScrBigInt *v = bi_zero();
@@ -541,14 +545,27 @@ ScrBigInt *scr_bigint_parse(ScrStr *s) {
     int d = bi_digit((unsigned char)s->data[lo]);
     if (d < 0 || (unsigned)d >= base) {
       scr_bigint_release(v);
-      return bi_parse_fail(s);
+      return bi_parse_invalid(s, report_error);
     }
     bi_mul_small(&v, base, (uint32_t)d);
     any = true;
   }
-  if (!any) { scr_bigint_release(v); return bi_parse_fail(s); }
+  if (!any) { scr_bigint_release(v); return bi_parse_invalid(s, report_error); }
   if (v->sign) v->sign = sign;
   return v;
+}
+
+ScrBigInt *scr_bigint_parse(ScrStr *s) { return bi_parse_string(s, true); }
+
+/* Abstract Equality's String/BigInt arm uses StringToBigInt without
+ * surfacing its parse failure: an invalid string compares false instead
+ * of throwing. BigInt(string) keeps the public throwing parser above. */
+bool scr_bigint_eq_string(ScrBigInt *a, ScrStr *b) {
+  ScrBigInt *parsed = bi_parse_string(b, false);
+  if (!parsed) return false;
+  bool equal = scr_bigint_eq(a, parsed);
+  scr_bigint_release(parsed);
+  return equal;
 }
 
 ScrBigInt *scr_bigint_from_f64(double value) {

@@ -74,8 +74,8 @@
       "apiEntries": 29,
       "static": {
         "supported": 0,
-        "partial": 15,
-        "refused": 6,
+        "partial": 17,
+        "refused": 4,
         "not-implemented": 8,
         "by-design": 0,
         "unreviewed": 0,
@@ -1827,9 +1827,9 @@
         "inherited": true
       },
       "static": {
-        "status": "refused",
-        "detail": "Explicitly rejected by a named compiler diagnostic.",
-        "verification": "explicit-refusal"
+        "status": "partial",
+        "detail": "Implemented by a dedicated static compiler/runtime path.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -2023,9 +2023,9 @@
         "inherited": true
       },
       "static": {
-        "status": "refused",
-        "detail": "Explicitly rejected by a named compiler diagnostic.",
-        "verification": "explicit-refusal"
+        "status": "partial",
+        "detail": "Implemented by a dedicated static compiler/runtime path.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",

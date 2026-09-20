@@ -6426,6 +6426,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2936-static-loose-equality.ts": {
+   "order": [
+    "<repo>/tests/corpus/2936-static-loose-equality.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"

@@ -7,9 +7,9 @@
     "tierItemCount": 6663,
     "tiers": {
       "static": {
-        "replace-refusal": 48,
+        "replace-refusal": 46,
         "verify-gap": 2714,
-        "audit-partial": 450,
+        "audit-partial": 452,
         "classify": 2,
         "implement": 81
       },
@@ -318,7 +318,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -391,7 +392,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -431,7 +433,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -471,7 +474,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -537,12 +541,18 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "refused",
-          "action": "replace-refusal",
-          "verification": "explicit-refusal",
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
           "confidence": "high",
-          "source": "surface-manifest:unsupported:node-builtin.assert.equal",
-          "tests": []
+          "source": "compiler-dedicated:assert.equal",
+          "tests": [
+            "tests/corpus/1600-assert-passing.ts",
+            "tests/corpus/1604-assert-deep-structures.ts",
+            "tests/corpus/1609-assert-async.ts",
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -581,7 +591,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -621,7 +632,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -661,7 +673,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -701,7 +714,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -776,7 +790,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -807,12 +822,18 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "refused",
-          "action": "replace-refusal",
-          "verification": "explicit-refusal",
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
           "confidence": "high",
-          "source": "surface-manifest:unsupported:node-builtin.assert.notEqual",
-          "tests": []
+          "source": "compiler-dedicated:assert.notEqual",
+          "tests": [
+            "tests/corpus/1600-assert-passing.ts",
+            "tests/corpus/1604-assert-deep-structures.ts",
+            "tests/corpus/1609-assert-async.ts",
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -851,7 +872,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -891,7 +913,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -931,7 +954,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -971,7 +995,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -1011,7 +1036,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {
@@ -82287,7 +82313,8 @@
             "tests/corpus/1600-assert-passing.ts",
             "tests/corpus/1604-assert-deep-structures.ts",
             "tests/corpus/1609-assert-async.ts",
-            "tests/corpus/1721-assert-throws-regex-class.ts"
+            "tests/corpus/1721-assert-throws-regex-class.ts",
+            "tests/corpus/2936-static-loose-equality.ts"
           ]
         },
         "dynamic": {

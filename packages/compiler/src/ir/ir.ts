@@ -2369,6 +2369,7 @@ export type IrLibFn =
   | "bigint.shl"
   | "bigint.shr"
   | "bigint.eq"
+  | "bigint.eqString"
   | "bigint.cmp"
   | "bigint.cmpNumber"
   | "bigint.truthy"
@@ -3957,6 +3958,7 @@ export type IrLibFn =
   | "assert.eqBool"
   | "assert.eqSym"
   | "assert.eqDyn"
+  | "assert.looseResult"
   | "assert.deepResult"
   | "assert.sameValue"
   /* deepStrictEqual's pair memo over cycle-capable types: enter answers
@@ -7601,6 +7603,7 @@ export const MAY_THROW_LIB_FNS: ReadonlySet<IrLibFn> = new Set([
   "assert.eqBool",
   "assert.eqSym",
   "assert.eqDyn",
+  "assert.looseResult",
   "assert.deepResult",
   "assert.match",
   "assert.refEqBytes",

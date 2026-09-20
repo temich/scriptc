@@ -88,7 +88,7 @@
       "name": "loose equality (== and !=)",
       "status": "unsupported",
       "code": "SC1040",
-      "note": "use === / !== ('x == null' / 'x != null' — the null-or-undefined test — is supported; other loose comparisons need dynamic coercion semantics)"
+      "note": "primitive and primitive-union coercions plus the x == null / x != null idiom compile statically; object-to-primitive comparisons can execute valueOf/toString — convert the object explicitly first"
     },
     {
       "id": "diagnostic.sc1042",
@@ -329,7 +329,7 @@
       "name": "assert.deepEqual",
       "status": "unsupported",
       "code": "SC2020",
-      "note": "loose == equality has no lowering — the strict forms compare with Object.is/structural equality like Node's assert/strict module, where equal IS strictEqual"
+      "note": "legacy deep equality has no lowering yet — deepStrictEqual and notDeepStrictEqual compare structures with Node's modern semantics"
     },
     {
       "id": "node-builtin.assert.doesNotReject",
@@ -348,14 +348,6 @@
       "note": "call the function directly — an unexpected throw already fails the test"
     },
     {
-      "id": "node-builtin.assert.equal",
-      "kind": "node-builtin",
-      "name": "assert.equal",
-      "status": "unsupported",
-      "code": "SC2020",
-      "note": "loose == equality has no lowering — the strict forms compare with Object.is/structural equality like Node's assert/strict module, where equal IS strictEqual"
-    },
-    {
       "id": "node-builtin.assert.ifError",
       "kind": "node-builtin",
       "name": "assert.ifError",
@@ -369,15 +361,7 @@
       "name": "assert.notDeepEqual",
       "status": "unsupported",
       "code": "SC2020",
-      "note": "loose == equality has no lowering — the strict forms compare with Object.is/structural equality like Node's assert/strict module, where equal IS strictEqual"
-    },
-    {
-      "id": "node-builtin.assert.notEqual",
-      "kind": "node-builtin",
-      "name": "assert.notEqual",
-      "status": "unsupported",
-      "code": "SC2020",
-      "note": "loose == equality has no lowering — the strict forms compare with Object.is/structural equality like Node's assert/strict module, where equal IS strictEqual"
+      "note": "legacy deep equality has no lowering yet — deepStrictEqual and notDeepStrictEqual compare structures with Node's modern semantics"
     },
     {
       "id": "node-builtin.assert.rejects",

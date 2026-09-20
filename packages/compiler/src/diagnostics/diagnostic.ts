@@ -236,7 +236,7 @@ export const UNSUPPORTED: Record<string, UnsupportedEntry> = {
   SC1040: {
     feature: "loose equality (== and !=)",
     milestone: "M4",
-    hint: "use === / !== ('x == null' / 'x != null' — the null-or-undefined test — is supported; other loose comparisons need dynamic coercion semantics)",
+    hint: "primitive and primitive-union coercions plus the x == null / x != null idiom compile statically; object-to-primitive comparisons can execute valueOf/toString — convert the object explicitly first",
   },
   // SC1041 (bitwise operators, ToInt32 semantics) shipped — code retired,
   // do not reuse.

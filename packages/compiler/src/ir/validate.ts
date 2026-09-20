@@ -275,6 +275,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "bigint.shl": { argTypes: [BIGINT_T, BIGINT_T], result: BIGINT_T },
   "bigint.shr": { argTypes: [BIGINT_T, BIGINT_T], result: BIGINT_T },
   "bigint.eq": { argTypes: [BIGINT_T, BIGINT_T], result: BOOL },
+  "bigint.eqString": { argTypes: [BIGINT_T, STRING], result: BOOL },
   "bigint.cmp": { argTypes: [BIGINT_T, BIGINT_T], result: F64 },
   "bigint.cmpNumber": { argTypes: [BIGINT_T, F64], result: F64 },
   "bigint.truthy": { argTypes: [BIGINT_T], result: BOOL },
@@ -1079,6 +1080,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // The equality quartet over checked-dynamic operands (the frontend
   // boxes a static side into the checked-dynamic tree first).
   "assert.eqDyn": { argTypes: [DYN, DYN, BOOL, BOOL, STRING, BOOL], result: VOID },
+  "assert.looseResult": { argTypes: [BOOL, BOOL, STRING, STRING, STRING, BOOL], result: VOID },
   // The throws(fn, {shape}) accumulator: begin/slot calls never throw;
   // shapeEnd throws the Comparison diff. The error slot is the
   // %Error-narrowed caught value.

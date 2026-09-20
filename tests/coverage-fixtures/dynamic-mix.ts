@@ -10,5 +10,5 @@ const up = (19.99).toPrecision(3);
 const parsed = Number.parseFloat("1.5"); // the global's string form is static now; the Number static keeps the island
 const raw = __island_eval("6 * 7");
 const unknownScore: unknown = 81;
-const flags = unknownScore == 81; // mixed-kind loose equality keeps the fence (same-kind == lowers)
+const flags = unknownScore == 81; // unknown/object coercion keeps the fence; static primitive pairs lower
 console.log("done");

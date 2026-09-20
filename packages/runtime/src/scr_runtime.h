@@ -3018,6 +3018,7 @@ ScrBigInt *scr_bigint_xor(ScrBigInt *a, ScrBigInt *b);
 ScrBigInt *scr_bigint_shl(ScrBigInt *a, ScrBigInt *count);
 ScrBigInt *scr_bigint_shr(ScrBigInt *a, ScrBigInt *count);
 bool scr_bigint_eq(ScrBigInt *a, ScrBigInt *b);
+bool scr_bigint_eq_string(ScrBigInt *a, ScrStr *b); /* StringToBigInt failure is false */
 double scr_bigint_cmp_f64(ScrBigInt *a, ScrBigInt *b); /* -1, 0, 1 */
 double scr_bigint_cmp_number(ScrBigInt *a, double b); /* -1, 0, 1; 2 = NaN */
 bool scr_bigint_truthy(ScrBigInt *value);
@@ -6594,6 +6595,10 @@ void scr_assert_neq_fail(const char *insp, size_t ilen, bool deep,
  * the divergences). Borrows everything; throws on the failing verdict. */
 void scr_assert_eq_dyn(ScrDyn *a, ScrDyn *b, bool negated, bool deep,
                        ScrStr *msg, bool has_msg);
+/* assert.equal/notEqual over the frontend's Abstract Equality verdict;
+ * actual/expected are borrowed util.inspect renderings. */
+void scr_assert_loose_result(bool equal, bool negated, ScrStr *actual,
+                             ScrStr *expected, ScrStr *msg, bool has_msg);
 /* assert.throws / assert.rejects whose callback returned (or whose
  * promise fulfilled): "Missing expected exception|rejection" with Node's
  * details — ` (${expected.name})` when the expected class/shape carries a

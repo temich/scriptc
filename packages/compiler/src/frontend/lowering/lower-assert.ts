@@ -1,7 +1,8 @@
 import { InternalCompilerError } from "../../errors.js";
 /* The node:assert lowering (a spoke module like lower-dgram.ts): the
  * callable module form (`assert(x)` through a default import or a CJS
- * require binding), ok, the strict/deep equality quartet, fail, throws,
+ * require binding), ok, legacy equal/notEqual, the strict/deep equality
+ * quartet, fail, throws,
  * and match/doesNotMatch — for BOTH the "assert" and "assert/strict"
  * modules ("assert/strict" additionally binds the loose NAMES to the
  * strict comparisons: equal IS strictEqual, exactly Node's aliasing).
@@ -27,7 +28,8 @@ import { resultIsDiscarded } from "./call-position.js";
 import type { Lowerer } from "./lowerer.js";
 import { jsFuncNameOf, own } from "./lowerer.js";
 import { NARROW_FIRST } from "./surfaces.js";
-import { typeReachesItself } from "./lower-inspect.js";
+import { inspectExpr, typeReachesItself } from "./lower-inspect.js";
+import { abstractEqualityExpr, abstractEqualitySupported } from "./abstract-equality.js";
 import { BOOL, CAUGHT, DYN, DYN_HANDLE_KINDS, F64, IrExpr, IrLibFn, IrStmt, IrType, REGEX, RUNTIME_ERROR_CLASSES, STRING, SrcLoc, VOID, isUnitType, typeEquals, typeKey } from "../../ir/ir.js";
 import { boolLit, countedFor, numLit, strLit, varRef } from "../../ir/build.js";
 
@@ -96,6 +98,10 @@ export function lowerAssertModuleCall(
   switch (canonicalAssertMember(bi.module, bi.member)) {
     case "ok":
       return lowerAssertOk(lowerer, expr, loc);
+    case "equal":
+      return lowerAssertLooseEqual(lowerer, expr, loc, false);
+    case "notEqual":
+      return lowerAssertLooseEqual(lowerer, expr, loc, true);
     case "strictEqual":
       return lowerAssertEqual(lowerer, expr, loc, false, false);
     case "notStrictEqual":
@@ -121,6 +127,82 @@ export function lowerAssertModuleCall(
     default:
       return null;
   }
+}
+
+function looseAssertTypeSupported(lowerer: Lowerer, type: IrType): boolean {
+  if (
+    type.kind === "f64" || type.kind === "bigint" || type.kind === "string" ||
+    type.kind === "bool" || type.kind === "symbol" || isUnitType(type)
+  ) {
+    return true;
+  }
+  if (type.kind !== "union") return false;
+  const def = lowerer.unions.get(type.unionId);
+  return def !== undefined && def.arms.every((arm) => looseAssertTypeSupported(lowerer, arm));
+}
+
+/** assert.equal / assert.notEqual over statically represented primitives.
+ * The shared Abstract Equality kernel owns coercion; this wrapper adds
+ * Node v24's legacy NaN-equals-NaN exception and the exact one-line
+ * generated message. Both values stabilize first so comparison and
+ * inspection never re-evaluate user expressions. */
+function lowerAssertLooseEqual(
+  lowerer: Lowerer,
+  expr: ts.CallExpression,
+  loc: SrcLoc,
+  negated: boolean,
+): IrExpr {
+  const surface = negated ? "assert.notEqual" : "assert.equal";
+  requireStatementPosition(lowerer, expr, surface);
+  if (expr.arguments.length < 2 || expr.arguments.length > 3) {
+    lowerer.noLowering(`${surface} with ${expr.arguments.length} arguments`, expr);
+  }
+  const aNode = expr.arguments[0];
+  const bNode = expr.arguments[1];
+  if (!aNode || !bNode) throw new InternalCompilerError(`${surface} arity fence returned unexpectedly`);
+  const left = lowerer.lowerExpr(aNode);
+  const right = lowerer.lowerExpr(bNode);
+  if (
+    !looseAssertTypeSupported(lowerer, left.type) ||
+    !looseAssertTypeSupported(lowerer, right.type) ||
+    !abstractEqualitySupported(lowerer, left.type, right.type)
+  ) {
+    lowerer.noLowering(
+      `${surface} of '${lowerer.fmt(left.type)}' and '${lowerer.fmt(right.type)}' values`,
+      expr,
+      "legacy equality lowers for primitive and primitive-union operands; object-to-primitive coercion can execute user-defined valueOf/toString methods",
+    );
+  }
+
+  const stmts: IrStmt[] = [];
+  const stable = (value: IrExpr, name: string): IrExpr => {
+    if (isUnitType(value.type)) {
+      if (value.kind !== "unitLit") stmts.push({ kind: "exprStmt", expr: value, loc });
+      return {
+        kind: "unitLit",
+        unit: value.type.kind === "nullT" ? "null" : "undefined",
+        type: value.type,
+        loc,
+      };
+    }
+    const local = lowerer.declareHiddenLocal(name, value.type);
+    stmts.push({ kind: "varDecl", localId: local.id, init: value, loc });
+    return varRef(local.id, value.type, loc);
+  };
+  const a = stable(left, "%assertLooseA");
+  const b = stable(right, "%assertLooseB");
+  const equal = abstractEqualityExpr(lowerer, a, b, loc, true);
+  const actual = inspectExpr(lowerer, a.type, a, numLit(0, loc), numLit(2, loc), loc);
+  const expected = inspectExpr(lowerer, b.type, b, numLit(0, loc), numLit(2, loc), loc);
+  const { msg, hasMsg } = lowerMessageArg(lowerer, expr.arguments[2], loc);
+  const result: IrExpr = {
+    kind: "libCall",
+    fn: "assert.looseResult",
+    args: [equal, boolLit(negated, loc), actual, expected, msg, hasMsg],
+    type: VOID,
+    loc,
+  };
+  return { kind: "seqExpr", stmts, result, type: VOID, loc };
 }
 
 /** The callable-module form: `assert(x)` where the callee identifier IS

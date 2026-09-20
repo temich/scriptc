@@ -1799,9 +1799,10 @@ declare module "node:util/types" {
  * Object.is over scalars; deepStrictEqual compares composites
  * structurally per their static types. The messages here are plain
  * strings (Node accepts Errors — that form fences per site), and the
- * loose-equality quartet (equal/notEqual/deepEqual/notDeepEqual) is
- * declared so real code typechecks but fences at its use sites (== has
- * no lowering; assert/strict's equal IS strictEqual and lowers). */
+ * shallow legacy pair (equal/notEqual) follows Node's == coercions for
+ * primitive and primitive-union operands, including Node v24's NaN
+ * exception. deepEqual/notDeepEqual remain declared-but-fenced;
+ * assert/strict's loose names alias the strict forms and lower. */
 /* node:test — the in-process test runner (prefix-only in Node too:
  * require("test") is MODULE_NOT_FOUND). test/it register tests (sync and
  * async bodies, skip/todo/only options and method twins), describe/suite

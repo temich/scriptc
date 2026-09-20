@@ -246,7 +246,7 @@ function isNumberFlag(lowerer: Lowerer, t: IrType, v: () => IrExpr, loc: SrcLoc)
 /** The rendering of one value of type `t` at runtime depth `recurse`
  * with the depth budget `depth` — a direct scalar libCall or a call of
  * the interned per-type helper. */
-function inspectExpr(
+export function inspectExpr(
   lowerer: Lowerer,
   t: IrType,
   value: IrExpr,

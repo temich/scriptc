@@ -1301,18 +1301,15 @@ export function builtinModulesArrayLit(loc: { file: string; start: number; end: 
 const ZLIB_HINT =
   "the default-options deflate/inflate, raw, gzip/gunzip, and unzip sync/callback forms plus crc32 are the lowered zlib surface";
 
-/** The loose-equality quartet's shared hint: == coercion has no lowering
- * anywhere in this compiler, and Node itself points at the strict forms. */
-const ASSERT_LOOSE_HINT =
-  "loose == equality has no lowering — the strict forms compare with " +
-  "Object.is/structural equality like Node's assert/strict module, where " +
-  "equal IS strictEqual";
+/** The legacy deep pair remains fenced. The shallow equal/notEqual pair
+ * lowers through the static Abstract Equality kernel in lower-assert. */
+const ASSERT_LOOSE_DEEP_HINT =
+  "legacy deep equality has no lowering yet — deepStrictEqual and " +
+  "notDeepStrictEqual compare structures with Node's modern semantics";
 
 const ASSERT_MODULE_HINTS: Record<string, string | undefined> = {
-  equal: ASSERT_LOOSE_HINT,
-  notEqual: ASSERT_LOOSE_HINT,
-  deepEqual: ASSERT_LOOSE_HINT,
-  notDeepEqual: ASSERT_LOOSE_HINT,
+  deepEqual: ASSERT_LOOSE_DEEP_HINT,
+  notDeepEqual: ASSERT_LOOSE_DEEP_HINT,
   ifError:
     "test explicitly instead: assert.strictEqual(err, null) / " +
     "assert.strictEqual(err, undefined)",

@@ -5188,6 +5188,8 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             return finish(`scr_bigint_shr(${arg(0)}, ${arg(1)})`);
           case "bigint.eq":
             return finish(`scr_bigint_eq(${arg(0)}, ${arg(1)})`);
+          case "bigint.eqString":
+            return finish(`scr_bigint_eq_string(${arg(0)}, ${arg(1)})`);
           case "bigint.cmp":
             return finish(`scr_bigint_cmp_f64(${arg(0)}, ${arg(1)})`);
           case "bigint.cmpNumber":
@@ -8361,6 +8363,8 @@ function emitAssertInspectLibCall(state: LibCallState): Temp {
             // The quartet over checked-dynamic operands: SameValue /
             // dyn-walk deep equality, assertion_error.js messages.
             return finish(`scr_assert_eq_dyn(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)})`);
+          case "assert.looseResult":
+            return finish(`scr_assert_loose_result(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)})`);
           case "assert.deepResult":
             return finish(`scr_assert_deep_result(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)})`);
           case "assert.deqEnter":
