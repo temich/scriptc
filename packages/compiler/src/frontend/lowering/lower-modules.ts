@@ -14,7 +14,7 @@ import type { CycleEdge } from "../program.js";
 import { invalidJsonModuleDiag, npmEmbedFailedDiag, requiresDynamicImportDiag } from "../../diagnostics/diagnostic.js";
 import { BOOL, DYN, IrClassDef, IrExpr, IrFunction, IrGlobal, IrRecordShape, IrStmt, IrType, IrUnionDef, JSVAL, RUNTIME_ERROR_CLASSES, STRING, SrcLoc, VOID, arrayOf, canConvertToDyn, isUnitType } from "../../ir/ir.js";
 import { ENTRY_NAME, PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, newFnCtx, uncheckedOverloadHandleCall } from "./lowerer.js";
-import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireNamespaceDecl, createRequireSpecOf, isPromisifyCall, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
+import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireNamespaceDecl, createRequireProgramModuleDecl, createRequireSpecOf, isPromisifyCall, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
 import { bindingContextualGenericFnNodeOf, bindingGenericFnAliasInfoOf, bindingGenericFnInfoOf, bindingGenericFnNodeOf, bindingNeverReassigned, deadUnmappableBinding, implicitLocalFnInfoOf, implicitLocalFnNodeOf, nullishGenericBindingUnitOf, registerOverloadedCallableAlias } from "./lower-calls.js";
 import { isVarDeclared, numericIteratorSourceOf, provenanceElidedConstDecl } from "./lower-stmts.js";
 import { streamClassAliasDecl } from "./lower-stream.js";
@@ -1274,6 +1274,11 @@ export function collectGlobals(lowerer: Lowerer, sf: ts.SourceFile, topStmts: ts
         // `const fs = require("node:fs")` through that binding at file
         // scope — a namespace import in const clothing, same story.
         if (isConst && createRequireNamespaceDecl(lowerer, decl.name, decl.initializer)) continue;
+        // `const local = require("./local.cjs")` through createRequire:
+        // the binding is static module alias plumbing. Its statement emits
+        // the dependency init at this exact source position; no value slot
+        // represents the namespace object itself.
+        if (isConst && createRequireProgramModuleDecl(lowerer, decl.name, decl.initializer)) continue;
         // `const { createSign } = crypto` over a builtin NAMESPACE binding
         // at file scope: alias plumbing like the destructured-require form
         // — no storage (the statement lowering skips by the same test).

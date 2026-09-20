@@ -650,9 +650,9 @@
       "apiEntries": 30,
       "static": {
         "supported": 0,
-        "partial": 0,
-        "refused": 3,
-        "not-implemented": 27,
+        "partial": 5,
+        "refused": 0,
+        "not-implemented": 25,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -57660,7 +57660,7 @@
       "anchor": "",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
+        "status": "partial",
         "detail": "Derived from the exact API rows in this chapter.",
         "verification": "derived"
       },
@@ -57706,9 +57706,9 @@
       "anchor": "modulecreaterequirefilename",
       "nodeStability": null,
       "static": {
-        "status": "refused",
-        "detail": "Explicitly rejected by a named compiler diagnostic.",
-        "verification": "explicit-refusal"
+        "status": "partial",
+        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -57757,9 +57757,9 @@
       "anchor": "moduleisbuiltinmodulename",
       "nodeStability": null,
       "static": {
-        "status": "refused",
-        "detail": "Explicitly rejected by a named compiler diagnostic.",
-        "verification": "explicit-refusal"
+        "status": "partial",
+        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -57864,9 +57864,9 @@
       "anchor": "modulesyncbuiltinesmexports",
       "nodeStability": null,
       "static": {
-        "status": "refused",
-        "detail": "Explicitly rejected by a named compiler diagnostic.",
-        "verification": "explicit-refusal"
+        "status": "partial",
+        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -57887,9 +57887,9 @@
       "anchor": "the-module-object",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",

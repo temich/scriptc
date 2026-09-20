@@ -7,9 +7,9 @@
     "tierItemCount": 6663,
     "tiers": {
       "static": {
-        "replace-refusal": 51,
-        "verify-gap": 2715,
-        "audit-partial": 446,
+        "replace-refusal": 48,
+        "verify-gap": 2714,
+        "audit-partial": 450,
         "classify": 2,
         "implement": 81
       },
@@ -61175,12 +61175,18 @@
       "priority": "normal",
       "tiers": {
         "static": {
-          "status": "refused",
-          "action": "replace-refusal",
-          "verification": "explicit-refusal",
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
           "confidence": "high",
-          "source": "surface-manifest:unsupported:node-builtin.module.createRequire",
-          "tests": []
+          "source": "compiler-feature:module.module.createRequire",
+          "tests": [
+            "tests/corpus/2631-create-require/main.ts",
+            "tests/corpus/2637-create-require-bare/main.ts",
+            "tests/corpus/2675-create-require-nested-esm.js",
+            "tests/corpus/2932-create-require-program/main.ts",
+            "tests/harness/npm-static.test.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -61239,12 +61245,14 @@
       "priority": "normal",
       "tiers": {
         "static": {
-          "status": "refused",
-          "action": "replace-refusal",
-          "verification": "explicit-refusal",
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
           "confidence": "high",
-          "source": "surface-manifest:unsupported:node-builtin.module.isBuiltin",
-          "tests": []
+          "source": "compiler-feature:module.module.isBuiltin",
+          "tests": [
+            "tests/corpus/2932-create-require-program/main.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -61369,12 +61377,14 @@
       "priority": "normal",
       "tiers": {
         "static": {
-          "status": "refused",
-          "action": "replace-refusal",
-          "verification": "explicit-refusal",
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
           "confidence": "high",
-          "source": "surface-manifest:unsupported:node-builtin.module.syncBuiltinESMExports",
-          "tests": []
+          "source": "compiler-feature:module.module.syncBuiltinESMExports",
+          "tests": [
+            "tests/corpus/2932-create-require-program/main.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -61400,12 +61410,16 @@
       "priority": "normal",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:module",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:module.builtinModules",
+          "tests": [
+            "tests/corpus/2631-create-require/main.ts",
+            "tests/corpus/2637-create-require-bare/main.ts",
+            "tests/corpus/2932-create-require-program/main.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",

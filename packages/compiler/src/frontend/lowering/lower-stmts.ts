@@ -23,7 +23,7 @@ import type { ClassInfo, ClassIteratorInfo } from "./lower-classes.js";
 import { genericIfaceBindingKeepsClass } from "./lower-classes.js";
 import { lowerStreamUnderscoreAssign, streamClassAliasDecl } from "./lower-stream.js";
 import { lowerHttpResPropertyAssignment, lowerHttpServerTimeoutAssignment, lowerServerCloseOverrideAssignment } from "./lower-server.js";
-import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireCalleeFileOf, createRequireNamespaceDecl, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
+import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireCalleeFileOf, createRequireNamespaceDecl, createRequireProgramModuleDecl, createRequireProgramModuleOf, lowerNodeModuleCall, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
 import { lowerEnumDeclaration } from "./lower-enums.js";
 import { abstractPropertyDeclOf, aliasTypeofNarrows, isMatchSliceType, lowerAbsenceProbe, lowerGroupsProjection, lowerOptionalNumber, matchResultNamedGroupsOf, runtimeOptionalTrueIds, symbolFieldInfo, withRuntimeOptionalNarrowed } from "./lower-exprs.js";
 import { isSafeToRepeat } from "./expressions/evaluation-safety.js";
@@ -1110,6 +1110,22 @@ export function lowerStmt(lowerer: Lowerer, stmt: ts.Statement): IrStmt | IrStmt
     const isConst = (list.flags & ts.NodeFlags.Const) !== 0;
     const isLet = (list.flags & ts.NodeFlags.Let) !== 0 || (list.flags & ts.NodeFlags.BlockScoped) === 0;
     return list.declarations.flatMap((decl) => {
+      // The canonical ESM bridge to a compiled program module. Like a
+      // top-level CommonJS require declaration, the binding is alias
+      // plumbing while the dependency evaluates at this statement's
+      // exact position through its run-once initializer.
+      if (isConst && createRequireProgramModuleDecl(lowerer, decl.name, decl.initializer)) {
+        if (!ts.isSourceFile(stmt.parent)) {
+          lowerer.unsupported(
+            "SC1090",
+            decl,
+            "createRequire program-module bindings outside the module's top level (move the binding to the top of the file; side-effect-only requires may remain nested)",
+          );
+        }
+        const target = createRequireProgramModuleOf(lowerer, decl.initializer)!;
+        const init = lowerer.requireInitStmt(target.spec, decl);
+        return init ? [init] : [];
+      }
       // CommonJS require declarations (JS files): at the module's top
       // level the BINDINGS are alias plumbing (no storage;
       // resolveValueSymbol routes the reads), but the require itself is
@@ -4869,6 +4885,27 @@ function isEsModuleStamp(expr: ts.Expression): boolean {
       ts.isExpressionStatement(stmtNode) &&
       ts.isSourceFile(stmtNode.parent) &&
       isJsSourceFile(stmtNode.parent);
+    // createRequire's side-effect program-module form uses the same inline
+    // run-once initializer as a CommonJS require statement. The expression
+    // has no represented namespace value in statement position.
+    if (ts.isCallExpression(expr)) {
+      const created = createRequireProgramModuleOf(lowerer, expr);
+      if (created !== null) {
+        return lowerer.requireInitStmt(created.spec, expr) ?? { kind: "block", body: [], loc: locOf(expr) };
+      }
+      // syncBuiltinESMExports() is the other compiler-only statement: the
+      // call validates its zero-argument shape, then emits no code because
+      // the static builtin surface is immutable.
+      const bi = ts.isIdentifier(expr.expression)
+        ? lowerer.builtinImportOf(expr.expression)
+        : ts.isPropertyAccessExpression(expr.expression)
+          ? lowerer.builtinMemberOf(expr.expression)
+          : null;
+      if (bi?.module === "module" && bi.member === "syncBuiltinESMExports") {
+        lowerNodeModuleCall(lowerer, expr, bi, locOf(expr));
+        return { kind: "block", body: [], loc: locOf(expr) };
+      }
+    }
     if (
       requireSpecOf(expr) !== null &&
       ts.isCallExpression(expr) &&

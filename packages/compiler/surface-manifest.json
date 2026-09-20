@@ -1140,7 +1140,7 @@
       "name": "module.createRequire",
       "status": "unsupported",
       "code": "SC2020",
-      "note": "the lowered shape is a const binding over createRequire(import.meta.url) (or __filename) whose require calls take STATIC string literals — builtins, relative .json documents, and installed npm packages (under --dynamic) resolve at build time; dynamic specifiers cannot exist in a compiled binary's fixed module graph"
+      "note": "the lowered shape is a const binding over createRequire(import.meta.url) (or __filename) whose require calls take STATIC string literals — builtins, project modules (including #imports), relative .json documents, --npm-static packages, and installed npm packages under --dynamic resolve at build time; dynamic specifiers cannot exist in a compiled binary's fixed module graph"
     },
     {
       "id": "node-builtin.module.isBuiltin",
@@ -1148,7 +1148,7 @@
       "name": "module.isBuiltin",
       "status": "unsupported",
       "code": "SC2020",
-      "note": "builtinModules.includes(name) answers the same question over the baked list (strip a node: prefix first; the prefix-only builtins appear with it, as node:test)"
+      "note": "the lowered call checks a string against the baked Node v24 list, including bare/node: aliases and prefix-only builtins"
     },
     {
       "id": "node-builtin.module.syncBuiltinESMExports",
@@ -1156,7 +1156,7 @@
       "name": "module.syncBuiltinESMExports",
       "status": "unsupported",
       "code": "SC2020",
-      "note": "a compiled program has no live builtin ESM namespace bindings to synchronize — nothing a compiled surface can mutate makes the call observable; remove it"
+      "note": "the direct zero-argument call is a no-op because compiled builtin exports are immutable and cannot become stale"
     },
     {
       "id": "node-builtin.net",

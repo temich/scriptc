@@ -1264,7 +1264,7 @@ export function builtinConstLit(value: string | number | boolean, loc: { file: s
  * Node ships one frozen singleton; each read here mints a fresh string
  * array — a divergence only mutation could observe, and mutating Node's
  * frozen array throws anyway. */
-const NODE_BUILTIN_MODULES_V24: readonly string[] = [
+export const NODE_BUILTIN_MODULES_V24: readonly string[] = [
   "_http_agent", "_http_client", "_http_common", "_http_incoming",
   "_http_outgoing", "_http_server", "_stream_duplex", "_stream_passthrough",
   "_stream_readable", "_stream_transform", "_stream_wrap", "_stream_writable",
@@ -1353,15 +1353,13 @@ export const BUILTIN_MODULE_FENCE_HINTS: Record<string, Record<string, string | 
   module: {
     createRequire:
       "the lowered shape is a const binding over createRequire(import.meta.url) (or __filename) " +
-      "whose require calls take STATIC string literals — builtins, relative .json documents, " +
-      "and installed npm packages (under --dynamic) resolve at build time; " +
+      "whose require calls take STATIC string literals — builtins, project modules (including #imports), " +
+      "relative .json documents, --npm-static packages, and installed npm packages under --dynamic resolve at build time; " +
       "dynamic specifiers cannot exist in a compiled binary's fixed module graph",
     isBuiltin:
-      "builtinModules.includes(name) answers the same question over the baked list " +
-      "(strip a node: prefix first; the prefix-only builtins appear with it, as node:test)",
+      "the lowered call checks a string against the baked Node v24 list, including bare/node: aliases and prefix-only builtins",
     syncBuiltinESMExports:
-      "a compiled program has no live builtin ESM namespace bindings to synchronize — " +
-      "nothing a compiled surface can mutate makes the call observable; remove it",
+      "the direct zero-argument call is a no-op because compiled builtin exports are immutable and cannot become stale",
   },
   child_process: {
     execFile:

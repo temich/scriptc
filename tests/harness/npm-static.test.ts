@@ -148,6 +148,27 @@ describe(`npm-static pilots${sanitize ? " (sanitized)" : ""}`, () => {
     }
   }, 180_000);
 
+  test("createRequire loads an opted-in package through its require entry", async () => {
+    const entry = join(pilotRoot, "create-require-cli.ts");
+    const { coverage } = analyze(entry, { npmStatic: ["picocolors"] });
+    expect(coverage.npmStatic).toEqual([{ package: "picocolors", status: "static" }]);
+    expect(coverage.preflightFailed).toBe(false);
+    expect(coverage.diagnostics).toHaveLength(0);
+    expect(coverage.runtimeFences ?? []).toHaveLength(0);
+    expect(coverage.stats.statementsFailed).toBe(0);
+
+    const binary = await buildStatic(entry, ["picocolors"]);
+    const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: "1" };
+    delete env["FORCE_COLOR"];
+    const [nodeRes, nativeRes] = await Promise.all([
+      runBinary("node", [entry], env),
+      runBinary(binary, [], env),
+    ]);
+    expect(nativeRes.stdout).toEqual(nodeRes.stdout);
+    expect(comparableStderr(nativeRes.stderr)).toEqual(nodeRes.stderr);
+    expect(nativeRes.exitCode).toBe(nodeRes.exitCode);
+  }, 180_000);
+
   test("picocolors inherited Object methods retain the prototype-method fence", () => {
     const entry = join(pilotRoot, "colors-prototype-cli.ts");
     const { coverage } = analyze(entry, { npmStatic: ["picocolors"] });

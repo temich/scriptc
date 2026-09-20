@@ -947,15 +947,19 @@ declare var performance: import("node:perf_hooks").Performance;
  * createRequire(import.meta.url) (or __filename) whose require calls
  * take STATIC string literals — the indirection erases at compile time.
  * A builtin spec makes the binding a namespace import in const clothing;
- * a relative .json document bakes and parses (JSON.parse's `unknown`
- * stance — validate with a checked cast); an installed npm package loads
- * through the island's require-condition entry under --dynamic; a bare
- * name nothing installed resolves compiles to Node's catchable
- * MODULE_NOT_FOUND throw (the optional-dependency try/require pattern).
+ * relative and package-import program modules use the compiled module
+ * graph; a relative .json document bakes and parses (JSON.parse's
+ * `unknown` stance — validate with a checked cast); an installed npm
+ * package loads through the island's require-condition entry under
+ * --dynamic, or through the compiled graph under --npm-static; a bare name
+ * nothing installed resolves compiles to Node's catchable MODULE_NOT_FOUND
+ * throw (the optional-dependency try/require pattern).
  * Dynamic specifiers fence: a compiled binary's module graph is fixed at
  * build time. builtinModules is the baked Node v24 list (a fresh
  * mutable array per read where Node ships one frozen singleton);
- * isBuiltin and syncBuiltinESMExports fence per site. Both spellings
+ * isBuiltin checks runtime strings against that pinned list, and
+ * syncBuiltinESMExports is a no-op because the static builtin surface is
+ * immutable. Both spellings
  * name the builtin, like in Node (the builtin wins over the npm package
  * named "module" for the bare specifier there too). */
 declare module "node:module" {

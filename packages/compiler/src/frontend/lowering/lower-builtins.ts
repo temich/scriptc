@@ -8,7 +8,7 @@ import { dirname, resolve } from "node:path";
 import * as ts from "../ts7/adapter.js";
 import type { Lowerer } from "./lowerer.js";
 import { PoisonError, dynUndefinedExpr, ladderFenceExpr, nodeThrowExpr, own } from "./lowerer.js";
-import { canonicalBuiltinModule, isJsSourceFile, isNodeEsmFile, locOf, requireSpecOf } from "../program.js";
+import { canonicalBuiltinModule, isJsSourceFile, isNodeEsmFile, locOf, npmStaticDepSf7, requireSpecOf, resolveImport } from "../program.js";
 import { isRelativeSpecifier } from "../workspace-registry.js";
 import { probeNodeRequireRefusal } from "../npm.js";
 import { isNpmStaticPackage } from "../npm-static.js";
@@ -27,6 +27,7 @@ import {
   builtinConstLit,
   fenceOrDropOptionKey,
   isChildSurfaceMember,
+  NODE_BUILTIN_MODULES_V24,
 } from "./surfaces.js";
 import { lowerAbsenceProbe } from "./lower-exprs.js";
 import { conditionalSpreadOf, lowerDynObjectLiteral } from "./expressions/object-literals.js";
@@ -469,6 +470,136 @@ function lowerBuiltinOptionalDefault(
     return cr !== null && cr.spec !== null && canonicalBuiltinModule(cr.spec) !== null;
   }
 
+/** A statically compiled program module reached through a canonical
+   * createRequire binding. This is the ESM twin of an ordinary CommonJS
+   * require edge: the same project resolver, require-condition npm-static
+   * entry, module initializer, and export registrations own the target. */
+  export function createRequireProgramModuleOf(
+    lowerer: Lowerer,
+    expr: ts.Expression | undefined,
+  ): { spec: string; baseFile: ts.SourceFile; dep: ts.SourceFile } | null {
+    if (expr === undefined) return null;
+    const call = stripTypeCasts(expr);
+    if (!ts.isCallExpression(call)) return null;
+    const cr = createRequireSpecOf(lowerer, call);
+    if (cr === null || cr.spec === null || canonicalBuiltinModule(cr.spec) !== null) return null;
+    const dep = resolveImport(lowerer.program, cr.baseFile, cr.spec) ??
+      npmStaticDepSf7(lowerer.program, cr.baseFile, cr.spec);
+    if (dep === null || dep.fileName.endsWith(".json")) return null;
+    return { spec: cr.spec, baseFile: cr.baseFile, dep };
+  }
+
+/** True for a const identifier whose initializer is a createRequire call
+   * reaching a compiled program module. The binding is namespace/value
+   * alias plumbing; its declaration emits only the dependency's run-once
+   * initializer at the source position. */
+  export function createRequireProgramModuleDecl(
+    lowerer: Lowerer,
+    nameNode: ts.Node,
+    init: ts.Expression | undefined,
+  ): boolean {
+    if (createRequireProgramModuleOf(lowerer, init) === null) return false;
+    if (ts.isIdentifier(nameNode)) return true;
+    if (!ts.isObjectBindingPattern(nameNode)) return false;
+    return nameNode.elements.every((element) =>
+      element.name !== undefined && element.dotDotDotToken === undefined && element.initializer === undefined &&
+      ts.isIdentifier(element.name) &&
+      (element.propertyName === undefined || ts.isIdentifier(element.propertyName) || ts.isStringLiteralLike(element.propertyName)),
+    );
+  }
+
+/** node:module's two compiler-only calls. isBuiltin compares one evaluated
+   * string against the pinned Node 24 list (bare builtins also accept their
+   * node: spelling; prefix-only entries do not gain a bare alias).
+   * syncBuiltinESMExports is observably a no-op inside the static surface:
+   * builtin exports cannot be mutated, so its only supported behavior is
+   * evaluating no arguments and returning undefined. */
+  export function lowerNodeModuleCall(
+    lowerer: Lowerer,
+    expr: ts.CallExpression,
+    bi: { module: string; member: string },
+    loc: SrcLoc,
+  ): IrExpr | null {
+    if (bi.module !== "module") return null;
+    if (bi.member === "syncBuiltinESMExports") {
+      if (expr.arguments.length !== 0 || expr.arguments.some(ts.isSpreadElement)) {
+        lowerer.noLowering(
+          `module.syncBuiltinESMExports with ${expr.arguments.length} arguments`,
+          expr,
+          "syncBuiltinESMExports() takes no arguments",
+        );
+      }
+      if (!ts.isExpressionStatement(expr.parent)) {
+        lowerer.noLowering(
+          "module.syncBuiltinESMExports used as a value",
+          expr,
+          "call syncBuiltinESMExports() as its own statement; the supported static effect is a no-op",
+        );
+      }
+      return { kind: "unitLit", unit: "undefined", type: UNDEFINED_T, loc };
+    }
+    if (bi.member !== "isBuiltin") return null;
+    if (expr.arguments.length !== 1 || expr.arguments.some(ts.isSpreadElement)) {
+      lowerer.noLowering(
+        `module.isBuiltin with ${expr.arguments.length} arguments`,
+        expr,
+        "isBuiltin(moduleName) takes one string",
+      );
+    }
+    const argumentNode = expr.arguments[0]!;
+    const argument = lowerer.lowerExpr(argumentNode);
+    if (argument.type.kind !== "string") {
+      if (argument.type.kind === "dyn" || argument.type.kind === "jsval" || argument.type.kind === "union") {
+        lowerer.noLowering(
+          "module.isBuiltin with a runtime-polymorphic argument",
+          argumentNode,
+          "narrow the module name to a string first; statically non-string values return false",
+        );
+      }
+      return {
+        kind: "seqExpr",
+        stmts: [{ kind: "exprStmt", expr: argument, loc: locOf(argumentNode) }],
+        result: boolLit(false, loc),
+        type: BOOL,
+        loc,
+      };
+    }
+    const slot = lowerer.declareHiddenLocal("%builtinName", STRING);
+    const ref = (): IrExpr => varRef(slot.id, STRING, loc);
+    const accepted = NODE_BUILTIN_MODULES_V24.flatMap((name) =>
+      name.startsWith("node:") ? [name] : [name, `node:${name}`],
+    );
+    let staticArgument: ts.Expression = argumentNode;
+    while (
+      ts.isParenthesizedExpression(staticArgument) || ts.isAsExpression(staticArgument) ||
+      ts.isTypeAssertion(staticArgument) || ts.isNonNullExpression(staticArgument)
+    ) {
+      staticArgument = staticArgument.expression;
+    }
+    if (ts.isStringLiteralLike(staticArgument)) {
+      return boolLit(accepted.includes(staticArgument.text), loc);
+    }
+    let result: IrExpr = boolLit(false, loc);
+    for (let i = accepted.length - 1; i >= 0; i--) {
+      const equal: IrExpr = {
+        kind: "strEq",
+        negated: false,
+        left: ref(),
+        right: strLit(accepted[i]!, loc),
+        type: BOOL,
+        loc,
+      };
+      result = { kind: "logical", op: "||", left: equal, right: result, type: BOOL, loc };
+    }
+    return {
+      kind: "seqExpr",
+      stmts: [{ kind: "varDecl", localId: slot.id, init: argument, loc }],
+      result,
+      type: BOOL,
+      loc,
+    };
+  }
+
 /** `require("spec")` through a createRequire binding — the erasure per
    * target. Builtins are reached here only OUTSIDE the const-namespace-
    * binding shape (that declaration erases; member uses resolve through
@@ -502,6 +633,14 @@ function lowerBuiltinOptionalDefault(
         `module namespace objects as values (bind it first: const m = require("${spec}"), then access members through the binding)`,
       );
     }
+    const programModule = createRequireProgramModuleOf(lowerer, call);
+    if (programModule !== null) {
+      lowerer.noLowering(
+        `createRequire's module namespace value for '${spec}'`,
+        call,
+        `bind it once (const m = require(${JSON.stringify(spec)})) and access statically-known members through that binding`,
+      );
+    }
     if (spec.startsWith("#")) {
       lowerer.noLowering(
         `createRequire's require of the '${spec}' project import`,
@@ -514,7 +653,7 @@ function lowerBuiltinOptionalDefault(
         lowerer.noLowering(
           `createRequire's require of '${spec}'`,
           call,
-          "relative requires lower for .json documents only — a program module is a static import",
+          "relative program modules lower when they resolve into the compiled graph; relative .json documents bake at build time",
         );
       }
       const abs = spec.startsWith("/")
