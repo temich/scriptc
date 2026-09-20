@@ -2,7 +2,8 @@
  * program modules (no island) — the slice-2 pilot. Three tiers pinned
  * here:
  *
- *   1. DRIVEN DIFFERENTIALS (escape-string-regexp, slash, ms, commander):
+ *   1. DRIVEN DIFFERENTIALS (escape-string-regexp, slash, ms, picocolors,
+ *      commander):
  *      fully static builds whose stdout, stderr, and exit status byte-match
  *      Node for the exercised programs.
  *   2. COVERAGE FRONTIERS: dormant package paths may retain runtime fences;
@@ -35,9 +36,9 @@ interface RunResult {
   exitCode: number;
 }
 
-async function runBinary(cmd: string, args: string[]): Promise<RunResult> {
+async function runBinary(cmd: string, args: string[], env: NodeJS.ProcessEnv = process.env): Promise<RunResult> {
   try {
-    const { stdout, stderr } = await execFileAsync(cmd, args, { encoding: "buffer" });
+    const { stdout, stderr } = await execFileAsync(cmd, args, { encoding: "buffer", env });
     return { stdout, stderr, exitCode: 0 };
   } catch (err) {
     const e = err as { code?: unknown; stdout?: Buffer; stderr?: Buffer };
@@ -120,6 +121,32 @@ describe(`npm-static pilots${sanitize ? " (sanitized)" : ""}`, () => {
     expect(nativeRes.stdout.toString("utf8")).toBe(nodeRes.stdout.toString("utf8"));
     expect(nativeRes.exitCode).toBe(nodeRes.exitCode);
   }, 120_000);
+
+  test("picocolors compiles fully statically and byte-matches both color branches", async () => {
+    const entry = join(pilotRoot, "colors-cli.ts");
+    const { coverage } = analyze(entry, { npmStatic: ["picocolors"] });
+    expect(coverage.npmStatic).toEqual([{ package: "picocolors", status: "static" }]);
+    expect(coverage.preflightFailed).toBe(false);
+    expect(coverage.diagnostics).toHaveLength(0);
+    expect(coverage.runtimeFences ?? []).toHaveLength(0);
+    expect(coverage.stats.statementsFailed).toBe(0);
+
+    const binary = await buildStatic(entry, ["picocolors"]);
+    const plainEnv: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: "1" };
+    delete plainEnv["FORCE_COLOR"];
+    const colorEnv: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "1" };
+    delete colorEnv["NO_COLOR"];
+
+    for (const env of [plainEnv, colorEnv]) {
+      const [nodeRes, nativeRes] = await Promise.all([
+        runBinary("node", [entry], env),
+        runBinary(binary, [], env),
+      ]);
+      expect(nativeRes.stdout).toEqual(nodeRes.stdout);
+      expect(comparableStderr(nativeRes.stderr)).toEqual(nodeRes.stderr);
+      expect(nativeRes.exitCode).toBe(nodeRes.exitCode);
+    }
+  }, 180_000);
 
   // Tier 1, auto mode: the eligibility heuristics pick escape-string-regexp
   // (own .d.ts, unminified, no transform markers) without naming it.

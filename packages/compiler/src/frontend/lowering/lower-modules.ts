@@ -15,10 +15,10 @@ import { invalidJsonModuleDiag, npmEmbedFailedDiag, requiresDynamicImportDiag } 
 import { BOOL, DYN, IrClassDef, IrExpr, IrFunction, IrGlobal, IrRecordShape, IrStmt, IrType, IrUnionDef, JSVAL, RUNTIME_ERROR_CLASSES, STRING, SrcLoc, VOID, arrayOf, canConvertToDyn, isUnitType } from "../../ir/ir.js";
 import { ENTRY_NAME, PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, newFnCtx, uncheckedOverloadHandleCall } from "./lowerer.js";
 import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireNamespaceDecl, createRequireSpecOf, isPromisifyCall, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
-import { bindingContextualGenericFnNodeOf, bindingGenericFnAliasInfoOf, bindingGenericFnInfoOf, bindingGenericFnNodeOf, deadUnmappableBinding, implicitLocalFnInfoOf, implicitLocalFnNodeOf, nullishGenericBindingUnitOf, registerOverloadedCallableAlias } from "./lower-calls.js";
+import { bindingContextualGenericFnNodeOf, bindingGenericFnAliasInfoOf, bindingGenericFnInfoOf, bindingGenericFnNodeOf, bindingNeverReassigned, deadUnmappableBinding, implicitLocalFnInfoOf, implicitLocalFnNodeOf, nullishGenericBindingUnitOf, registerOverloadedCallableAlias } from "./lower-calls.js";
 import { isVarDeclared, numericIteratorSourceOf, provenanceElidedConstDecl } from "./lower-stmts.js";
 import { streamClassAliasDecl } from "./lower-stream.js";
-import { stdlibGlobalAliasDecl } from "./surfaces.js";
+import { stdlibGlobalAliasDecl, stdlibGlobalAliasNameOf } from "./surfaces.js";
 import { collectNamespaceStmt, nsPathPrefix, trapDeclRootOf } from "./lower-namespaces.js";
 import { collectExpandoMembers } from "./lower-expando.js";
 import { isUnitOnlyTsType, unitOnlyUnion } from "../type-mapper.js";
@@ -961,11 +961,20 @@ export function collectGlobals(lowerer: Lowerer, sf: ts.SourceFile, topStmts: ts
           // included); unmappable pieces take the JS checked-dynamic
           // fallback like every JS binding.
           const fnValued = ts.isFunctionExpression(rhs) || ts.isArrowFunction(rhs);
-          if (cjsScalarLiteral(rhs) || fnValued) {
+          // A factory-returned CommonJS root (`module.exports = make()`)
+          // is a single value just like the scalar/function forms above
+          // when its result has a static or checked-dynamic representation. Register one
+          // snapshot slot keyed by the export-assignment declaration; the
+          // statement lowering evaluates the call exactly once at its
+          // source position and assigns that slot. Unmappable calls retain
+          // the existing statement-level fence.
+          const factoryValued = ts.isCallExpression(rhs);
+          if (cjsScalarLiteral(rhs) || fnValued || factoryValued) {
             const diagsBefore = lowerer.diags.length;
             try {
               const strict = lowerer.typeOf(rhs);
-              const t = lowerer.mapTypeOf(strict) ?? (fnValued ? dynFallbackType(lowerer, rhs, strict) : null);
+              const t = lowerer.mapTypeOf(strict) ??
+                (fnValued || factoryValued ? dynFallbackType(lowerer, rhs, strict) : null);
               if (t && t.kind !== "void") {
                 const g: IrGlobal = { id: `%g.${tag}exports`, name: "exports", type: t, mutable: false };
                 lowerer.globalsByDeclNode.set(cjs.expr, g);
@@ -1283,7 +1292,18 @@ export function collectGlobals(lowerer: Lowerer, sf: ts.SourceFile, topStmts: ts
         // global snapshot — alias plumbing, no global storage (see
         // stdlibGlobalAliasDecl; the statement lowering skips it by the
         // same test).
-        if (isConst && stdlibGlobalAliasDecl(lowerer, decl.name, decl.initializer)) continue;
+        const stableStdlibAlias =
+          isConst ||
+          (
+            (list.flags & ts.NodeFlags.Let) !== 0 &&
+            ts.isIdentifier(decl.name) &&
+            stdlibGlobalAliasNameOf(lowerer, decl.initializer) !== null &&
+            (() => {
+              const symbol = lowerer.checker.getSymbolAtLocation(decl.name);
+              return symbol !== undefined && bindingNeverReassigned(lowerer, symbol, decl);
+            })()
+          );
+        if (stableStdlibAlias && stdlibGlobalAliasDecl(lowerer, decl.name, decl.initializer)) continue;
         // Stored default TextEncoder/TextDecoder instances are the same
         // compile-time alias plumbing as their statement lowering: calls
         // trace this const initializer, so no module global exists.

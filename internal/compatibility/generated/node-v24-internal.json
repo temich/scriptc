@@ -73916,7 +73916,8 @@
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
           "tests/corpus/2858-import-meta-resolve/main.mjs",
           "tests/corpus/2860-require-resolve/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -73955,7 +73956,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74020,7 +74022,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74058,7 +74061,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74096,7 +74100,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74164,7 +74169,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74331,7 +74337,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74395,7 +74402,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74459,7 +74467,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74497,7 +74506,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {
@@ -74535,7 +74545,8 @@
           "tests/corpus/1596-cjs-modules/main.js",
           "tests/corpus/1629-require-main-filename.cjs",
           "tests/corpus/2830-cjs-require-self-name/main.cjs",
-          "tests/corpus/2880-cjs-module-graph/main.cjs"
+          "tests/corpus/2880-cjs-module-graph/main.cjs",
+          "tests/corpus/2923-cjs-factory-export/main.cjs"
         ]
       },
       "dynamic": {

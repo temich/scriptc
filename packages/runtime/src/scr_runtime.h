@@ -3496,6 +3496,9 @@ ScrStr *scr_dyn_string_coerce(const ScrDyn *d);
  * Borrows; +1 or NULL with the exception pending. */
 ScrStr *scr_dyn_string_coerce_js(const ScrDyn *d);
 bool scr_dyn_number_coerce_js(const ScrDyn *d, double *out);
+/* Direct-return ABI wrapper for compiler libCalls: JS ToNumber, or NaN
+ * with the exception pending when an object hook throws/refuses. */
+double scr_dyn_number_coerce(const ScrDyn *d);
 
 /* `d instanceof TypeError` (and the other builtin error classes) on a
  * checked-dynamic value: the from_error cache resolves the dyn encoding

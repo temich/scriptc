@@ -6373,6 +6373,19 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2922-dyn-bitwise-not.cjs": {
+   "order": [
+    "<repo>/tests/corpus/2922-dyn-bitwise-not.cjs"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2923-cjs-factory-export/main.cjs": {
+   "order": [
+    "<repo>/tests/corpus/2923-cjs-factory-export/factory.cjs",
+    "<repo>/tests/corpus/2923-cjs-factory-export/main.cjs"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2930-union-receiver-calls.ts": {
    "order": [
     "<repo>/tests/corpus/2930-union-receiver-calls.ts"

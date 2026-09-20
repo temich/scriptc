@@ -12,12 +12,12 @@ import { BOOL, BYTES_U8, CAUGHT, DYN, F64, IrExpr, IrGlobal, IrJsOp, IrLocal, Ir
 import { PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, neverTaintedJsType, stmtUsesIsland, uncheckedOverloadHandleCall } from "./lowerer.js";
 import { enforceLibBoundary } from "./lib-boundary.js";
 import { cjsExportAssignmentOf, cjsExportDiscardReason, cjsExportTargetLiteral, isCjsJsFile, isJsSourceFile, locOf, requireSpecOf } from "../program.js";
-import { COMPOUND_ASSIGN_OPS, CompoundOp, STR_METHODS, UNSUPPORTED_STMT, isStdlibMember, sideEffectFreeOptionValue, stdlibGlobalAliasDecl, stdlibGlobalNameOf } from "./surfaces.js";
+import { COMPOUND_ASSIGN_OPS, CompoundOp, STR_METHODS, UNSUPPORTED_STMT, isStdlibMember, sideEffectFreeOptionValue, stdlibGlobalAliasDecl, stdlibGlobalAliasNameOf, stdlibGlobalNameOf } from "./surfaces.js";
 import { isProvenanceSourceFile } from "../provenance-registry.js";
 import { ambientUndefVarRootOf, lowerImportEquals, nsUndefRead, nsWritableTarget, trapDeclRootOf } from "./lower-namespaces.js";
 import { expandoWritableTarget, lowerExpandoAssignStmt } from "./lower-expando.js";
 import { ForOfIterProjection, lowerForOfArrayIter, lowerForOfMap, lowerForOfSearchParams, lowerForOfSet, lowerSafeIndexRead, objectIterOverIndexShape, strCharsCall } from "./lower-containers.js";
-import { bindingContextualGenericFnNodeOf, bindingGenericFnAliasInfoOf, bindingGenericFnInfoOf, bindingGenericFnNodeOf, deadUnmappableBinding, implicitLocalFnInfoOf, implicitLocalFnNodeOf, implicitMethodCallInfersReturn, nullishExprUnitOf, nullishGenericBindingUnitOf, recordKeysArrayCall, registerOverloadedCallableAlias } from "./lower-calls.js";
+import { bindingContextualGenericFnNodeOf, bindingGenericFnAliasInfoOf, bindingGenericFnInfoOf, bindingGenericFnNodeOf, bindingNeverReassigned, deadUnmappableBinding, implicitLocalFnInfoOf, implicitLocalFnNodeOf, implicitMethodCallInfersReturn, nullishExprUnitOf, nullishGenericBindingUnitOf, recordKeysArrayCall, registerOverloadedCallableAlias } from "./lower-calls.js";
 import { isMixinFnBinding, mixinResultBindingClassOf } from "./lower-mixins.js";
 import type { ClassInfo, ClassIteratorInfo } from "./lower-classes.js";
 import { genericIfaceBindingKeepsClass } from "./lower-classes.js";
@@ -3504,7 +3504,19 @@ export function lowerVarDecl(lowerer: Lowerer, decl: ts.VariableDeclaration, isL
 
     // `const process = globalThis.process` — a stdlib-global snapshot:
     // alias plumbing (see stdlibGlobalAliasDecl), no storage, no code.
-    if (!isLet && stdlibGlobalAliasDecl(lowerer, decl.name, decl.initializer)) return null;
+    const stableStdlibAlias =
+      !isLet ||
+      (
+        ts.isVariableDeclarationList(decl.parent) &&
+        (decl.parent.flags & ts.NodeFlags.Let) !== 0 &&
+        ts.isIdentifier(decl.name) &&
+        stdlibGlobalAliasNameOf(lowerer, decl.initializer) !== null &&
+        (() => {
+          const symbol = lowerer.checker.getSymbolAtLocation(decl.name);
+          return symbol !== undefined && bindingNeverReassigned(lowerer, symbol, decl);
+        })()
+      );
+    if (stableStdlibAlias && stdlibGlobalAliasDecl(lowerer, decl.name, decl.initializer)) return null;
 
     // `const encoder = new TextEncoder()` and a statically-labelled
     // TextDecoder twin: the codec has no general value representation, but calls
@@ -4497,7 +4509,7 @@ function isEsModuleStamp(expr: ts.Expression): boolean {
       const discarded = ts.isExpressionStatement(stmt) ? cjsExportDiscardReason(stmt) : null;
       if (discarded !== null) lowerer.unsupported("SC1090", cjs.expr, discarded);
     }
-    const assignExport = (nameNode: ts.Node, value: ts.Expression): IrStmt => {
+    const assignExport = (nameNode: ts.Node, value: ts.Expression, root?: IrGlobal): IrStmt => {
       const symbol =
         lowerer.checker.getSymbolAtLocation(nameNode) ??
         (ts.isIdentifier(nameNode) || ts.isPrivateIdentifier(nameNode)
@@ -4510,7 +4522,42 @@ function isEsModuleStamp(expr: ts.Expression): boolean {
         lowerer.lowerExpr(value);
         lowerer.badType(value, lowerer.typeOf(value));
       }
-      return { kind: "assign", localId: g.id, value: lowerer.lowerExprExpecting(value, g.type), loc: locOf(value) };
+      const lowered = lowerer.lowerExprExpecting(value, g.type);
+      if (root?.type.kind !== "dyn" || !ts.isIdentifier(nameNode)) {
+        return { kind: "assign", localId: g.id, value: lowered, loc: locOf(value) };
+      }
+      // A factory whole export is represented by its checked-dynamic root.
+      // A later `module.exports.name = value` mutates THAT same object in
+      // Node; the separate export global exists only so named-import and
+      // lexer-visible member paths have a static snapshot. Evaluate the
+      // RHS once, perform the observable object write first (it may throw
+      // if a factory returned a primitive), then publish the snapshot.
+      const saved = lowerer.declareHiddenLocal("%cjsMember", g.type);
+      const savedRef = (): IrExpr => ({ kind: "varRef", localId: saved.id, type: g.type, loc: locOf(value) });
+      const dynValue = lowerer.coerceInto(value, savedRef(), DYN);
+      return {
+        kind: "block",
+        body: [
+          { kind: "varDecl", localId: saved.id, init: lowered, loc: locOf(value) },
+          {
+            kind: "exprStmt",
+            expr: {
+              kind: "libCall",
+              fn: "dyn.keySet",
+              args: [
+                { kind: "varRef", localId: root.id, type: DYN, loc },
+                { kind: "strLit", value: nameNode.text, type: STRING, loc: locOf(nameNode) },
+                dynValue,
+              ],
+              type: VOID,
+              loc,
+            },
+            loc,
+          },
+          { kind: "assign", localId: g.id, value: savedRef(), loc: locOf(value) },
+        ],
+        loc,
+      };
     };
     if (cjs.kind === "member") {
       if (!ts.isIdentifier(cjs.name)) {
@@ -4571,7 +4618,14 @@ function isEsModuleStamp(expr: ts.Expression): boolean {
           if (names.every(laterRealOf)) return { kind: "block", body: [], loc };
         }
       }
-      return assignExport(cjs.name, cjs.value);
+      const sf = cjs.expr.getSourceFile();
+      let root: IrGlobal | undefined;
+      for (const stmt of sf.statements) {
+        const whole = cjsExportAssignmentOf(stmt);
+        if (whole?.kind !== "table" || cjsExportDiscardReason(stmt) !== null) continue;
+        root = lowerer.globalsByDeclNode.get(whole.expr);
+      }
+      return assignExport(cjs.name, cjs.value, root);
     }
     let tableObj = cjs.obj;
     let resolvedTarget = false;

@@ -6219,6 +6219,19 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
     if (member !== "isTTY" && member !== "columns") return null;
     let recv: ts.Expression = expr.expression;
     while (ts.isParenthesizedExpression(recv) || ts.isAsExpression(recv) || ts.isTypeAssertion(recv)) recv = recv.expression;
+    // Browser-compatible packages commonly write
+    // `(process.stdout || {}).isTTY`. Node's stream object is always
+    // present and truthy, so the fallback cannot run; match the left
+    // receiver exactly as the value-level always-truthy `||` lowering
+    // does, preserving the native isatty/columns answer.
+    if (
+      ts.isBinaryExpression(recv) &&
+      recv.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    ) {
+      let left = recv.left;
+      while (ts.isParenthesizedExpression(left) || ts.isAsExpression(left) || ts.isTypeAssertion(left)) left = left.expression;
+      if (ts.isPropertyAccessExpression(left)) recv = left;
+    }
     if (!ts.isPropertyAccessExpression(recv)) return null;
     const stream = lowerer.stdlibGlobalMember(recv, "process");
     if (stream !== "stdin" && stream !== "stdout" && stream !== "stderr") return null;

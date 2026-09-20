@@ -4351,6 +4351,11 @@ function emitDynamicLibCall(state: LibCallState): Temp {
             // +1 string or NULL with the exception pending (user
             // toString/valueOf throws propagate). Borrows the dyn.
             return finish(`scr_dyn_string_coerce_js(${arg(0)})`);
+          case "dyn.toNumberCoerce":
+            // JS ToNumber (number-hint valueOf/toString protocol). A
+            // thrown hook leaves the exception pending; the may-throw
+            // epilogue abandons the NaN dummy.
+            return finish(`scr_dyn_number_coerce(${arg(0)})`);
           case "global.undefRead":
             // A declare-d const nothing defines: Node's catchable
             // ReferenceError at the access (always throws — the typed

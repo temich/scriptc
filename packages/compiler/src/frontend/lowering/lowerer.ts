@@ -854,7 +854,27 @@ function jsFallbackFunctionType(lowerer: Lowerer, node: ts.Node, t: ts.Type): Ir
   if (!sig) return null;
   const params = sig.getParameters().map((p): IrType => {
     const pt = lowerer.checker.getTypeOfSymbolAtLocation(p, node);
-    return lowerer.mapTypeOf(pt) ?? DYN;
+    let mapped = lowerer.mapTypeOf(pt) ?? DYN;
+    // The fallback must preserve the same completed ABI as mapType and
+    // lambdaSignature: a spelled optional/defaulted parameter accepts an
+    // omitted call, represented by an undefined arm in its fixed native
+    // slot. JS inference reports the body type (`boolean` for
+    // `enabled = true`) rather than that call-site type, so recover the
+    // syntactic optionality from the parameter declaration.
+    const decl = lowerer.checker.valueDeclarationOf(p);
+    const optional =
+      decl !== undefined &&
+      ts.isParameter(decl) &&
+      (decl.questionToken !== undefined || decl.initializer !== undefined);
+    if (
+      optional &&
+      mapped.kind !== "dyn" &&
+      mapped.kind !== "jsval" &&
+      !lowerer.bareUndefinedArmedUnion(mapped)
+    ) {
+      mapped = lowerer.withUndefinedArm(mapped);
+    }
+    return mapped;
   });
   const retT = lowerer.checker.getReturnTypeOfSignature(sig);
   const ret: IrType = retT.flags & ts.TypeFlags.Void ? VOID : lowerer.mapTypeOf(retT) ?? DYN;
@@ -1536,9 +1556,9 @@ export class Lowerer {
   readonly spHofHelpers = new Map<string, string>();
   /** The primitive-constructor VALUES (`String`/`Number`/`Boolean` as
    * bare identifiers — CLI option tables store and compare them): one
-   * synthesized coercion function per constructor per program, interned
-   * here by name so every reference is the SAME zero-capture closure and
-   * `opt.type === String` is JS identity (see primitiveCtorClosure). */
+   * synthesized coercion function per constructor and typed/dyn ABI,
+   * interned here so references under one source-world ABI are the SAME
+   * zero-capture closure (see primitiveCtorClosure). */
   readonly primitiveCtorFns = new Map<string, string>();
   /** Builtin-module FUNCTIONS admitted as values by their surface-table
    * entries. The resolved runtime function plus ABI is the identity key,
@@ -2380,10 +2400,14 @@ export class Lowerer {
         while (init && ts.isParenthesizedExpression(init)) init = init.expression;
         if (!init || !ts.isObjectLiteralExpression(init)) return false;
       }
-      // The scalar-literal export= symbol declares AT the `module.exports
-      // =` statement itself; table/Proxy replacements share that
-      // declaration node, so only scalar RHS reads as a single value.
+      // A represented whole export declares AT the `module.exports =`
+      // statement itself. Scalar/function/factory-call roots register one
+      // snapshot global on that declaration; table/Proxy replacements do
+      // not. A binding whose declaration owns such storage is therefore a
+      // single VALUE, not a namespace whose members must appear in Node's
+      // CJS lexer export table.
       if (d && ts.isBinaryExpression(d)) {
+        if (this.globalsByDeclNode.has(d)) return false;
         let r: ts.Expression = d.right;
         while (ts.isParenthesizedExpression(r)) r = r.expression;
         const scalar =

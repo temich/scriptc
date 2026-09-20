@@ -1905,6 +1905,12 @@ bool scr_dyn_number_coerce_js(const ScrDyn *d, double *out) {
   }
 }
 
+double scr_dyn_number_coerce(const ScrDyn *d) {
+  double out = NAN;
+  (void)scr_dyn_number_coerce_js(d, &out);
+  return out;
+}
+
 /* The checked-dynamic keyed WRITE (`h.k = v` on a dyn receiver): OBJ sets
  * the member (later writes win, insertion order — JS); undefined/null
  * throws Node's "Cannot set properties of ..."; every other kind throws

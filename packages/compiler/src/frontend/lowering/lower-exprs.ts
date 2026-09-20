@@ -1032,13 +1032,17 @@ function lowerExprInner(lowerer: Lowerer, expr: ts.Expression): IrExpr {
       // type-mapper.ts pins the one concrete signature `(value: string) =>
       // primitive`; direct calls `String(x)` never reach here — the call
       // lowering intercepts them with the wider static coercions).
-      // JavaScript sources keep the identity-token path below.
+      const jsPrimitiveCtorSelector =
+        isJsSourceFile(expr.getSourceFile()) &&
+        expr.parent !== undefined &&
+        ts.isArrowFunction(expr.parent) &&
+        expr.parent.body === expr;
       if (
         (expr.text === "String" || expr.text === "Number" || expr.text === "Boolean") &&
-        !isJsSourceFile(expr.getSourceFile()) &&
+        (!isJsSourceFile(expr.getSourceFile()) || jsPrimitiveCtorSelector) &&
         lowerer.isStdlibSymbol(lowerer.checker.getSymbolAtLocation(expr))
       ) {
-        return primitiveCtorClosure(lowerer, expr.text, loc);
+        return primitiveCtorClosure(lowerer, expr.text, loc, jsPrimitiveCtorSelector);
       }
       // The lib fence's IDENTIFIER chokepoint: the real standard library
       // resolves names the old minimal ambient world never declared
@@ -5620,7 +5624,14 @@ export function lowerPrefixUnary(lowerer: Lowerer, expr: ts.PrefixUnaryExpressio
         if (raw.type.kind === "bigint") {
           return { kind: "libCall", fn: "bigint.not", args: [raw], type: BIGINT_T, loc };
         }
-        const operand = lowerOptionalNumber(lowerer, raw, loc, expr.operand);
+        // A checked-dynamic value retains enough JavaScript structure to
+        // run exact ToNumber, including the object valueOf/toString
+        // protocol. This is the static `any`/JS-lane answer for idioms
+        // such as `while (~index)`, where inference may have widened an
+        // otherwise numeric slot to the checked-dynamic tree.
+        const operand = raw.type.kind === "dyn"
+          ? { kind: "libCall" as const, fn: "dyn.toNumberCoerce" as const, args: [raw], type: F64, loc }
+          : lowerOptionalNumber(lowerer, raw, loc, expr.operand);
         if (operand.type.kind !== "f64") lowerer.unsupported("SC1043", expr);
         return { kind: "unary", op: "~", operand, type: F64, loc };
       }
@@ -5980,6 +5991,15 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
       // units only — computed unit-typed values keep the fences below.
       if (left.kind === "unitLit") {
         return op === ts.SyntaxKind.BarBarToken ? right : left;
+      }
+      // JS objects and symbols are always truthy. In `ref || fallback`
+      // the fallback is therefore unreachable and the result is the
+      // already-evaluated left value — the browser-fallback idiom used by
+      // packages for `process.argv || []` and `process.env || {}`. The
+      // operand itself remains in the IR, preserving reads/calls that
+      // produce the reference; only the unreachable right lowering drops.
+      if (op === ts.SyntaxKind.BarBarToken && REF_TRUTHY_KINDS.has(left.type.kind)) {
+        return left;
       }
       if (left.type.kind === "dyn" || right.type.kind === "dyn") {
         // A checked-dynamic operand (`fn.name || '<anonymous>'` —
@@ -9527,37 +9547,45 @@ function lowerStreamObjectProperty(lowerer: Lowerer, expr: ts.PropertyAccessExpr
 }
 
 /** The primitive-constructor closure (`String`/`Number`/`Boolean` as a
- * VALUE): interns one synthesized module function per constructor —
- * `%builtin.String` et al. — and returns the zero-capture closure over it.
- * The body IS the string-coercion the type mapping promised
- * (`(value: string) => primitive`): String is identity, Number the ECMA
- * StringToNumber (num.fromString — the same runtime call the direct
- * `Number(s)` lowering emits), Boolean the emptiness test. Interning makes
- * every reference the SAME immortal closure, so `opt.type === String`
- * compares like JS function identity. */
+ * VALUE): interns one synthesized module function per constructor/ABI and
+ * returns the zero-capture closure over it. Typed sources use the mapped
+ * `(value: string) => primitive` signature; a recognized JavaScript
+ * concise-arrow selector (`() => String`, the picocolors fallback) takes
+ * dyn so its ordinary coercion signature survives inference residue. The
+ * dyn bodies run exact ToString/ToNumber/ToBoolean, including object hooks.
+ * Interning makes every reference under one ABI the SAME immortal closure,
+ * so `opt.type === String` compares like JS function identity. */
 function primitiveCtorClosure(
   lowerer: Lowerer,
   name: "String" | "Number" | "Boolean",
   loc: SrcLoc,
+  dynamicInput: boolean,
 ): IrExpr {
   const ret = name === "String" ? STRING : name === "Number" ? F64 : BOOL;
-  const fnT = funcOf([STRING], ret);
-  let fnName = lowerer.primitiveCtorFns.get(name);
+  const input = dynamicInput ? DYN : STRING;
+  const fnT = funcOf([input], ret);
+  const key = `${name}:${dynamicInput ? "dyn" : "string"}`;
+  let fnName = lowerer.primitiveCtorFns.get(key);
   if (!fnName) {
-    fnName = `%builtin.${name}`;
-    lowerer.primitiveCtorFns.set(name, fnName);
-    const s: IrExpr = { kind: "varRef", localId: "v.0", type: STRING, loc };
-    const value: IrExpr =
-      name === "String"
-        ? s
+    fnName = `%builtin.${name}${dynamicInput ? ".dyn" : ""}`;
+    lowerer.primitiveCtorFns.set(key, fnName);
+    const v: IrExpr = { kind: "varRef", localId: "v.0", type: input, loc };
+    const value: IrExpr = dynamicInput
+      ? name === "String"
+        ? { kind: "libCall", fn: "dyn.toStringCoerce", args: [v], type: STRING, loc }
         : name === "Number"
-          ? { kind: "libCall", fn: "num.fromString", args: [s], type: F64, loc }
-          : { kind: "strEq", negated: true, left: s, right: { kind: "strLit", value: "", type: STRING, loc }, type: BOOL, loc };
+          ? { kind: "libCall", fn: "dyn.toNumberCoerce", args: [v], type: F64, loc }
+          : { kind: "dynTest", test: "truthy", value: v, type: BOOL, loc }
+      : name === "String"
+        ? v
+        : name === "Number"
+          ? { kind: "libCall", fn: "num.fromString", args: [v], type: F64, loc }
+          : { kind: "strEq", negated: true, left: v, right: { kind: "strLit", value: "", type: STRING, loc }, type: BOOL, loc };
     const fn: IrFunction = {
       name: fnName,
-      params: [{ localId: "v.0", name: "value", type: STRING }],
+      params: [{ localId: "v.0", name: "value", type: input }],
       returnType: ret,
-      locals: [{ id: "v.0", name: "value", type: STRING, mutable: false }],
+      locals: [{ id: "v.0", name: "value", type: input, mutable: false }],
       body: [{ kind: "return", value, loc }],
       loc,
     };

@@ -840,6 +840,22 @@ function completeFuncValueArgs(
     ) {
       return;
     }
+    // An uncontextualized npm-static implementation function can still
+    // have a declaration-backed completed ABI: the package's .d.ts
+    // projection supplies the body-facing parameter/return types while
+    // the shipped JavaScript's own inferred type remains wider (`any`
+    // callback fields are the common case). lambdaSignature has already
+    // constructed and validated that concrete ABI, and every eventual
+    // storage/call site independently checks it. Admit the value at birth;
+    // do not make the unprojected JS inference veto its authored surface.
+    if (
+      target === undefined &&
+      contextual !== null &&
+      (ts.isArrowFunction(contextual) || ts.isFunctionExpression(contextual)) &&
+      npmStaticPackageOfPath(contextual.getSourceFile().fileName) !== null
+    ) {
+      return;
+    }
     // An 'any'-typed slot is the ISLAND boundary: the host-function
     // trampoline already implements JS call semantics over the completed
     // signature — a missing engine argument arrives as undefined and takes
@@ -5188,8 +5204,10 @@ function lowerOptionalStringNumber(
       arrayReceiver &&
       ((lowerer.checker.getTypeArguments(recvTs as ts.TypeReference)[0]?.flags ?? 0) &
         (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
+    const checkerUntyped =
+      (recvTs.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0 || anyArray;
     let recv: IrExpr;
-    if (recvTs.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown) || anyArray) {
+    if (checkerUntyped) {
       recv = lowerer.lowerExpr(access.expression);
     } else {
       // A checker-TYPED spelling whose VALUE is still checked-dynamic (an
@@ -5272,7 +5290,16 @@ function lowerOptionalStringNumber(
     // member models. Order note: JS reads the callee before evaluating
     // arguments — dynKeyGet's undefined-receiver TypeError fires first,
     // exactly Node.
-    if (DYN_PROTO_METHOD_NAMES.has(access.name.text)) return null;
+    // A checker-typed object whose represented value remains dyn still
+    // has an authored own-member contract. Let that member win even when
+    // its name overlaps a primitive prototype (`colors.bold(...)`): the
+    // source value was compiled from that object shape, while genuinely
+    // untyped/any receivers retain the runtime-kind ambiguity and fence.
+    const ownCallable = !checkerUntyped && (() => {
+      const prop = lowerer.checker.getPropertyOfType(recvTs, access.name.text);
+      return prop !== undefined && lowerer.checker.getCallSignatures(lowerer.checker.getTypeOfSymbol(prop)).length > 0;
+    })();
+    if (DYN_PROTO_METHOD_NAMES.has(access.name.text) && !ownCallable) return null;
     // Optional forms (`obj.cb?.()`, `obj?.cb()`) belong to the chain
     // machinery's short-circuit semantics — not modeled here yet.
     if (call.questionDotToken || access.questionDotToken) return null;
