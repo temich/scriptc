@@ -9656,6 +9656,12 @@ export function lowerFunction(lowerer: Lowerer, decl: ts.FunctionDeclaration): I
     access: ts.PropertyAccessExpression,): IrExpr | null {
     if (lowerer.chainBlocked(access, call)) return null;
     const mappedReceiver = lowerer.mapTypeOf(lowerer.typeOf(access.expression));
+    if (mappedReceiver?.kind === "union") {
+      const dispatched =
+        lowerUnionObjectMethodCall(lowerer, call, access, mappedReceiver) ??
+        lowerUnionObjectDynFieldCall(lowerer, call, access, mappedReceiver);
+      if (dispatched) return dispatched;
+    }
     const receiverIr = mappedReceiver?.kind === "object"
       ? mappedReceiver
       : mappedReceiver?.kind === "union"
@@ -9799,3 +9805,225 @@ export function lowerFunction(lowerer: Lowerer, decl: ts.FunctionDeclaration): I
       loc: locOf(call),
     });
   }
+
+/** A method TypeScript proves callable on every arm of an unrelated class
+ * union. Each runtime tag keeps its own direct/virtual dispatch; only the
+ * completed argument ABI must agree. Results flow into the checker-selected
+ * call type through the ordinary wrap/retag/width machinery. */
+function lowerUnionObjectMethodCall(
+  lowerer: Lowerer,
+  call: ts.CallExpression,
+  access: ts.PropertyAccessExpression,
+  receiverT: IrType & { kind: "union" },
+): IrExpr | null {
+  const def = lowerer.unions.get(receiverT.unionId);
+  if (!def || def.arms.length < 2 || !def.arms.every((arm) => arm.kind === "object")) return null;
+  const method = access.name.text;
+  const plans: {
+    arm: IrType & { kind: "object" };
+    info: ClassInfo;
+    found: NonNullable<ReturnType<Lowerer["findMethodOn"]>>;
+  }[] = [];
+  for (const arm of def.arms as (IrType & { kind: "object" })[]) {
+    const info = lowerer.classes.get(arm.className);
+    if (!info) {
+      lowerer.flushDeferredClass(arm.className);
+      return null;
+    }
+    const found = lowerer.findMethodOn(info, method);
+    if (!found) return null;
+    if (found.sig.abstract === true && !lowerer.overrideBelow(info, method)) return null;
+    plans.push({ arm, info, found });
+  }
+  const shapes = plans[0]!.found.sig.params;
+  if (!plans.every((plan) => paramAbisEqual(shapes, plan.found.sig.params))) return null;
+  const resultT = lowerer.mapTypeOf(lowerer.typeOf(call));
+  if (!resultT || isUnitType(resultT)) return null;
+  const loc = locOf(call);
+  const receiver = lowerer.coerceInto(access.expression, lowerer.lowerExpr(access.expression), receiverT);
+  const args = lowerer.completeArgs(call.arguments, shapes, loc, call);
+  const helper = unionObjectMethodHelper(lowerer, call, receiverT, method, plans, shapes, resultT, loc);
+  return { kind: "call", callee: helper, args: [receiver, ...args], type: resultT, loc };
+}
+
+function paramAbisEqual(left: readonly ParamShape[], right: readonly ParamShape[]): boolean {
+  return left.length === right.length && left.every((shape, i) => {
+    const other = right[i];
+    return other !== undefined && shape.mode === other.mode && typeEquals(shape.type, other.type);
+  });
+}
+
+/** The JS-class sibling of union method dispatch: every arm stores the
+ * named callable in a checked-dynamic field. A helper selects and retains
+ * the field value before the dynCall evaluates its source arguments, so an
+ * argument that overwrites the field cannot change this invocation. */
+function lowerUnionObjectDynFieldCall(
+  lowerer: Lowerer,
+  call: ts.CallExpression,
+  access: ts.PropertyAccessExpression,
+  receiverT: IrType & { kind: "union" },
+): IrExpr | null {
+  const def = lowerer.unions.get(receiverT.unionId);
+  if (!def || def.arms.length < 2 || !def.arms.every((arm) => arm.kind === "object")) return null;
+  const field = access.name.text;
+  const plans: { arm: IrType & { kind: "object" }; info: ClassInfo }[] = [];
+  for (const arm of def.arms as (IrType & { kind: "object" })[]) {
+    const info = lowerer.classes.get(arm.className);
+    if (!info || info.fields.get(field)?.kind !== "dyn") return null;
+    plans.push({ arm, info });
+  }
+  if (call.arguments.some(ts.isSpreadElement)) {
+    lowerer.unsupported("SC1090", call, "spread arguments in calls through 'unknown' values");
+  }
+  const loc = locOf(call);
+  const receiver = lowerer.coerceInto(access.expression, lowerer.lowerExpr(access.expression), receiverT);
+  const key = `${receiverT.unionId}:dyn-field:${field}`;
+  let helper = lowerer.unionCallHelpers.get(key);
+  if (!helper) {
+    helper = `%union.call.${lowerer.unionCallHelpers.size}`;
+    lowerer.unionCallHelpers.set(key, helper);
+    const receiverRef = varRef("this.0", receiverT, loc);
+    const branch = (plan: typeof plans[number]): IrStmt[] => {
+      const concrete: IrExpr = {
+        kind: "unionNarrow",
+        unionId: receiverT.unionId,
+        tag: lowerer.armTag(receiverT.unionId, plan.arm),
+        value: receiverRef,
+        type: plan.arm,
+        loc,
+      };
+      return [{
+        kind: "return",
+        value: {
+          kind: "fieldGet",
+          obj: concrete,
+          className: plan.info.def.name,
+          field,
+          type: DYN,
+          loc,
+        },
+        loc,
+      }];
+    };
+    let body = branch(plans[plans.length - 1]!);
+    for (let i = plans.length - 2; i >= 0; i--) {
+      const plan = plans[i]!;
+      body = [{
+        kind: "if",
+        cond: {
+          kind: "unionIsTag",
+          unionId: receiverT.unionId,
+          tag: lowerer.armTag(receiverT.unionId, plan.arm),
+          negated: false,
+          value: receiverRef,
+          type: BOOL,
+          loc,
+        },
+        then: branch(plan),
+        else_: body,
+        loc,
+      }];
+    }
+    const params: IrParam[] = [
+      { localId: "this.0", name: "this", type: receiverT },
+    ];
+    const locals: IrLocal[] = params.map((param) => ({ id: param.localId, name: param.name, type: param.type, mutable: false }));
+    lowerer.liftedFns.push({ name: helper, params, returnType: DYN, locals, body, loc });
+  }
+  const callee: IrExpr = { kind: "call", callee: helper, args: [receiver], type: DYN, loc };
+  const args = call.arguments.map((arg) => lowerer.lowerExprExpecting(arg, DYN));
+  return { kind: "dynCall", callee, calleeName: access.getText(), args, type: DYN, loc };
+}
+
+function unionObjectMethodHelper(
+  lowerer: Lowerer,
+  sourceCall: ts.CallExpression,
+  receiverT: IrType & { kind: "union" },
+  method: string,
+  plans: {
+    arm: IrType & { kind: "object" };
+    info: ClassInfo;
+    found: NonNullable<ReturnType<Lowerer["findMethodOn"]>>;
+  }[],
+  shapes: readonly ParamShape[],
+  resultT: IrType,
+  loc: SrcLoc,
+): string {
+  const key = `${receiverT.unionId}:${method}:${shapes.map((shape) => `${shape.mode}:${typeKey(shape.type)}`).join(",")}:${typeKey(resultT)}`;
+  const existing = lowerer.unionCallHelpers.get(key);
+  if (existing) return existing;
+  const name = `%union.call.${lowerer.unionCallHelpers.size}`;
+  lowerer.unionCallHelpers.set(key, name);
+  const receiver = varRef("this.0", receiverT, loc);
+  const argRefs = shapes.map((shape, i) => varRef(`a.${i}`, shape.type, loc));
+  const branch = (plan: typeof plans[number]): IrStmt[] => {
+    const concrete: IrExpr = {
+      kind: "unionNarrow",
+      unionId: receiverT.unionId,
+      tag: lowerer.armTag(receiverT.unionId, plan.arm),
+      value: receiver,
+      type: plan.arm,
+      loc,
+    };
+    let invoke: IrExpr;
+    if (plan.found.declarer.builtinError) {
+      invoke = {
+        kind: "libCall",
+        fn: "error.toString",
+        args: [lowerer.upcastTo(concrete, plan.found.declarer.def.name)],
+        type: STRING,
+        loc,
+      };
+    } else if (lowerer.overrideBelow(plan.info, method)) {
+      lowerer.noteVirtualEdge(plan.info, method);
+      invoke = {
+        kind: "virtualCall",
+        className: plan.info.def.name,
+        method,
+        args: [lowerer.upcastTo(concrete, plan.info.def.name), ...argRefs],
+        type: plan.found.sig.ret,
+        loc,
+      };
+    } else {
+      lowerer.noteEdge(`%${plan.found.declarer.def.name}.${method}`);
+      invoke = {
+        kind: "call",
+        callee: `%${plan.found.declarer.def.name}.${method}`,
+        args: [lowerer.upcastTo(concrete, plan.found.declarer.def.name), ...argRefs],
+        type: plan.found.sig.ret,
+        loc,
+      };
+    }
+    invoke = reconcileOverloadReturn(lowerer, sourceCall, invoke);
+    const result = lowerer.coerceInto(sourceCall, invoke, resultT);
+    return resultT.kind === "void"
+      ? [{ kind: "exprStmt", expr: result, loc }, { kind: "return", value: null, loc }]
+      : [{ kind: "return", value: result, loc }];
+  };
+  let body = branch(plans[plans.length - 1]!);
+  for (let i = plans.length - 2; i >= 0; i--) {
+    const plan = plans[i]!;
+    body = [{
+      kind: "if",
+      cond: {
+        kind: "unionIsTag",
+        unionId: receiverT.unionId,
+        tag: lowerer.armTag(receiverT.unionId, plan.arm),
+        negated: false,
+        value: receiver,
+        type: BOOL,
+        loc,
+      },
+      then: branch(plan),
+      else_: body,
+      loc,
+    }];
+  }
+  const params: IrParam[] = [
+    { localId: "this.0", name: "this", type: receiverT },
+    ...shapes.map((shape, i) => ({ localId: `a.${i}`, name: `a${i}`, type: shape.type })),
+  ];
+  const locals: IrLocal[] = params.map((param) => ({ id: param.localId, name: param.name, type: param.type, mutable: false }));
+  lowerer.liftedFns.push({ name, params, returnType: resultT, locals, body, loc });
+  return name;
+}

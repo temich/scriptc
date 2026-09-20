@@ -7826,22 +7826,24 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
     // Compile-time-known STRING keys fold — literals, and the same
     // const/enum-literal and template folding computed property keys get
     // (foldedStringKeyOf); runtime-valued keys keep the fence.
-    // NUMERIC literal keys answer on ARRAY receivers: dense arrays hold
-    // exactly the indices [0, length), so `3 in xs` is a length test (and
-    // a negative/fractional literal is a constant miss — the receiver
-    // still evaluates once through its own length read).
+    // NUMERIC literal keys answer on ARRAY receivers through the shared
+    // presence query. Arrays retain holes independently from length, and
+    // noncanonical numeric keys live in their ordinary-property table, so
+    // a length comparison is not an honest `in` answer.
     {
       let kNode = expr.left;
       while (ts.isParenthesizedExpression(kNode)) kNode = kNode.expression;
       if (ts.isNumericLiteral(kNode) && lowerer.mapTypeOf(lowerer.typeOf(expr.right))?.kind === "array") {
         const recvArr = lowerer.lowerExpr(expr.right);
         if (recvArr.type.kind === "array") {
-          const len: IrExpr = { kind: "arrIntrinsic", method: "length", receiver: recvArr, args: [], type: F64, loc };
           const n = Number(kNode.text);
-          if (Number.isInteger(n) && n >= 0) {
-            return { kind: "bin", op: "<", left: { kind: "numLit", value: n, type: F64, loc }, right: len, type: BOOL, loc };
-          }
-          return { kind: "bin", op: "<", left: len, right: { kind: "numLit", value: 0, type: F64, loc }, type: BOOL, loc };
+          return {
+            kind: "arrayHas",
+            arr: recvArr,
+            index: { kind: "numLit", value: n, type: F64, loc },
+            type: BOOL,
+            loc,
+          };
         }
       }
     }

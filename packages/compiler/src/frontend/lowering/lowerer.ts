@@ -1451,6 +1451,9 @@ export class Lowerer {
   /** Synthetic array-HOF loop functions (map/filter/forEach desugar),
    * interned per method + element/callback-result type: key → fn name. */
   readonly arrHofHelpers = new Map<string, string>();
+  /** Per-arm calls through union-typed class receivers, interned by the
+   * receiver union, member, completed argument ABI, and result type. */
+  readonly unionCallHelpers = new Map<string, string>();
   /** Derived shape metadata that depends on another shape's declaration
    * order. These settle before helper bodies rebuild from that metadata. */
   readonly shapeOrderMetadataFinalizers: (() => void)[] = [];

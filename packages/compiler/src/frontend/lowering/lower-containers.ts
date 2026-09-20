@@ -114,6 +114,10 @@ function fenceProducedArrayElem(lowerer: Lowerer, node: ts.Node, producer: strin
         probedUntyped = true;
       }
     }
+    if (receiverIr?.kind === "union") {
+      const unionHof = lowerArrayUnionHofCall(lowerer, call, access, receiverIr);
+      if (unionHof) return unionHof;
+    }
     if (receiverIr?.kind !== "array") return null;
     if (!probedUntyped && !lowerer.isStdlibMember(access)) return null;
     let elem = receiverIr.elem;
@@ -1183,6 +1187,154 @@ function filterCond(call: IrExpr, fnRet: IrType, loc: SrcLoc): IrExpr {
     lowerer.liftedFns.push(buildArrayHofFn(lowerer, name, method, elem, fnRet, arity, loc, outElem));
     return name;
   }
+
+/** The TS 5.2+ callable-union array rule: a `T[] | U[]` receiver exposes
+ * common HOFs with a callback over `T | U`. The runtime value remains the
+ * original concrete array arm — never a copied `(T | U)[]` — and an
+ * arm-specific function adapter wraps the element and receiver arguments
+ * into the union-wide callback ABI. That preserves sparse-array reads,
+ * callback mutation, and the callback's third-argument identity. */
+function lowerArrayUnionHofCall(
+  lowerer: Lowerer,
+  call: ts.CallExpression,
+  access: ts.PropertyAccessExpression,
+  receiverT: IrType & { kind: "union" },
+): IrExpr | null {
+  const method = access.name.text;
+  if (method !== "map" && method !== "forEach") return null;
+  if (!lowerer.isStdlibMember(access)) return null;
+  const def = lowerer.unions.get(receiverT.unionId);
+  if (!def || def.arms.length < 2 || !def.arms.every((arm) => arm.kind === "array")) return null;
+  if (call.arguments.length !== 1 || !call.arguments[0]) return null;
+  const arrays = def.arms as (IrType & { kind: "array" })[];
+  const valueArms: IrType[] = [];
+  const addValueArm = (type: IrType): boolean => {
+    if (type.kind === "dyn" || type.kind === "jsval" || type.kind === "caught" || type.kind === "void") return false;
+    if (type.kind === "union") {
+      const inner = lowerer.unions.get(type.unionId);
+      if (!inner) return false;
+      for (const arm of inner.arms) {
+        if (!valueArms.some((candidate) => typeEquals(candidate, arm))) valueArms.push(arm);
+      }
+      return true;
+    }
+    if (!valueArms.some((candidate) => typeEquals(candidate, type))) valueArms.push(type);
+    return true;
+  };
+  for (const array of arrays) {
+    if (!addValueArm(array.elem)) return null;
+  }
+  const valueT: IrType = valueArms.length === 1
+    ? valueArms[0]!
+    : { kind: "union", unionId: lowerer.unions.intern(valueArms) };
+  const argNode = call.arguments[0]!;
+  const { fnArg, arity } = hofCallbackArg(lowerer, argNode, [valueT], receiverT);
+  const fnRet = fnArg.type.ret;
+  if (method === "map" && (fnRet.kind === "void" || fnRet.kind === "func")) {
+    lowerer.badType(call, lowerer.typeOf(call));
+  }
+  if (method === "map") fenceProducedArrayElem(lowerer, call, "'.map()'", fnRet);
+  const outElem = method === "map" ? callbackArrayElem(lowerer, call, fnRet) : VOID;
+  const resultT: IrType = method === "map" ? arrayOf(outElem) : VOID;
+  for (const array of arrays) {
+    const armFnT = funcOf([arrayValueType(lowerer, array.elem), F64, array].slice(0, arity), fnRet) as IrType & { kind: "func" };
+    if (!lowerer.cleanFuncAdaptable(fnArg.type, armFnT)) return null;
+  }
+  const helper = arrayUnionHofHelper(
+    lowerer,
+    method,
+    receiverT,
+    arrays,
+    fnArg.type,
+    arity,
+    fnRet,
+    outElem,
+    locOf(call),
+  );
+  return {
+    kind: "call",
+    callee: helper,
+    args: [lowerer.coerceInto(access.expression, lowerer.lowerExpr(access.expression), receiverT), fnArg],
+    type: resultT,
+    loc: locOf(call),
+  };
+}
+
+function arrayUnionHofHelper(
+  lowerer: Lowerer,
+  method: "map" | "forEach",
+  receiverT: IrType & { kind: "union" },
+  arrays: (IrType & { kind: "array" })[],
+  callbackT: IrType & { kind: "func" },
+  arity: number,
+  fnRet: IrType,
+  outElem: IrType,
+  loc: SrcLoc,
+): string {
+  const resultT: IrType = method === "map" ? arrayOf(outElem) : VOID;
+  const key = `union:${method}:${receiverT.unionId}:${typeKey(callbackT)}:${typeKey(resultT)}`;
+  const existing = lowerer.arrHofHelpers.get(key);
+  if (existing) return existing;
+  const name = `%arr.union.${lowerer.arrHofHelpers.size}`;
+  lowerer.arrHofHelpers.set(key, name);
+  const receiver = varRef("a.0", receiverT, loc);
+  const callback = varRef("f.0", callbackT, loc);
+  const branch = (array: IrType & { kind: "array" }): IrStmt[] => {
+    const tag = lowerer.armTag(receiverT.unionId, array);
+    const concrete: IrExpr = {
+      kind: "unionNarrow",
+      unionId: receiverT.unionId,
+      tag,
+      value: receiver,
+      type: array,
+      loc,
+    };
+    const armFnT = funcOf([arrayValueType(lowerer, array.elem), F64, array].slice(0, arity), fnRet) as IrType & { kind: "func" };
+    const adapted = lowerer.coerceToExpected(callback, armFnT);
+    if (!typeEquals(adapted.type, armFnT)) {
+      throw new InternalCompilerError("lowerer bug: union-array callback stopped adapting");
+    }
+    const callee = arrayHofHelper(lowerer, method, array.elem, fnRet, arity, loc, outElem);
+    const invoke: IrExpr = { kind: "call", callee, args: [concrete, adapted], type: resultT, loc };
+    return resultT.kind === "void"
+      ? [{ kind: "exprStmt", expr: invoke, loc }, { kind: "return", value: null, loc }]
+      : [{ kind: "return", value: invoke, loc }];
+  };
+  let body = branch(arrays[arrays.length - 1]!);
+  for (let i = arrays.length - 2; i >= 0; i--) {
+    const array = arrays[i]!;
+    body = [{
+      kind: "if",
+      cond: {
+        kind: "unionIsTag",
+        unionId: receiverT.unionId,
+        tag: lowerer.armTag(receiverT.unionId, array),
+        negated: false,
+        value: receiver,
+        type: BOOL,
+        loc,
+      },
+      then: branch(array),
+      else_: body,
+      loc,
+    }];
+  }
+  lowerer.liftedFns.push({
+    name,
+    params: [
+      { localId: "a.0", name: "a", type: receiverT },
+      { localId: "f.0", name: "f", type: callbackT },
+    ],
+    returnType: resultT,
+    locals: [
+      { id: "a.0", name: "a", type: receiverT, mutable: false },
+      { id: "f.0", name: "f", type: callbackT, mutable: false },
+    ],
+    body,
+    loc,
+  });
+  return name;
+}
 
 /** READ-ONLY array methods on TUPLE receivers — `t.slice(...)` and
    * `t.map(f)`: a tuple is a fixed-shape record, but these methods never

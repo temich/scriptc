@@ -6373,6 +6373,18 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2930-union-receiver-calls.ts": {
+   "order": [
+    "<repo>/tests/corpus/2930-union-receiver-calls.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2931-union-dynamic-field-call.js": {
+   "order": [
+    "<repo>/tests/corpus/2931-union-dynamic-field-call.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
