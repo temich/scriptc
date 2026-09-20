@@ -5297,7 +5297,15 @@ function lowerOptionalStringNumber(
     // untyped/any receivers retain the runtime-kind ambiguity and fence.
     const ownCallable = !checkerUntyped && (() => {
       const prop = lowerer.checker.getPropertyOfType(recvTs, access.name.text);
-      return prop !== undefined && lowerer.checker.getCallSignatures(lowerer.checker.getTypeOfSymbol(prop)).length > 0;
+      if (prop === undefined) return false;
+      // getPropertyOfType includes inherited Object.prototype members.
+      // Those are not stored members of a checked-dynamic object, so
+      // dynKeyGet cannot stand in for JavaScript's prototype lookup. Only
+      // an authored declaration can justify the own-member path.
+      const authored = lowerer.checker.declarationsOf(prop).some(
+        (decl) => !lowerer.isStdlibFile(decl.getSourceFile()),
+      );
+      return authored && lowerer.checker.getCallSignatures(lowerer.checker.getTypeOfSymbol(prop)).length > 0;
     })();
     if (DYN_PROTO_METHOD_NAMES.has(access.name.text) && !ownCallable) return null;
     // Optional forms (`obj.cb?.()`, `obj?.cb()`) belong to the chain

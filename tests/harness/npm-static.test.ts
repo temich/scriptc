@@ -148,6 +148,19 @@ describe(`npm-static pilots${sanitize ? " (sanitized)" : ""}`, () => {
     }
   }, 180_000);
 
+  test("picocolors inherited Object methods retain the prototype-method fence", () => {
+    const entry = join(pilotRoot, "colors-prototype-cli.ts");
+    const { coverage } = analyze(entry, { npmStatic: ["picocolors"] });
+    expect(coverage.npmStatic).toEqual([{ package: "picocolors", status: "static" }]);
+    expect(coverage.preflightFailed).toBe(false);
+    expect(coverage.runtimeFences ?? []).toHaveLength(0);
+    expect(coverage.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(["SC2020", "SC2020"]);
+    expect(coverage.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      expect.stringContaining(".hasOwnProperty' is part of the standard library types"),
+      expect.stringContaining(".valueOf' is part of the standard library types"),
+    ]);
+  }, 120_000);
+
   // Tier 1, auto mode: the eligibility heuristics pick escape-string-regexp
   // (own .d.ts, unminified, no transform markers) without naming it.
   test("--npm-static=auto opts the eligible pilot in", () => {
