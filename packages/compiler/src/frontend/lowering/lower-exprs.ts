@@ -664,6 +664,7 @@ function lowerExprInner(lowerer: Lowerer, expr: ts.Expression): IrExpr {
         symbol: "symbol",
         map: "object", set: "object", promise: "object", bytes: "object",
         regexp: "object", generator: "object", classval: "function",
+        moduleNs: "object",
         undefinedT: "undefined", nullT: "object",
       };
       const folded = FOLD[operand.type.kind];
@@ -972,7 +973,12 @@ function lowerExprInner(lowerer: Lowerer, expr: ts.Expression): IrExpr {
       // the namespace object has no representation — members lower at
       // their access sites only. The CommonJS namespace binding
       // (`const lib = require("./lib.js")`) gets the same fence.
-      if (lowerer.builtinNamespaceModuleOf(expr) !== null || lowerer.cjsLocalModuleBindingOf(expr)) {
+      const builtinNamespace = lowerer.builtinNamespaceModuleOf(expr);
+      if (builtinNamespace !== null) {
+        const type: IrType = { kind: "moduleNs", moduleId: `builtin:${builtinNamespace}` };
+        return { kind: "moduleNsRef", moduleId: type.moduleId, type, loc };
+      }
+      if (lowerer.cjsLocalModuleBindingOf(expr)) {
         lowerer.unsupported(
           "SC1090",
           expr,
@@ -1182,6 +1188,15 @@ function lowerExprInner(lowerer: Lowerer, expr: ts.Expression): IrExpr {
       // representation (ambient namespaces compile to Node's
       // ReferenceError instead — the object never exists at runtime).
       {
+        const moduleNs = lowerer.mapTypeOf(lowerer.typeOf(expr));
+        if (moduleNs?.kind === "moduleNs") {
+          return { kind: "moduleNsRef", moduleId: moduleNs.moduleId, type: moduleNs, loc };
+        }
+        const builtinNs = lowerer.builtinNamespaceModuleOf(expr);
+        if (builtinNs !== null) {
+          const type: IrType = { kind: "moduleNs", moduleId: `builtin:${builtinNs}` };
+          return { kind: "moduleNsRef", moduleId: type.moduleId, type, loc };
+        }
         const ns = lowerNsIdentifierValue(lowerer, expr);
         if (ns) return ns;
       }
@@ -6723,6 +6738,9 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
         // (the function-identity rule verbatim; `X === D` through a
         // base-typed slot answers exactly JS).
         if (idLeft.type.kind === "classval" && idRight.type.kind === "classval") {
+          return { kind: "bin", op: negated ? "!==" : "===", left: idLeft, right: idRight, type: BOOL, loc };
+        }
+        if (idLeft.type.kind === "moduleNs" && idRight.type.kind === "moduleNs") {
           return { kind: "bin", op: negated ? "!==" : "===", left: idLeft, right: idRight, type: BOOL, loc };
         }
         if (

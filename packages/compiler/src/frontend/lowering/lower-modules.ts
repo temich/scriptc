@@ -13,7 +13,7 @@ import { canonicalBuiltinModule, cjsExportAssignmentOf, cjsExportDiscardReason, 
 import type { CycleEdge } from "../program.js";
 import { invalidJsonModuleDiag, npmEmbedFailedDiag, requiresDynamicImportDiag } from "../../diagnostics/diagnostic.js";
 import { BOOL, DYN, IrClassDef, IrExpr, IrFunction, IrGlobal, IrRecordShape, IrStmt, IrType, IrUnionDef, JSVAL, RUNTIME_ERROR_CLASSES, STRING, SrcLoc, VOID, arrayOf, canConvertToDyn, isUnitType } from "../../ir/ir.js";
-import { ENTRY_NAME, PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, newFnCtx, uncheckedOverloadHandleCall } from "./lowerer.js";
+import { ENTRY_NAME, PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, newFnCtx, staticImportNamespaceType, uncheckedOverloadHandleCall } from "./lowerer.js";
 import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireNamespaceDecl, createRequireProgramModuleDecl, createRequireSpecOf, isPromisifyCall, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
 import { bindingContextualGenericFnNodeOf, bindingGenericFnAliasInfoOf, bindingGenericFnInfoOf, bindingGenericFnNodeOf, bindingNeverReassigned, deadUnmappableBinding, implicitLocalFnInfoOf, implicitLocalFnNodeOf, nullishGenericBindingUnitOf, registerOverloadedCallableAlias } from "./lower-calls.js";
 import { isVarDeclared, numericIteratorSourceOf, provenanceElidedConstDecl } from "./lower-stmts.js";
@@ -384,8 +384,8 @@ export interface FileParts {
         }
       }
     }
+    for (const fp of parts) collectDynamicImports(lowerer, builder, fp.sf);
     if (builder) {
-      for (const fp of parts) collectDynamicImports(lowerer, builder, fp.sf);
       for (const fp of parts) collectCreateRequires(lowerer, builder, fp.sf);
       const graph = builder.finish();
       if (graph.modules.length > 0) {
@@ -396,19 +396,21 @@ export interface FileParts {
     }
   }
 
-/** The dynamic-import half of the npm chokepoint (--dynamic only): every
+/** Literal dynamic-import collection: every
    * `import("literal")` in the file — whatever body it sits in — resolves
    * and embeds AT COLLECTION time, so the per-site lowering later just
    * looks its key up (the emitted tables are assembled once, here; a
    * site lowered in any pass finds its module embedded). Resolution
+   * In static builds this records compiled program modules and supported
+   * builtins without constructing an npm graph. Dynamic package-resolution
    * failures and unshimmed builtins are diagnostics HERE, at the import
    * expression, exactly like static npm imports at their statements; the
    * lowering poisons those sites without re-reporting. Non-literal
    * specifiers are skipped — the lowering owns that fence (the module
    * graph is a build-time artifact; there is nothing to embed for a
    * runtime-computed name). */
-  function collectDynamicImports(lowerer: Lowerer, builder: NpmGraphBuilder, sf: ts.SourceFile): void {
-    const visit = (node: ts.Node): void => {
+  function collectDynamicImports(lowerer: Lowerer, builder: NpmGraphBuilder | null, sf: ts.SourceFile): void {
+    ts.walkPreorder(sf, (node) => {
       if (
         ts.isCallExpression(node) &&
         node.expression.kind === ts.SyntaxKind.ImportKeyword &&
@@ -418,8 +420,7 @@ export interface FileParts {
       ) {
         const spec = node.arguments[0].text;
         if (lowerer.externalTypes.has(spec)) {
-          ts.forEachChild(node, visit);
-          return;
+          return undefined;
         }
         const mapKey = `${sf.fileName}\u0000${spec}`;
         if (!lowerer.dynImports.has(mapKey)) {
@@ -432,9 +433,15 @@ export interface FileParts {
           const ownModule = modSym !== undefined && lowerer.checker.declarationsOf(modSym).some(
             (d) => ts.isSourceFile(d) && !d.isDeclarationFile,
           );
+          const builtin = canonicalBuiltinModule(spec);
           const res = ownModule
             ? ({ kind: "program-module" } as const)
-            : builder.addDynamicImport(sf.fileName, spec);
+            : !lowerer.dynamic && builtin !== null
+              ? ({ kind: "static-builtin", module: builtin } as const)
+              : builder?.addDynamicImport(sf.fileName, spec);
+          if (res === undefined) {
+            return undefined;
+          }
           lowerer.dynImports.set(mapKey, res);
           if (res.kind === "unsupported-builtin") {
             lowerer.pushDiag(
@@ -448,9 +455,8 @@ export interface FileParts {
           }
         }
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(sf);
+      return undefined;
+    });
   }
 
 /** The createRequire half of the npm chokepoint (--dynamic only): every
@@ -1441,11 +1447,12 @@ export function collectGlobals(lowerer: Lowerer, sf: ts.SourceFile, topStmts: ts
             // (lowerVarDecl's rule at module scope; the init body assigns
             // it).
             const handleT =
-              lowerer.dynamic && ts.isIdentifier(decl.name) && nameNode === decl.name
-                ? (importCallHandleType(decl.initializer) ??
+              ts.isIdentifier(decl.name) && nameNode === decl.name
+                ? (lowerer.dynamic ? importCallHandleType(decl.initializer) : staticImportNamespaceType(lowerer, decl.initializer)) ??
+                  (lowerer.dynamic ?
                   // An unchecked-overload call result stores the handle,
                   // exactly the local rule (uncheckedOverloadHandleCall).
-                  (uncheckedOverloadHandleCall(lowerer, decl.initializer) ? JSVAL : null))
+                  (uncheckedOverloadHandleCall(lowerer, decl.initializer) ? JSVAL : null) : null)
                 : null;
             let type = handleT ?? lowerer.irTypeOf(nameNode);
             // An evolving-`any` array's DERIVED file-scope binding under

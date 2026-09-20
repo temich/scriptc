@@ -63,6 +63,7 @@ import {
   cjsExportDiscardReason,
   fallbackDtsPath,
   isCjsExportTableLiteral,
+  isCjsJsFile,
   isJsSourceFile,
   isNodeEsmFile,
   isNodeTypesPath,
@@ -514,21 +515,19 @@ export function lowerToIr(
   const dynamic = options.dynamic ?? false;
   const targetPlatform = options.targetPlatform ?? process.platform;
   const startupCrash = options.startupCrash ?? null;
-  // --dynamic: modules reachable only through dynamic import() of the
-  // program's own files join the compiled graph here, ONCE, before any
+  // Modules reachable only through literal import() of the program's own
+  // files join the compiled graph here, ONCE, before any
   // pass constructs (nothing calls their %init at startup — the import()
   // site's namespace builder does, on the engine microtask, Node's
   // evaluation point for them). Inadmissible static cycles inside the
   // added subgraph are minted here and handed to reachable emit after this
   // extension of the shared array; no later pass re-walks the subgraph.
   const dynamicCycleDiags: ScrDiagnostic[] = [];
-  if (dynamic) {
-    appendDynamicImportModules(program, moduleOrder, (cycle, reason) => {
-      dynamicCycleDiags.push(
-        unsupportedDiag("SC1016", { file: entry.fileName, start: 0, end: 0 }, `circular imports (${cycle}; ${reason})`),
-      );
-    });
-  }
+  appendDynamicImportModules(program, moduleOrder, (cycle, reason) => {
+    dynamicCycleDiags.push(
+      unsupportedDiag("SC1016", { file: entry.fileName, start: 0, end: 0 }, `circular imports (${cycle}; ${reason})`),
+    );
+  });
   const ffiImports = options.ffiImports ?? [];
   const libraryCallbacks = options.libraryCallbacks ?? false;
   const externalTypes = options.externalTypes ?? new Map<string, string>();
@@ -630,6 +629,44 @@ export function importCallHandleType(expr: ts.Expression | undefined): IrType | 
     return awaited ? JSVAL : { kind: "promise", inner: JSVAL };
   }
   return null;
+}
+
+/** The native namespace type produced by a literal static import() of a
+ * compiled program module or supported Node builtin. This syntax-level
+ * fallback is used where the checker exposes an anonymous builtin-module
+ * object type with no stable module symbol (locals/globals are still
+ * represented nominally by the value they actually receive). */
+export function staticImportNamespaceType(lowerer: Lowerer, expr: ts.Expression | undefined): IrType | null {
+  if (!expr || lowerer.dynamic) return null;
+  let e = expr;
+  let awaited = false;
+  for (;;) {
+    if (ts.isParenthesizedExpression(e)) e = e.expression;
+    else if (ts.isAwaitExpression(e)) {
+      awaited = true;
+      e = e.expression;
+    } else break;
+  }
+  if (!ts.isCallExpression(e) || e.expression.kind !== ts.SyntaxKind.ImportKeyword) return null;
+  const arg = e.arguments[0];
+  if (!arg || !ts.isStringLiteralLike(arg)) return null;
+  const builtin = canonicalBuiltinModule(arg.text);
+  let moduleId: string | null = builtin === null ? null : `builtin:${builtin}`;
+  if (moduleId === null) {
+    const symbol = lowerer.checker.getSymbolAtLocation(arg);
+    const source = symbol && lowerer.checker.declarationsOf(symbol).find(
+      (decl): decl is ts.SourceFile => ts.isSourceFile(decl) && !decl.isDeclarationFile,
+    );
+    if (
+      source && !source.fileName.endsWith(".cts") && !isCjsJsFile(source) &&
+      lowerer.moduleOrder.includes(source)
+    ) {
+      moduleId = `file:${tsgoPath(resolve(source.fileName))}`;
+    }
+  }
+  if (moduleId === null) return null;
+  const ns: IrType = { kind: "moduleNs", moduleId };
+  return awaited ? ns : { kind: "promise", inner: ns };
 }
 
 /** True when `expr` is a call that resolved to an overload SIGNATURE of a
@@ -1653,6 +1690,10 @@ export class Lowerer {
    * engine handle (a dynamic import's namespace object) — paramShape's
    * early-out. */
   readonly jsvalParamOverrides = new Set<ts.ParameterDeclaration>();
+  /** Inline Promise.then parameters whose contextual type is a builtin
+   * module namespace anonymous object. The settled native token is the
+   * ABI truth even when the checker type has no stable module symbol. */
+  readonly moduleNsParamOverrides = new Map<ts.ParameterDeclaration, IrType & { kind: "moduleNs" }>();
   /** File → qualifier prefix: "" for the entry, "%mI." otherwise. */
   readonly fileTag = new Map<ts.SourceFile, string>();
   /** Namespace ModuleBlocks this program lowers, filled by splitFiles:
@@ -1904,8 +1945,9 @@ export class Lowerer {
       // fileTag is filled just below; the hook is only ever CALLED during
       // lowering, long after the constructor completes.
       isProgramFile: (sf) => this.fileTag.has(sf),
+      moduleNamespaceId: (type) => this.moduleNamespaceIdOfType(type),
     };
-    // --dynamic: modules reachable only through dynamic import() joined
+    // Modules reachable only through literal import() joined
     // moduleOrder BEFORE any pass constructed — lowerToIr runs
     // appendDynamicImportModules once on the shared array (a per-pass run
     // here would repeatedly extend the graph and duplicate cycle reports).
@@ -1920,6 +1962,35 @@ export class Lowerer {
 
   registerBuiltinErrorClasses(): void {
     return registerBuiltinErrorClasses(this);
+  }
+
+  /** The nominal identity of a checker module-namespace type. Program
+   * modules use their normalized absolute source name; supported builtins
+   * use the lowering tables' canonical bare name. */
+  moduleNamespaceIdOfType(type: ts.Type): string | null {
+    let sym = type.getSymbol();
+    if (!sym) return null;
+    if (sym.flags & ts.SymbolFlags.Alias) sym = this.checker.getAliasedSymbol(sym);
+    for (const decl of this.checker.declarationsOf(sym)) {
+      if (
+        ts.isSourceFile(decl) && !decl.isDeclarationFile &&
+        !decl.fileName.endsWith(".cts") && !isCjsJsFile(decl) &&
+        this.moduleOrder.includes(decl)
+      ) {
+        return `file:${tsgoPath(resolve(decl.fileName))}`;
+      }
+      if (ts.isModuleDeclaration(decl) && ts.isStringLiteral(decl.name)) {
+        const builtin = canonicalBuiltinModule(decl.name.text);
+        if (builtin !== null) return `builtin:${builtin}`;
+      }
+    }
+    return null;
+  }
+
+  sourceFileOfModuleNamespace(type: IrType): ts.SourceFile | null {
+    if (type.kind !== "moduleNs" || !type.moduleId.startsWith("file:")) return null;
+    const path = type.moduleId.slice("file:".length);
+    return this.moduleOrder.find((sf) => tsgoPath(resolve(sf.fileName)) === path) ?? null;
   }
 
   builtinErrorInfoOf(symbol: ts.Symbol | null | undefined): ClassInfo | null {
@@ -3607,7 +3678,7 @@ export class Lowerer {
       this.diags.length > 0
         ? null
         : {
-            irVersion: 10,
+            irVersion: 11,
             sourceFile: this.entry.fileName,
             functions,
             classes: artifacts.classes,
@@ -9818,6 +9889,13 @@ export class Lowerer {
    * member access that IS a module in its own right (`fs.promises` — the
    * same object as node:fs/promises, Node's rule). Null otherwise. */
   builtinNamespaceModuleOf(expr: ts.Expression): string | null {
+    const stored = ts.isIdentifier(expr)
+      ? (this.peekLocal(expr)?.type ?? this.globalOf(expr)?.type)
+      : undefined;
+    const mapped = stored ?? this.mapTypeOf(this.typeOf(expr));
+    if (mapped?.kind === "moduleNs" && mapped.moduleId.startsWith("builtin:")) {
+      return mapped.moduleId.slice("builtin:".length);
+    }
     if (ts.isIdentifier(expr)) {
       const symbol = this.checker.getSymbolAtLocation(expr);
       const decl = symbol ? this.checker.declarationsOf(symbol)[0] : undefined;

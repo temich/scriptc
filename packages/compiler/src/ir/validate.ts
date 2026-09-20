@@ -1908,6 +1908,11 @@ function validateFunction(
       case "strLit":
         if (e.type.kind !== "string") err("strLit must be string", e.loc);
         break;
+      case "moduleNsRef":
+        if (e.type.kind !== "moduleNs" || e.type.moduleId !== e.moduleId) {
+          err("moduleNsRef must match its moduleNs type", e.loc);
+        }
+        break;
       case "boolLit":
         if (e.type.kind !== "bool") err("boolLit must be bool", e.loc);
         break;
@@ -1941,6 +1946,10 @@ function validateFunction(
           // class, one pointer compare (tsc gates the overlap).
           if (e.right.type.kind !== "classval") {
             err(`bin ${e.op} on class values: right operand is ${e.right.type.kind}`, e.loc);
+          }
+        } else if (isEq && e.left.type.kind === "moduleNs") {
+          if (e.right.type.kind !== "moduleNs") {
+            err(`bin ${e.op} on module namespaces: right operand is ${e.right.type.kind}`, e.loc);
           }
         } else if (
           isEq &&

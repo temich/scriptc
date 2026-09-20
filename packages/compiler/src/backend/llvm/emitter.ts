@@ -4058,7 +4058,7 @@ class LlEmitter {
     return this as unknown as LlvmEmitterContext;
   }
 
-  private emitLiteralExpr(e: ExprOf<"numLit" | "boolLit" | "strLit" | "unitLit" | "varRef">): LlValue {
+  private emitLiteralExpr(e: ExprOf<"numLit" | "boolLit" | "strLit" | "moduleNsRef" | "unitLit" | "varRef">): LlValue {
     return emitLiteralExpr(this.expressionContext(), e);
   }
 

@@ -89,7 +89,7 @@ export interface LlvmEmitterContext extends ShapeHost {
   emitJsMarshal(e: IrExpr & { kind: "jsMarshal" }): LlValue;
   emitJsOp(e: IrExpr & { kind: "jsOp" }): LlValue;
   emitLibCall(e: LibCallExpr): LlValue;
-  emitLiteralExpr(e: ExprOf<"numLit" | "boolLit" | "strLit" | "unitLit" | "varRef">): LlValue;
+  emitLiteralExpr(e: ExprOf<"numLit" | "boolLit" | "strLit" | "moduleNsRef" | "unitLit" | "varRef">): LlValue;
   emitMapLikeIntrinsic(e: Extract<IrExpr, { kind: "mapIntrinsic" | "setIntrinsic" }>): LlValue;
   emitMapNew(e: IrExpr & { kind: "mapNew" }): LlValue;
   emitNetworkHttpLibCall(e: LibCallExpr): LlValue;

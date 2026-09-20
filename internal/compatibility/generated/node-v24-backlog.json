@@ -60628,7 +60628,10 @@
           "source": "compiler-feature:esm.import",
           "tests": [
             "tests/corpus/950-modules-basic/main.ts",
-            "tests/corpus/2646-top-level-await.ts"
+            "tests/corpus/2646-top-level-await.ts",
+            "tests/corpus/2933-static-dynamic-import/main.ts",
+            "tests/corpus/2934-static-import-stored.ts",
+            "tests/corpus/2935-module-namespace-values/main.ts"
           ]
         },
         "dynamic": {
@@ -60667,7 +60670,10 @@
           "source": "compiler-feature:esm.file:",
           "tests": [
             "tests/corpus/950-modules-basic/main.ts",
-            "tests/corpus/2646-top-level-await.ts"
+            "tests/corpus/2646-top-level-await.ts",
+            "tests/corpus/2933-static-dynamic-import/main.ts",
+            "tests/corpus/2934-static-import-stored.ts",
+            "tests/corpus/2935-module-namespace-values/main.ts"
           ]
         },
         "dynamic": {
@@ -60739,7 +60745,10 @@
           "source": "compiler-feature:esm.node:",
           "tests": [
             "tests/corpus/950-modules-basic/main.ts",
-            "tests/corpus/2646-top-level-await.ts"
+            "tests/corpus/2646-top-level-await.ts",
+            "tests/corpus/2933-static-dynamic-import/main.ts",
+            "tests/corpus/2934-static-import-stored.ts",
+            "tests/corpus/2935-module-namespace-values/main.ts"
           ]
         },
         "dynamic": {
@@ -60778,7 +60787,10 @@
           "source": "compiler-feature:esm.import",
           "tests": [
             "tests/corpus/950-modules-basic/main.ts",
-            "tests/corpus/2646-top-level-await.ts"
+            "tests/corpus/2646-top-level-await.ts",
+            "tests/corpus/2933-static-dynamic-import/main.ts",
+            "tests/corpus/2934-static-import-stored.ts",
+            "tests/corpus/2935-module-namespace-values/main.ts"
           ]
         },
         "dynamic": {
@@ -60817,7 +60829,10 @@
           "source": "compiler-feature:esm.import",
           "tests": [
             "tests/corpus/950-modules-basic/main.ts",
-            "tests/corpus/2646-top-level-await.ts"
+            "tests/corpus/2646-top-level-await.ts",
+            "tests/corpus/2933-static-dynamic-import/main.ts",
+            "tests/corpus/2934-static-import-stored.ts",
+            "tests/corpus/2935-module-namespace-values/main.ts"
           ]
         },
         "dynamic": {
@@ -61120,7 +61135,10 @@
           "source": "compiler-feature:esm.await",
           "tests": [
             "tests/corpus/950-modules-basic/main.ts",
-            "tests/corpus/2646-top-level-await.ts"
+            "tests/corpus/2646-top-level-await.ts",
+            "tests/corpus/2933-static-dynamic-import/main.ts",
+            "tests/corpus/2934-static-import-stored.ts",
+            "tests/corpus/2935-module-namespace-values/main.ts"
           ]
         },
         "dynamic": {

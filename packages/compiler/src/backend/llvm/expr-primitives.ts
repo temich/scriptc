@@ -16,7 +16,7 @@ const BYTES_ELEM_NUM: Record<"u8" | "u32" | "f32" | "i32", number> = {
 };
 import { f64Lit } from "./common.js";
 
-export function emitLiteralExpr(host: LlvmEmitterContext, e: ExprOf<"numLit" | "boolLit" | "strLit" | "unitLit" | "varRef">): LlValue {
+export function emitLiteralExpr(host: LlvmEmitterContext, e: ExprOf<"numLit" | "boolLit" | "strLit" | "moduleNsRef" | "unitLit" | "varRef">): LlValue {
     const B = host.B;
     switch (e.kind) {
       case "numLit":
@@ -25,6 +25,10 @@ export function emitLiteralExpr(host: LlvmEmitterContext, e: ExprOf<"numLit" | "
         return { name: e.value ? "true" : "false", type: e.type };
       case "strLit": {
         const sym = host.internLiteral(e.value);
+        return host.own({ name: host.retainValue(sym, e.type), type: e.type });
+      }
+      case "moduleNsRef": {
+        const sym = host.internLiteral(`module:${e.moduleId}`);
         return host.own({ name: host.retainValue(sym, e.type), type: e.type });
       }
       case "unitLit":

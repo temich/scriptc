@@ -2678,7 +2678,9 @@ export function lowerStaticReadableStreamReaderCall(
   );
 }
 
-/** Dynamic `import(spec)` — the island's module system at a USER site.
+/** Literal `import(spec)` at a user site. Static builds compile program
+   * modules and supported Node builtins to a native Promise<moduleNs>;
+   * dynamic builds retain the island-backed package/module path below.
    * Under --dynamic the call lowers to island.importDyn(key): the engine
    * loads the module (embedded npm graph, a shipped local .js/.mjs the
    * build embedded, or a builtin shim — collectDynamicImports resolved and
@@ -2689,11 +2691,11 @@ export function lowerStaticReadableStreamReaderCall(
    * a load/evaluation failure crosses as a catchable rejection, exactly
    * where Node puts it. Specifiers must be string literals: the module
    * graph is a BUILD-time artifact — a runtime-computed name has nothing
-   * to embed, and the fence says so. Static builds report the per-site
-   * SC2012. Null for anything that isn't `import(...)`. */
+   * to embed, and the fence says so. Static builds accept compiled program
+   * modules and supported builtins; other execution homes report SC2012.
+   * Null for anything that isn't `import(...)`. */
   export function lowerDynamicImportCall(lowerer: Lowerer, call: ts.CallExpression): IrExpr | null {
     if (call.expression.kind !== ts.SyntaxKind.ImportKeyword) return null;
-    lowerer.requireDynamicApi("'import()'", call);
     const loc = locOf(call);
     const arg = call.arguments[0];
     if (arg === undefined || !ts.isStringLiteralLike(arg)) {
@@ -2708,13 +2710,27 @@ export function lowerStaticReadableStreamReaderCall(
       lowerer.unsupported("SC1090", call, "dynamic import() with import attributes");
     }
     const res = lowerer.dynImports.get(`${call.getSourceFile().fileName}\u0000${arg.text}`);
+    if (!lowerer.dynamic) {
+      if (res?.kind === "program-module") {
+        return lowerOwnStaticModuleImport(lowerer, call, arg);
+      }
+      if (res?.kind === "static-builtin") {
+        return lowerStaticNamespaceImport(lowerer, call, {
+          kind: "moduleNs",
+          moduleId: `builtin:${res.module}`,
+        });
+      }
+      lowerer.requireDynamicApi("'import()'", call);
+      throw new PoisonError();
+    }
+    lowerer.requireDynamicApi("'import()'", call);
     if (!res) {
       // Collection walks every file before bodies lower, so a missing
       // entry is a lowerer bug, not user error.
       throw new InternalCompilerError(`lowerer bug: unresolved dynamic import '${arg.text}'`);
     }
     if (res.kind === "program-module") {
-      return lowerOwnModuleImport(lowerer, call, arg);
+      return lowerOwnDynamicModuleImport(lowerer, call, arg);
     }
     if (res.kind !== "module") {
       throw new PoisonError(); // resolution failed — collection reported it
@@ -2745,7 +2761,7 @@ export function lowerStaticReadableStreamReaderCall(
    * signatures) cross as trap functions that throw a pointed TypeError
    * when USED — the namespace still builds, exactly like Node still
    * resolves it. */
-  function lowerOwnModuleImport(lowerer: Lowerer, call: ts.CallExpression, arg: ts.StringLiteralLike): IrExpr {
+  function lowerOwnDynamicModuleImport(lowerer: Lowerer, call: ts.CallExpression, arg: ts.StringLiteralLike): IrExpr {
     const loc = locOf(call);
     let dep: ts.SourceFile | null = null;
     const modSym = lowerer.checker.getSymbolAtLocation(arg);
@@ -2789,6 +2805,170 @@ export function lowerStaticReadableStreamReaderCall(
     };
     const chained: IrExpr = { kind: "jsOp", op: "callMethod", name: "then", args: [resolved, marshaled], type: JSVAL, loc };
     return { kind: "jsBridgePromise", value: chained, type: { kind: "promise", inner: JSVAL }, loc };
+  }
+
+/** The checker-resolved program source behind one literal import(). */
+  function programImportTarget(lowerer: Lowerer, arg: ts.StringLiteralLike): ts.SourceFile | null {
+    const modSym = lowerer.checker.getSymbolAtLocation(arg);
+    for (const d of (modSym ? lowerer.checker.declarationsOf(modSym) : [])) {
+      if (ts.isSourceFile(d) && !d.isDeclarationFile) return d;
+    }
+    return null;
+  }
+
+/** Static literal import of one compiled ESM module. The async helper's
+   * first operation is an await of an already-settled promise: evaluation
+   * therefore starts on a microtask, after the importer's synchronous
+   * tail, matching import(). Its result is the module's singleton nominal
+   * namespace token; member reads resolve separately to live exports. */
+  function lowerOwnStaticModuleImport(
+    lowerer: Lowerer,
+    call: ts.CallExpression,
+    arg: ts.StringLiteralLike,
+  ): IrExpr {
+    const dep = programImportTarget(lowerer, arg);
+    if (dep !== null && (dep.fileName.endsWith(".cts") || isCjsJsFile(dep))) {
+      lowerer.unsupported(
+        "SC1090",
+        call,
+        `dynamic import of the program's own CommonJS module '${arg.text}' ` +
+          "(its namespace comes from module.exports through Node's CJS lexer, " +
+          "which has no compiled story — require it, or import it statically)",
+      );
+    }
+    if (dep === null || lowerer.initNameOf.get(dep) === undefined) {
+      lowerer.unsupported(
+        "SC1090",
+        call,
+        `dynamic import of the program's own module '${arg.text}' ` +
+          "(this module is not part of the compiled module graph)",
+      );
+    }
+    const ns: IrType & { kind: "moduleNs" } = {
+      kind: "moduleNs",
+      moduleId: `file:${dep === null ? "" : lowerer.moduleNamespaceIdOfType(lowerer.typeOf(call))?.replace(/^file:/, "") ?? dep.fileName}`,
+    };
+    // The call's type is Promise<typeof import(...)>; prefer the mapper's
+    // canonical normalized id when available.
+    const mapped = lowerer.mapTypeOf(lowerer.typeOf(call));
+    const inner = mapped?.kind === "promise" && mapped.inner.kind === "moduleNs" ? mapped.inner : ns;
+    return lowerStaticNamespaceImport(lowerer, call, inner, dep);
+  }
+
+/** Builds a fresh native promise for a static module namespace. Source
+   * modules run/await their guarded initializer after the mandatory hop;
+   * builtins only take the hop and resolve their immortal token. */
+  function lowerStaticNamespaceImport(
+    lowerer: Lowerer,
+    call: ts.CallExpression,
+    ns: IrType & { kind: "moduleNs" },
+    dep: ts.SourceFile | null = null,
+  ): IrExpr {
+    const loc = locOf(call);
+    const resultT: IrType & { kind: "promise" } = { kind: "promise", inner: ns };
+    const fnName = `%fn${lowerer.lambdaCounter++}_staticImport`;
+    const fnType: IrType & { kind: "func" } = { kind: "func", params: [], ret: resultT };
+    const fnCtx = newFnCtx(true, null, fnType, ns);
+    fnCtx.isAsync = true;
+    lowerer.fnStack.push(fnCtx);
+    try {
+      const hop: IrExpr = {
+        kind: "awaitExpr",
+        value: {
+          kind: "intrinsic",
+          name: "promise.resolve",
+          args: [],
+          type: { kind: "promise", inner: VOID },
+          loc,
+        },
+        type: VOID,
+        loc,
+      };
+      const body: IrStmt[] = [{ kind: "exprStmt", expr: hop, loc }];
+      if (dep !== null) appendStaticModuleInit(lowerer, dep, body, loc);
+      body.push({
+        kind: "return",
+        value: { kind: "moduleNsRef", moduleId: ns.moduleId, type: ns, loc },
+        loc,
+      });
+      const ctx = lowerer.ctx;
+      lowerer.liftedFns.push({
+        name: fnName,
+        params: [],
+        returnType: ns,
+        locals: ctx.locals,
+        captures: ctx.captures ?? [],
+        body,
+        async: true,
+        loc,
+      });
+    } finally {
+      lowerer.fnStack.pop();
+    }
+    return {
+      kind: "callValue",
+      callee: { kind: "closure", fnName, captures: [], type: fnType, loc },
+      args: [],
+      type: resultT,
+      loc,
+    };
+  }
+
+/** Appends Node's lazy source-module link/evaluation work to a static
+   * import helper. This is the native twin of dynNsBuilderOf's prelude. */
+  function appendStaticModuleInit(
+    lowerer: Lowerer,
+    dep: ts.SourceFile,
+    body: IrStmt[],
+    loc: IrExpr["loc"],
+  ): void {
+    const linkCrash = esmNamedImportLinkCrash(lowerer.program, dep);
+    if (linkCrash !== null) {
+      body.push({
+        kind: "throw",
+        value: {
+          kind: "libCall",
+          fn: "error.new",
+          args: [{ kind: "strLit", value: linkCrash.message, type: STRING, loc }],
+          type: { kind: "object", className: linkCrash.className },
+          loc,
+        },
+        loc,
+      });
+      return;
+    }
+    const initName = lowerer.initNameOf.get(dep);
+    if (initName === undefined) throw new InternalCompilerError("lowerer bug: static import target has no init");
+    const isAsync = lowerer.asyncInitFiles.has(dep);
+    if (dep === lowerer.entry && !isAsync) return;
+    const initCall: IrExpr = {
+      kind: "call",
+      callee: initName,
+      args: [],
+      type: isAsync ? { kind: "promise", inner: VOID } : VOID,
+      loc,
+    };
+    const cyclePromiseId = lowerer.asyncCyclePromiseOf.get(dep);
+    if (isAsync && cyclePromiseId !== undefined) {
+      body.push({ kind: "exprStmt", expr: initCall, loc });
+      const promiseT: IrType = { kind: "promise", inner: VOID };
+      body.push({
+        kind: "exprStmt",
+        expr: {
+          kind: "awaitExpr",
+          value: { kind: "varRef", localId: cyclePromiseId, type: promiseT, loc },
+          type: VOID,
+          loc,
+        },
+        loc,
+      });
+      return;
+    }
+    body.push({
+      kind: "exprStmt",
+      expr: isAsync ? { kind: "awaitExpr", value: initCall, type: VOID, loc } : initCall,
+      loc,
+    });
   }
 
 /** The namespace-BUILDER function for one program module, synthesized on

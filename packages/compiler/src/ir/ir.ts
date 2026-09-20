@@ -254,6 +254,12 @@ export type IrType =
    * elements, Map VALUES, and union arms; fenced out of Map keys, Set
    * elements, JSON, dyn/jsval conversion, and ToString. */
   | { kind: "classval"; className: string }
+  /** An ECMAScript module namespace object for one statically-known module.
+   * `moduleId` is a canonical compiled source-file or builtin identity.
+   * Runtime representation is an interned immortal string token: identity
+   * is pointer identity, while member reads resolve to live module globals
+   * or builtin lowering tables rather than snapshotting export values. */
+  | { kind: "moduleNs"; moduleId: string }
   /** Structural record shape (object literal / interface / type alias over
    * data properties). `shapeId` indexes IrModule.records; the frontend
    * interns shapes structurally, so equal shapeId ⇔ equal shape and
@@ -386,6 +392,7 @@ const POINTER_KIND_LIST = [
   "func",
   "object",
   "classval",
+  "moduleNs",
   "record",
   "union",
   "dyn",
@@ -438,6 +445,7 @@ export const RUNTIME_RC_STEMS: Record<IrType["kind"], string> = {
   func: "scr_closure",
   object: "",
   classval: "scr_classobj",
+  moduleNs: "scr_str",
   record: "",
   union: "scr_union",
   dyn: "scr_dyn",
@@ -478,6 +486,8 @@ export const REF_TRUTHY_KINDS: ReadonlySet<string> = new Set([
   "generator",
   // A class object is a JS object (constructors are functions): always truthy.
   "classval",
+  // A module namespace object is always truthy.
+  "moduleNs",
 ]);
 
 export const F64: IrType = { kind: "f64" };
@@ -549,6 +559,7 @@ export function isSupportedArrayElem(t: IrType): boolean {
     case "netServer":
     case "symbol":
     case "classval":
+    case "moduleNs":
       return true;
     default:
       return false;
@@ -732,6 +743,8 @@ export function typeKey(t: IrType): string {
       return `object:${t.className}`;
     case "classval":
       return `classval:${t.className}`;
+    case "moduleNs":
+      return `moduleNs:${t.moduleId}`;
     case "record":
       return `record:${t.shapeId}`;
     case "union":
@@ -767,6 +780,7 @@ export function typeEquals(a: IrType, b: IrType): boolean {
   }
   if (a.kind === "object") return b.kind === "object" && a.className === b.className;
   if (a.kind === "classval") return b.kind === "classval" && a.className === b.className;
+  if (a.kind === "moduleNs") return b.kind === "moduleNs" && a.moduleId === b.moduleId;
   // The frontend deduplicates shapes structurally (one shapeId per canonical
   // field list), so id equality IS structural equality.
   if (a.kind === "record") return b.kind === "record" && a.shapeId === b.shapeId;
@@ -798,7 +812,7 @@ export function isRefCounted(t: IrType): boolean {
 
 export interface IrModule {
   /** Bumped on any breaking IR change; serialize.ts refuses mismatches. */
-  irVersion: 10;
+  irVersion: 11;
   sourceFile: string;
   functions: IrFunction[];
   /** Class shapes. Constructors and methods are ordinary module functions
@@ -4443,6 +4457,8 @@ export type IrExpr =
    * for every program that held its numbers. */
   | { kind: "numLit"; value: number; spelling?: string; type: IrType; loc: SrcLoc }
   | { kind: "strLit"; value: string; type: IrType; loc: SrcLoc }
+  /** The singleton namespace token for one compiled or builtin module. */
+  | { kind: "moduleNsRef"; moduleId: string; type: IrType; loc: SrcLoc }
   | { kind: "boolLit"; value: boolean; type: IrType; loc: SrcLoc }
   /** An `undefined` or `null` literal; `type` is the matching unit kind.
    * Valid ONLY as the immediate value of a `unionWrap` (the frontend's slot
@@ -5632,6 +5648,7 @@ function isJsonSafeAt(
     case "caught":
     case "promise":
     case "generator":
+    case "moduleNs":
     case "void":
       return false;
     // Record fields drop undefined. Stringification also represents it in

@@ -540,6 +540,8 @@ export function formatIrType(t: IrType, shapes: ShapeRegistry, unions: UnionRegi
       return "Writable";
     case "procStream":
       return "WriteStream";
+    case "moduleNs":
+      return `module namespace '${t.moduleId}'`;
     case "promise":
       return `Promise<${formatIrType(t.inner, shapes, unions, seen)}>`;
     case "generator":
@@ -734,6 +736,11 @@ export interface TypeMapperCtx {
    * would ICE the validator. Such instance types stay unmapped (null):
    * callers fence them like any other unsupported type. */
   isProgramFile: (sf: ts.SourceFile) => boolean;
+  /** Static ECMAScript module namespace identity, when `type` is exactly a
+   * compiled source module or supported Node builtin namespace. Dynamic
+   * builds leave these unmapped because import() values live in the
+   * embedded engine there. */
+  moduleNamespaceId?: (type: ts.Type) => string | null;
 }
 
 
@@ -873,6 +880,10 @@ function classExprNeverRegisters(decl: ts.ClassLikeDeclaration): boolean {
 
 function mapTypeInner(type: ts.Type, ctx: TypeMapperCtx): IrType | null {
   const { checker, unions, classNamer, resolveTypeParam } = ctx;
+  if (!ctx.dynamic) {
+    const moduleId = ctx.moduleNamespaceId?.(type) ?? null;
+    if (moduleId !== null) return { kind: "moduleNs", moduleId };
+  }
   // @types/node spells child_process.ExecFileException as an intersection
   // type alias over two Error-derived metadata interfaces. The value is
   // still one ordinary Error; recognize the owned alias before generic
@@ -1095,15 +1106,11 @@ function mapTypeInner(type: ts.Type, ctx: TypeMapperCtx): IrType | null {
   ) {
     return ctx.dynamic ? JSVAL : null;
   }
-  // NOTE on module NAMESPACE types (`typeof import("./x.mjs")` — what a
-  // dynamic import resolves to): non-stdlib ones fall under the rule
-  // above (their declarations are the .d.ts SourceFiles themselves).
-  // Stdlib `declare module` namespaces ("fs", "path") deliberately stay
-  // unmapped: their members have STATIC lowerings keyed off import
-  // bindings (builtinImportOf), and a handle mapping would reroute
-  // `import * as path` member calls into the engine — dynamic imports of
-  // builtins get their handles from the import lowering's IR type
-  // instead.
+  // Module NAMESPACE types (`typeof import("./x.mjs")`) were claimed at
+  // the top by moduleNamespaceId when they name a compiled source module
+  // or supported builtin in a static build. Declaration-only package
+  // namespaces retain the npm rule above; dynamic builds retain their
+  // jsval import-handle path.
   // T[]: monomorphic arrays, recursively (number[][] works). An element type
   // that doesn't map (never from a context-free `[]`) makes the whole array
   // unsupported — null propagates. Record/object/union elements ride the

@@ -184,9 +184,13 @@ export type DynamicImportResolution =
   /** A Node builtin the island ships no shim for — a build diagnostic,
    * exactly like a static import of it. */
   | { kind: "unsupported-builtin"; builtin: string }
-  /** The specifier resolves into the compiled program's own TypeScript —
-   * fenced at the site (static imports are the way in). */
+  /** The specifier resolves into the compiled program's own TypeScript.
+   * Static builds expose its nominal live namespace; dynamic builds
+   * marshal a snapshot namespace into the island. */
   | { kind: "program-module" }
+  /** A supported Node builtin imported by a static build. Its namespace
+   * token routes member reads through the existing builtin tables. */
+  | { kind: "static-builtin"; module: string }
   /** No resolution — a build diagnostic, like static imports. */
   | { kind: "unresolved"; message: string };
 
@@ -1020,7 +1024,7 @@ export class NpmGraphBuilder {
    * see, because tsc compiles those — resolve against the importing FILE
    * with Node's file/extension/directory rules and embed the reached JS
    * graph. A relative target that is TypeScript is the program's own
-   * module (fenced at the site: static imports are the way in), and one
+   * module (compiled natively and exposed through the import lowering), and one
    * with an extension no loader executes (.wasm, .node, ...) embeds a stub
    * whose EVALUATION throws Node's exact ERR_UNKNOWN_FILE_EXTENSION
    * TypeError — the build succeeds and the import() rejects at runtime,

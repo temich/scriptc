@@ -31,6 +31,8 @@ export function cType(t: IrType): string {
       return "bool";
     case "string":
       return "ScrStr *";
+    case "moduleNs":
+      return "ScrStr *";
     case "bigint":
       return "ScrBigInt *";
     case "array":

@@ -220,6 +220,12 @@ function nsBlockKindOfSymbol(lowerer: Lowerer, sym: ts.Symbol): "flattened" | "t
  * .d.ts files) and npm packages answer null — their own chokepoints and
  * fences keep ownership. */
 function moduleNsSourceFileOf(lowerer: Lowerer, e: ts.Expression): ts.SourceFile | null {
+  const stored = ts.isIdentifier(e)
+    ? (lowerer.peekLocal(e)?.type ?? lowerer.globalOf(e)?.type)
+    : undefined;
+  const mapped = stored ?? lowerer.mapTypeOf(lowerer.typeOf(e));
+  const typedSource = mapped ? lowerer.sourceFileOfModuleNamespace(mapped) : null;
+  if (typedSource !== null) return typedSource;
   let sym: ts.Symbol | undefined;
   if (ts.isIdentifier(e)) {
     sym = lowerer.checker.getSymbolAtLocation(e);

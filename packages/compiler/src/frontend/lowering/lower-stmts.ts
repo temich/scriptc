@@ -9,7 +9,7 @@ import { arrayValueRead, arrayValueStore, arrayValueType } from "./array-values.
 import { lowerForAwaitGenerator, lowerForOfGenerator, lowerYieldStarStatement, type GenType } from "./lower-generators.js";
 import { lowerForAwaitBuiltin } from "./lower-async-iteration.js";
 import { BOOL, BYTES_U8, CAUGHT, DYN, F64, IrExpr, IrGlobal, IrJsOp, IrLocal, IrStmt, IrType, JSVAL, STRING, SrcLoc, UNDEFINED_T, VOID, arrayOf, isUnitType, shapeHasAccessorSlots, typeEquals } from "../../ir/ir.js";
-import { PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, neverTaintedJsType, stmtUsesIsland, uncheckedOverloadHandleCall } from "./lowerer.js";
+import { PoisonError, boundIdentifiersOf, dynFallbackType, dynUndefinedExpr, importCallHandleType, neverTaintedJsType, staticImportNamespaceType, stmtUsesIsland, uncheckedOverloadHandleCall } from "./lowerer.js";
 import { enforceLibBoundary } from "./lib-boundary.js";
 import { cjsExportAssignmentOf, cjsExportDiscardReason, cjsExportTargetLiteral, isCjsJsFile, isJsSourceFile, locOf, requireSpecOf } from "../program.js";
 import { COMPOUND_ASSIGN_OPS, CompoundOp, STR_METHODS, UNSUPPORTED_STMT, isStdlibMember, sideEffectFreeOptionValue, stdlibGlobalAliasDecl, stdlibGlobalAliasNameOf, stdlibGlobalNameOf } from "./surfaces.js";
@@ -685,6 +685,9 @@ export function provenanceElidedConstDecl(lowerer: Lowerer, decl: ts.VariableDec
         // let/const rule (see uncheckedOverloadHandleCall).
         (uncheckedOverloadHandleCall(lowerer, nameNode.parent.initializer) ? JSVAL : null) ??
         type;
+    }
+    if (!lowerer.dynamic && ts.isVariableDeclaration(nameNode.parent) && nameNode.parent.name === nameNode) {
+      type = staticImportNamespaceType(lowerer, nameNode.parent.initializer) ?? type;
     }
     if (!type || type.kind === "void") return null;
     return type;
@@ -3765,6 +3768,8 @@ export function lowerVarDecl(lowerer: Lowerer, decl: ts.VariableDeclaration, isL
       // island members).
       (lowerer.dynamic && init.type.kind === "dyn" && jsvalFlavoredType(lowerer.mapTypeOf(lowerer.typeOf(decl.name)) ?? DYN) ? DYN : null) ??
       (bindingTainted ? null : lowerer.mapTypeOf(lowerer.typeOf(decl.name))) ??
+      staticImportNamespaceType(lowerer, decl.initializer) ??
+      (init.type.kind === "moduleNs" ? init.type : null) ??
       (init.type.kind === "dyn" ? DYN : null);
     if (
       lowerer.implicitParamTypes !== null &&

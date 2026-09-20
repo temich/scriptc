@@ -769,7 +769,7 @@ type ExprOf<K extends IrExpr["kind"]> = Extract<IrExpr, { kind: K }>;
 
 function emitLiteralExpr(
   emitter: CEmitter,
-  e: ExprOf<"numLit" | "boolLit" | "strLit" | "unitLit" | "varRef">,
+  e: ExprOf<"numLit" | "boolLit" | "strLit" | "moduleNsRef" | "unitLit" | "varRef">,
 ): Temp {
   switch (e.kind) {
       case "numLit":
@@ -778,6 +778,10 @@ function emitLiteralExpr(
         return emitter.newTemp(e.type, e.value ? "true" : "false");
       case "strLit": {
         const sym = emitter.internLiteral(e.value);
+        return emitter.newTemp(e.type, retainCallC(e.type, `(ScrStr *)&${sym}`));
+      }
+      case "moduleNsRef": {
+        const sym = emitter.internLiteral(`module:${e.moduleId}`);
         return emitter.newTemp(e.type, retainCallC(e.type, `(ScrStr *)&${sym}`));
       }
       case "unitLit":
@@ -8638,6 +8642,7 @@ export function emitExpr(emitter: CEmitter, e: IrExpr): Temp {
     case "numLit":
     case "boolLit":
     case "strLit":
+    case "moduleNsRef":
     case "unitLit":
     case "varRef":
       return emitLiteralExpr(emitter, e);

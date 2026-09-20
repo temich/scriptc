@@ -6407,6 +6407,25 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2933-static-dynamic-import/main.ts": {
+   "order": [
+    "<repo>/tests/corpus/2933-static-dynamic-import/main.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2934-static-import-stored.ts": {
+   "order": [
+    "<repo>/tests/corpus/2934-static-import-stored.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2935-module-namespace-values/main.ts": {
+   "order": [
+    "<repo>/tests/corpus/2935-module-namespace-values/mod.ts",
+    "<repo>/tests/corpus/2935-module-namespace-values/main.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"

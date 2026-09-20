@@ -10,7 +10,7 @@ import { BIGINT_T, BOOL, CAUGHT, DYN, F64, IrExpr, IrFunction, IrLocal, IrParam,
 import type { IrFfiCallbackParam, IrFfiCallbackParamClass, IrFfiImport, IrFfiReleaseParam } from "../../ir/ir.js";
 import { isJsSourceFile, locOf } from "../program.js";
 import { genResultRecord, isGenericCallableMemberType, typeKey } from "../type-mapper.js";
-import { PoisonError, dynFallbackType, dynUndefinedExpr, importCallHandleType, jsFuncNameOf, newFnCtx, nodeThrowExpr } from "./lowerer.js";
+import { PoisonError, dynFallbackType, dynUndefinedExpr, importCallHandleType, jsFuncNameOf, newFnCtx, nodeThrowExpr, staticImportNamespaceType } from "./lowerer.js";
 import { enforceLibBoundary } from "./lib-boundary.js";
 import { NARROW_FIRST, builtinFenceHintOf, builtinModuleFnOf } from "./surfaces.js";
 import { ffiBindingDiag, ffiSignatureDiag, libCallbackDiag, requiresDynamicDiag } from "../../diagnostics/diagnostic.js";
@@ -249,6 +249,10 @@ export interface GenericInstance {
    * - `...xs: T[]`: the ABI type is the array; call sites pack the surplus.
    */
   export function paramShape(lowerer: Lowerer, param: ts.ParameterDeclaration): ParamShape {
+    const moduleNs = lowerer.moduleNsParamOverrides.get(param);
+    if (moduleNs !== undefined) {
+      return { type: moduleNs, mode: param.questionToken ? "omittable" : "required" };
+    }
     // Island-handle params (a then-handler receiving a dynamic import's
     // namespace handle — markJsvalHandlerParams): jsval, whatever the
     // contextual type spelled.
@@ -6683,16 +6687,20 @@ function loweredTemplateStrings(
    * to a promise-of-jsval local or module global answers the binding's
    * type. Null everywhere else. */
   function islandPromiseStorageTypeOf(lowerer: Lowerer, e: ts.Expression): IrType | null {
-    const direct = importCallHandleType(e);
+    const direct = lowerer.dynamic
+      ? importCallHandleType(e)
+      : staticImportNamespaceType(lowerer, e);
     if (direct?.kind === "promise") return direct;
     if (!ts.isIdentifier(e)) return null;
     const local = lowerer.resolveLocal(e);
-    if (local?.type.kind === "promise" && local.type.inner.kind === "jsval") return local.type;
+    if (local?.type.kind === "promise" &&
+        (local.type.inner.kind === "jsval" || local.type.inner.kind === "moduleNs")) return local.type;
     if (local) return null;
     let sym = lowerer.checker.getSymbolAtLocation(e);
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = lowerer.checker.getAliasedSymbol(sym);
     const g = sym ? lowerer.globalsBySymbol.get(sym) : undefined;
-    if (g?.type.kind === "promise" && g.type.inner.kind === "jsval") return g.type;
+    if (g?.type.kind === "promise" &&
+        (g.type.inner.kind === "jsval" || g.type.inner.kind === "moduleNs")) return g.type;
     return null;
   }
 
@@ -6711,6 +6719,21 @@ function loweredTemplateStrings(
     }
   }
 
+  function markModuleNsHandlerParams(
+    lowerer: Lowerer,
+    handler: ts.Expression,
+    type: IrType & { kind: "moduleNs" },
+  ): void {
+    let e = handler;
+    while (ts.isParenthesizedExpression(e)) e = e.expression;
+    if (!ts.isArrowFunction(e) && !ts.isFunctionExpression(e)) return;
+    for (const p of e.parameters) {
+      if (ts.isIdentifier(p.name) && !p.dotDotDotToken && !p.initializer) {
+        lowerer.moduleNsParamOverrides.set(p, type);
+      }
+    }
+  }
+
 export function lowerPromiseMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     access: ts.PropertyAccessExpression,): IrExpr | null {
     if (call.questionDotToken || access.questionDotToken) return null;
@@ -6723,7 +6746,7 @@ export function lowerPromiseMethodCall(lowerer: Lowerer, call: ts.CallExpression
     // (importCallHandleType / the island-HANDLE var rules), so the storage
     // type is the receiver's truth. Direct `import("./m").then(...)`
     // spells the same promise with no binding at all.
-    if (!recvT && lowerer.dynamic) recvT = islandPromiseStorageTypeOf(lowerer, access.expression);
+    if (!recvT) recvT = islandPromiseStorageTypeOf(lowerer, access.expression);
     if (recvT?.kind !== "promise") return null;
     if (!lowerer.isStdlibMember(access)) return null;
     const loc = locOf(call);
@@ -6829,6 +6852,7 @@ export function lowerPromiseMethodCall(lowerer: Lowerer, call: ts.CallExpression
       // contextual type spelled (a module-namespace type has no mapping —
       // the handle is the value's only story, isIslandExpr's local rule).
       if (inner.kind === "jsval") markJsvalHandlerParams(lowerer, call.arguments[0]!);
+      if (inner.kind === "moduleNs") markModuleNsHandlerParams(lowerer, call.arguments[0]!, inner);
       let cb = lowerer.lowerExpr(call.arguments[0]!);
       // A TYPED handler on a DYN-settling promise (the tracePromise
       // result's `.then((value) => ...)` — the checker's generic
@@ -8431,6 +8455,54 @@ export function lowerPromiseMethodCall(lowerer: Lowerer, call: ts.CallExpression
     if (member !== "keys" && member !== "values" && member !== "entries") return null;
     if (call.arguments.length !== 1 || ts.isSpreadElement(call.arguments[0]!)) return null;
     const argNode = call.arguments[0]!;
+    // A compiled PROGRAM module namespace is a nominal token whose members
+    // remain live bindings, but its enumerable key set is static and Node
+    // sorts it in code-unit order. Materialize exactly those value-export
+    // names for Object.keys; values/entries would need a heterogeneous live
+    // view and stay explicitly fenced. Builtin namespaces also stay fenced:
+    // their exact runtime export set is Node-owned, not the ambient subset.
+    {
+      const probed = tryLowerExpression(lowerer, argNode);
+      if (probed?.type.kind === "moduleNs") {
+        if (member !== "keys") {
+          lowerer.noLowering(
+            `Object.${member} over a module namespace`,
+            call,
+            "read the named exports directly (module namespace values are live and may have heterogeneous representations)",
+          );
+        }
+        const source = lowerer.sourceFileOfModuleNamespace(probed.type);
+        if (source === null) {
+          lowerer.noLowering(
+            "Object.keys over a builtin module namespace",
+            call,
+            "access the builtin's named exports directly (the exact runtime key census is Node-owned)",
+          );
+        }
+        const moduleSymbol = source ? lowerer.checker.getSymbolAtLocation(source) : undefined;
+        const names: string[] = [];
+        moduleSymbol?.getExports().forEach((symbol, key) => {
+          const name = String(key);
+          if (name.startsWith("__") || name === "export=") return;
+          const target = symbol.flags & ts.SymbolFlags.Alias
+            ? lowerer.checker.getAliasedSymbol(symbol)
+            : symbol;
+          if (target.flags & ts.SymbolFlags.Value) names.push(name);
+        });
+        names.sort();
+        const loc = locOf(call);
+        const result: IrExpr = {
+          kind: "arrayLit",
+          elems: names.map((name) => ({ kind: "strLit", value: name, type: STRING, loc })),
+          type: arrayOf(STRING),
+          loc,
+        };
+        const receiver = lowerer.lowerExpr(argNode);
+        return isSafeToDiscard(receiver)
+          ? result
+          : { kind: "seqExpr", stmts: [{ kind: "exprStmt", expr: receiver, loc }], result, type: result.type, loc };
+      }
+    }
     // A CHECKED-DYNAMIC argument — the checker may still spell a record
     // type (the JS file-scope object-literal identity story stores the
     // dyn object), so the LOWERED value's kind is the dispatch: the
