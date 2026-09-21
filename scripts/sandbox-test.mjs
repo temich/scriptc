@@ -725,7 +725,28 @@ try {
       // Workspace builds deliberately do not rebuild packaged native artifacts.
       // Every remote lane needs the Linux helper and runtime from this worktree.
       await execIn(worker, "pnpm", ["--filter", "@scriptc/llvm-linux-x64-gnu", "build:native"], {}, "LLVM helper", 5 * 60_000);
-      await execIn(worker, "pnpm", ["--filter", "@scriptc/runtime-linux-x64-gnu", "build:native"], { CC: "clang-22", AR: "llvm-ar-22" }, "runtime pack", 5 * 60_000);
+      await execIn(
+        worker,
+        "pnpm",
+        ["--filter", "@scriptc/runtime-linux-x64-gnu", "build:native"],
+        { CC: "zig", AR: "zig" },
+        "runtime pack",
+        5 * 60_000,
+        "/workspace",
+        3 * 60_000,
+      );
+      // Zig is a build-only dependency in this lane. Cross-target suites own
+      // the conditional Zig tests; exposing it here would silently expand the
+      // native-cache shard while that shard deliberately disables stable
+      // toolchain caching.
+      await execIn(
+        worker,
+        "sudo",
+        ["rm", "-f", "/usr/local/bin/zig"],
+        {},
+        "runtime toolchain cleanup",
+        60_000,
+      );
     }, imageConfig.custom ? workers.length : 8);
 
     await allWorkers("Testing", async (worker) => {
