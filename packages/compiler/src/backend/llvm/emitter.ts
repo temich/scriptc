@@ -97,7 +97,7 @@ import { emitJsMarshal, emitJsOp, emitJsExit, islandAdapter, islandTypedAdapter 
 import { dynKind, raceAdapterFor, genResultThunkFor, childExitThunkFor, childExitSignalThunkFor, childDataThunkFor, execFileThunkFor, emitterFixedAdapter, wrapEmitterListener, unwrapNullableClosure, closeBindThunkFor, closeOverrideWrapFor } from "./expr-callbacks.js";
 import { streamDataAdapter, streamDoneFnFor, cryptoBytesThunkFor, fsRenameThunkFor, streamCbThunkFor, zlibBytesThunkFor } from "./expr-stream-callbacks.js";
 import { resolveThunkFor, tagInSet, arrPush, emitArrayCopyLoop, emitStrIntrinsic, emitArrIntrinsic, wrapNullable, emitMapNew, mapSet, emitMapLikeIntrinsic, emitSetNew } from "./expr-containers.js";
-import { emitBytesReceiver, emitIntegerLoopIndex, emitBytesIndex, emitBytesData, emitBytesLength, emitBytesGet, emitBytesU32, emitBytesSet, emitBytesIntrinsic } from "./expr-bytes.js";
+import { emitBytesReceiver, emitIntegerLoopIndex, emitBytesIndex, emitBytesData, emitBytesLength, emitBytesGet, emitToUint32, emitBytesSet, emitBytesIntrinsic } from "./expr-bytes.js";
 import { emitRegexIntrinsic, emitRecordKeyGet, keyedRecordReadInto } from "./expr-records.js";
 import { dynPromiseAdapter, streamTypedRefCommitAdapter, liveDynUnionRefAdapter, streamTypedRefBoxValue, streamTypedRefMaterializeAdapter, streamFromArrayAdapter } from "./expr-stream-bridges.js";
 import { emitWebLibCall, emitDynamicLibCall, emitFilesystemLibCall, emitPathUrlLibCall, emitPrimitiveLibCall } from "./lib-filesystem.js";
@@ -4313,8 +4313,8 @@ class LlEmitter {
     return emitBytesGet(this.expressionContext(), elem, receiver, index, integerIndex);
   }
 
-  private emitBytesU32(value: string): string {
-    return emitBytesU32(this.expressionContext(), value);
+  private emitToUint32(value: string): string {
+    return emitToUint32(this.expressionContext(), value);
   }
 
   private emitBytesSet(elem: IrBytesElem, receiver: string, index: string, value: string, integerIndex = false): void {

@@ -182,7 +182,7 @@ export function emitBytesGet(host: LlvmEmitterContext, elem: IrBytesElem, receiv
     return { name: out, type: F64 };
   }
 
-export function emitBytesU32(host: LlvmEmitterContext, value: string): string {
+export function emitToUint32(host: LlvmEmitterContext, value: string): string {
     const B = host.B;
     const aboveMin = B.tmp();
     const belowMax = B.tmp();
@@ -191,9 +191,9 @@ export function emitBytesU32(host: LlvmEmitterContext, value: string): string {
     B.line(`${belowMax} = fcmp ole double ${value}, ${f64Lit(9007199254740992)}`);
     B.line(`${fast} = and i1 ${aboveMin}, ${belowMax}`);
 
-    const fastLabel = B.newLabel("bytes.coerce.fast");
-    const slowLabel = B.newLabel("bytes.coerce.slow");
-    const done = B.newLabel("bytes.coerce.done");
+    const fastLabel = B.newLabel("uint32.coerce.fast");
+    const slowLabel = B.newLabel("uint32.coerce.slow");
+    const done = B.newLabel("uint32.coerce.done");
     B.condBr(fast, fastLabel, slowLabel);
 
     B.startBlock(fastLabel);
@@ -214,9 +214,9 @@ export function emitBytesU32(host: LlvmEmitterContext, value: string): string {
     B.line(`${aboveNegInf} = fcmp ogt double ${value}, ${f64Lit(-Infinity)}`);
     B.line(`${finiteRange} = and i1 ${belowInf}, ${aboveNegInf}`);
     B.line(`${finite} = and i1 ${ordered}, ${finiteRange}`);
-    const finiteLabel = B.newLabel("bytes.coerce.finite");
-    const nonfiniteLabel = B.newLabel("bytes.coerce.nonfinite");
-    const slowDone = B.newLabel("bytes.coerce.slow.done");
+    const finiteLabel = B.newLabel("uint32.coerce.finite");
+    const nonfiniteLabel = B.newLabel("uint32.coerce.nonfinite");
+    const slowDone = B.newLabel("uint32.coerce.slow.done");
     B.condBr(finite, finiteLabel, nonfiniteLabel);
 
     B.startBlock(finiteLabel);
@@ -252,7 +252,7 @@ export function emitBytesU32(host: LlvmEmitterContext, value: string): string {
 export function emitBytesSet(host: LlvmEmitterContext, elem: IrBytesElem, receiver: string, index: string, value: string, integerIndex = false): void {
     const B = host.B;
     const idx = host.emitBytesIndex(receiver, index, integerIndex);
-    const stored = elem === "f32" ? null : host.emitBytesU32(value);
+    const stored = elem === "f32" ? null : host.emitToUint32(value);
     const data = host.emitBytesData(receiver);
     const p = B.tmp();
     if (elem === "u8") {

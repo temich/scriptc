@@ -70,7 +70,7 @@ export interface LlvmEmitterContext extends ShapeHost {
   emitBytesIntrinsic(e: IrExpr & { kind: "bytesIntrinsic" }): LlValue;
   emitBytesLength(elem: IrBytesElem, receiver: string, bytes: boolean): LlValue;
   emitBytesReceiver(receiver: IrExpr, following: IrExpr[]): LlValue;
-  emitBytesU32(value: string): string;
+  emitToUint32(value: string): string;
   emitCallExpr(e: ExprOf<"call" | "ffiCall" | "closure" | "callValue" | "selfRef" | "new" | "classRef" | "newValue" | "instanceOfValue" | "promiseVoidWiden" | "upcast" | "downcast" | "instanceOf" | "virtualCall">): LlValue;
   emitChildProcessLibCall(e: LibCallExpr): LlValue;
   emitContainerExpr(e: ExprOf<"arrayLit" | "arrayNewLen" | "arrayGet" | "arrayHas" | "arrayState" | "arrIntrinsic" | "bytesNew" | "bytesIntrinsic" | "mapNew" | "mapIntrinsic" | "setIntrinsic" | "setNew">): LlValue;

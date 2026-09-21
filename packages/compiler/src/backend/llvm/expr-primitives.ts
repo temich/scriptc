@@ -81,13 +81,13 @@ export function emitOperatorExpr(host: LlvmEmitterContext, e: ExprOf<"bin" | "un
         const arith: Record<string, string> = { "+": "fadd", "-": "fsub", "*": "fmul", "/": "fdiv" };
         const cmp: Record<string, string> = { "<": "olt", "<=": "ole", ">": "ogt", ">=": "oge", "===": "oeq", "!==": "une" };
         const libm: Record<string, string> = { "%": "fmod", "**": "pow" };
-        const bit: Record<string, string> = {
-          "&": "scr_bit_and",
-          "|": "scr_bit_or",
-          "^": "scr_bit_xor",
-          "<<": "scr_bit_shl",
-          ">>": "scr_bit_shr",
-          ">>>": "scr_bit_ushr",
+        const bit: Record<string, "and" | "or" | "xor" | "shl" | "ashr" | "lshr"> = {
+          "&": "and",
+          "|": "or",
+          "^": "xor",
+          "<<": "shl",
+          ">>": "ashr",
+          ">>>": "lshr",
         };
         if ((e.op === "===" || e.op === "!==") && e.left.type.kind === "bool") {
           B.line(`${t} = icmp ${e.op === "===" ? "eq" : "ne"} i1 ${l.name}, ${r.name}`);
@@ -99,8 +99,22 @@ export function emitOperatorExpr(host: LlvmEmitterContext, e: ExprOf<"bin" | "un
           if (e.left.type.kind !== "f64") throw new LlvmUnsupportedError(`bin:${e.op}:${e.left.type.kind}`, e.loc);
           if (arith[e.op] !== undefined) B.line(`${t} = ${arith[e.op]} double ${l.name}, ${r.name}`);
           else B.line(`${t} = fcmp ${cmp[e.op]} double ${l.name}, ${r.name}`);
+        } else if (bit[e.op] !== undefined) {
+          if (e.left.type.kind !== "f64" || e.right.type.kind !== "f64") {
+            throw new LlvmUnsupportedError(`bin:${e.op}:${e.left.type.kind}:${e.right.type.kind}`, e.loc);
+          }
+          const left = host.emitToUint32(l.name);
+          let right = host.emitToUint32(r.name);
+          if (e.op === "<<" || e.op === ">>" || e.op === ">>>") {
+            const shift = B.tmp();
+            B.line(`${shift} = and i32 ${right}, 31`);
+            right = shift;
+          }
+          const result = B.tmp();
+          B.line(`${result} = ${bit[e.op]} i32 ${left}, ${right}`);
+          B.line(`${t} = ${e.op === ">>>" ? "uitofp" : "sitofp"} i32 ${result} to double`);
         } else {
-          const fn = libm[e.op] ?? bit[e.op];
+          const fn = libm[e.op];
           if (fn === undefined) throw new LlvmUnsupportedError(`bin:${e.op}`, e.loc);
           host.declare(`declare double @${fn}(double, double)`);
           B.line(`${t} = call double @${fn}(double ${l.name}, double ${r.name})`);
@@ -113,8 +127,10 @@ export function emitOperatorExpr(host: LlvmEmitterContext, e: ExprOf<"bin" | "un
         if (e.op === "-") B.line(`${t} = fneg double ${v.name}`);
         else if (e.op === "!") B.line(`${t} = xor i1 ${v.name}, true`);
         else {
-          host.declare(`declare double @scr_bit_not(double)`);
-          B.line(`${t} = call double @scr_bit_not(double ${v.name})`);
+          const value = host.emitToUint32(v.name);
+          const result = B.tmp();
+          B.line(`${result} = xor i32 ${value}, -1`);
+          B.line(`${t} = sitofp i32 ${result} to double`);
         }
         return { name: t, type: e.type };
       }

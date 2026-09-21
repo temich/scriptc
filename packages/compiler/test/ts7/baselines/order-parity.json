@@ -6432,6 +6432,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2937-bitwise-hot-loop.ts": {
+   "order": [
+    "<repo>/tests/corpus/2937-bitwise-hot-loop.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
