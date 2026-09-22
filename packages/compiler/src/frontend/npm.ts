@@ -7,9 +7,9 @@
  * probed from the importing FILE upward to the filesystem root, symlinks
  * are resolved with realpath (pnpm/bun virtual stores are symlink farms —
  * a package's dependencies live next to its REAL location, not its link),
- * package.json "exports" maps are honored (import/require conditions,
- * subpath patterns with '*'), with main/module fallbacks and extension/
- * directory-index resolution for the rest. The internal module graph
+ * package.json "exports" and package-scoped "imports" maps are honored
+ * (import/require conditions, subpath patterns with '*'), with main/module
+ * fallbacks and extension/directory-index resolution for the rest. The internal module graph
  * (the package's own relative imports/requires plus its dependencies')
  * is scanned with a real TypeScript parse collecting every module edge —
  * import/export declarations (including `export * as ns from`, which
@@ -90,7 +90,7 @@ import ts from "typescript5";
 import { packageNameOfSpecifier as packageNameOf } from "./workspace-registry.js";
 import { cjsLexedExportsOf } from "./cjs-lexer.js";
 import { trackedDirectoryExists, trackedFileExists, trackedReadFile, trackedRealpath } from "./input-tracker.js";
-import { resolveExports } from "./resolve.js";
+import { resolveExports, resolvePackageImports } from "./resolve.js";
 
 const NODE_IMPORT_CONDITIONS = new Set(["import", "node", "default"]);
 const NODE_REQUIRE_CONDITIONS = new Set(["require", "node", "default"]);
@@ -771,6 +771,7 @@ interface PkgJson {
   module?: string;
   type?: string;
   exports?: unknown;
+  imports?: unknown;
 }
 
 /** Package name from a PATH into node_modules ("…/node_modules/@s/p/d/x.js"
@@ -1389,6 +1390,9 @@ export class NpmGraphBuilder {
     mode: "import" | "require",
     ctx: { importer: string; chain: readonly string[]; preferModuleField?: boolean },
   ): string | null {
+    if (specifier.startsWith("#")) {
+      return this.resolvePackageImport(fromDir, specifier, mode, ctx);
+    }
     const name = packageNameOf(specifier);
     const parts = specifier.split("/");
     const subparts = specifier.startsWith("@") ? parts.slice(2) : parts.slice(1);
@@ -1490,6 +1494,81 @@ export class NpmGraphBuilder {
       }
       dir = parent;
     }
+  }
+
+  /** Resolves a package-internal "#" specifier from the nearest package
+   * scope. Relative targets stay in that package; bare package targets
+   * re-enter the same runtime resolver so edge-kind conditions and package
+   * self-resolution remain consistent. */
+  private resolvePackageImport(
+    fromDir: string,
+    specifier: string,
+    mode: "import" | "require",
+    ctx: { importer: string; chain: readonly string[]; preferModuleField?: boolean },
+  ): string | null {
+    let pkgDir: string | null = null;
+    let pkg: PkgJson | null = null;
+    for (let dir = fromDir; ; ) {
+      const candidate = this.pkgJsonOf(dir);
+      if (candidate !== null) {
+        pkgDir = dir;
+        pkg = candidate;
+        break;
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    const chain = NpmGraphBuilder.chainOf(ctx.chain);
+    if (pkgDir === null || pkg === null) {
+      this.errors.push({
+        message:
+          `package import '${specifier}' has no enclosing package.json` +
+          ` (imported from ${ctx.importer}${chain === "" ? "" : `; dependency chain: ${chain}`})`,
+      });
+      return null;
+    }
+    if (specifier === "#") {
+      this.errors.push({
+        message:
+          `package import '#' is not a valid internal specifier` +
+          ` (imported from ${ctx.importer}${chain === "" ? "" : `; dependency chain: ${chain}`})`,
+      });
+      return null;
+    }
+    const target = resolvePackageImports(pkg.imports, specifier, nodeExportConditions(mode));
+    if (target === null) {
+      this.errors.push({
+        message:
+          `package import '${specifier}' is not defined by "imports" in ${join(pkgDir, "package.json")}` +
+          ` (imported from ${ctx.importer}${chain === "" ? "" : `; dependency chain: ${chain}`})`,
+      });
+      return null;
+    }
+    if (target.startsWith("./")) {
+      const resolved = this.resolveFile(join(pkgDir, target));
+      if (resolved === null) {
+        this.errors.push({
+          message:
+            `package import '${specifier}' resolves to '${target}', which does not exist` +
+            ` (imported from ${ctx.importer}${chain === "" ? "" : `; dependency chain: ${chain}`})`,
+        });
+        return null;
+      }
+      return this.host.realpath(resolved);
+    }
+    if (
+      target.startsWith("#") || target.startsWith("../") || target.startsWith("/") ||
+      target === "." || target === ".."
+    ) {
+      this.errors.push({
+        message:
+          `package import '${specifier}' has invalid target '${target}' in ${join(pkgDir, "package.json")}` +
+          ` (imported from ${ctx.importer}${chain === "" ? "" : `; dependency chain: ${chain}`})`,
+      });
+      return null;
+    }
+    return this.resolvePackage(pkgDir, target, mode, ctx);
   }
 
   /* ── the walk ─────────────────────────────────────────────────── */
@@ -1695,7 +1774,12 @@ export class NpmGraphBuilder {
       // kind-tagged edge (the island's module loader asks with the import
       // kind, its require shim with the require kind).
       const depName = packageNameOf(spec);
-      const nextChain = depName === pkgName ? chain : [...chain, depName];
+      const nextChain = depName === pkgName || spec.startsWith("#") ? chain : [...chain, depName];
+      const targetChain = (to: string): readonly string[] => {
+        if (!spec.startsWith("#")) return nextChain;
+        const targetPkg = packageNameOfPath(to);
+        return targetPkg === null || targetPkg === pkgName ? chain : [...chain, targetPkg];
+      };
       if (use.require) {
         // require edges attribute to the module whose scope DEFINES the
         // require function being called: a direct require() is this file's
@@ -1738,7 +1822,7 @@ export class NpmGraphBuilder {
             );
           }
           pushEdge(from, spec, to, "require");
-          this.walk(to, nextChain, true);
+          this.walk(to, targetChain(to), true);
         }
       }
       if (use.static || use.dynamicImport || use.importMetaResolve) {
@@ -1775,7 +1859,7 @@ export class NpmGraphBuilder {
         }
         pushEdge(key, spec, to, "import");
         if (!use.importMetaResolve || use.static || use.dynamicImport) {
-          this.walk(to, nextChain, lazy || !use.static);
+          this.walk(to, targetChain(to), lazy || !use.static);
         }
       }
     }

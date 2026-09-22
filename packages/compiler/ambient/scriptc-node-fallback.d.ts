@@ -3217,8 +3217,14 @@ declare module "node:cluster" {
   export = cluster;
 }
 
-/* node:tty — the fd probe (the same isatty(3) behind process.*.isTTY). */
+/* node:tty — the fd probe (the same isatty(3) behind process.*.isTTY)
+ * and the supported structural view of a process output stream. */
 declare module "tty" {
+  export interface WriteStream {
+    write(data: string | Uint8Array, callback?: (error?: Error | null) => void): boolean;
+    write(data: string | Uint8Array, encoding: BufferEncoding, callback?: (error?: Error | null) => void): boolean;
+    readonly isTTY: boolean;
+  }
   export function isatty(fd: number): boolean;
 }
 declare module "node:tty" {

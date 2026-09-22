@@ -9014,6 +9014,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/fixtures/npm/cases/package-imports/main.ts": {
+   "order": [
+    "<repo>/tests/fixtures/npm/cases/package-imports/main.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/fixtures/npm/cases/promise-bridge-forever/main.ts": {
    "order": [
     "<repo>/tests/fixtures/npm/cases/promise-bridge-forever/main.ts"

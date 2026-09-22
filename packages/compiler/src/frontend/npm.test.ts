@@ -1,6 +1,12 @@
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { moduleSpecifiersOf } from "./npm.js";
 import { NpmGraphBuilder } from "./npm.js";
+
+const fixturesRoot = fileURLToPath(new URL("../../../../tests/fixtures/npm/", import.meta.url));
+const fixture = (...parts: string[]): string => join(fixturesRoot, ...parts);
+const portable = (path: string): string => path.replaceAll("\\", "/");
 
 test("collects import.meta.resolve literals as resolution-only edges", () => {
   const result = moduleSpecifiersOf(
@@ -31,15 +37,16 @@ test("collects import.meta.resolve literals as resolution-only edges", () => {
 });
 
 test("emits an import-condition edge for an embedded bare import.meta.resolve", () => {
-  const root = new URL("../../../../tests/fixtures/npm/", import.meta.url).pathname;
-  const entry = `${root}cases/dual-entry/main.ts`;
+  const entry = fixture("cases", "dual-entry", "main.ts");
   const builder = new NpmGraphBuilder();
   builder.addImport(entry, "dual");
   const graph = builder.finish();
-  const dual = graph.modules.find((module) => module.key.endsWith("/dual/index.mjs"));
+  const dual = graph.modules.find((module) => portable(module.key).endsWith("/dual/index.mjs"));
   expect(dual).toBeDefined();
-  expect(graph.edges).toContainEqual({
-    from: dual!.key,
+  if (dual === undefined) return;
+  const edges = graph.edges.map((edge) => ({ ...edge, from: portable(edge.from), to: portable(edge.to) }));
+  expect(edges).toContainEqual({
+    from: portable(dual.key),
     specifier: "cjszoo",
     to: expect.stringMatching(/\/cjszoo\/index\.js$/),
     kind: "import",
@@ -47,9 +54,70 @@ test("emits an import-condition edge for an embedded bare import.meta.resolve", 
 });
 
 test("runtime introspection keeps import and require export conditions separate", () => {
-  const root = new URL("../../../../tests/fixtures/npm/", import.meta.url).pathname;
-  const entry = `${root}cases/dual-entry/main.ts`;
+  const entry = fixture("cases", "dual-entry", "main.ts");
   const builder = new NpmGraphBuilder();
-  expect(builder.resolveForIntrospection(entry, "dual", "import")).toMatch(/\/dual\/index\.mjs$/);
-  expect(builder.resolveForIntrospection(entry, "dual", "require")).toMatch(/\/dual\/index\.cjs$/);
+  const imported = builder.resolveForIntrospection(entry, "dual", "import");
+  const required = builder.resolveForIntrospection(entry, "dual", "require");
+  expect(imported).not.toBeNull();
+  expect(required).not.toBeNull();
+  if (imported === null || required === null) return;
+  expect(portable(imported)).toMatch(/\/dual\/index\.mjs$/);
+  expect(portable(required)).toMatch(/\/dual\/index\.cjs$/);
+});
+
+test("embedded package imports resolve with edge-specific conditions", () => {
+  const entry = fixture("cases", "package-imports", "main.ts");
+  const builder = new NpmGraphBuilder();
+  builder.addImport(entry, "importmapped");
+  const graph = builder.finish();
+  const packageEntry = graph.modules.find((module) => portable(module.key).endsWith("/importmapped/index.js"));
+  const edges = graph.edges.map((edge) => ({ ...edge, from: portable(edge.from), to: portable(edge.to) }));
+  expect(graph.errors).toEqual([]);
+  expect(packageEntry).toBeDefined();
+  if (packageEntry === undefined) return;
+  expect(edges).toContainEqual({
+    from: portable(packageEntry.key),
+    specifier: "#exact",
+    to: expect.stringMatching(/\/importmapped\/internal\/exact\.js$/),
+    kind: "import",
+  });
+  expect(edges).toContainEqual({
+    from: portable(packageEntry.key),
+    specifier: "#pattern/value",
+    to: expect.stringMatching(/\/importmapped\/internal\/value\.js$/),
+    kind: "import",
+  });
+  expect(edges).toContainEqual({
+    from: portable(packageEntry.key),
+    specifier: "#external",
+    to: expect.stringMatching(/\/dual\/index\.mjs$/),
+    kind: "import",
+  });
+  expect(edges).toContainEqual({
+    from: portable(packageEntry.key),
+    specifier: "#mode",
+    to: expect.stringMatching(/\/importmapped\/internal\/require-mode\.cjs$/),
+    kind: "require",
+  });
+  expect(edges).toContainEqual({
+    from: portable(packageEntry.key),
+    specifier: "#mode",
+    to: expect.stringMatching(/\/importmapped\/internal\/import-mode\.js$/),
+    kind: "import",
+  });
+});
+
+test("an unmapped embedded package import reports its package scope", () => {
+  const entry = fixture("cases", "package-imports", "main.ts");
+  const builder = new NpmGraphBuilder();
+  builder.addFileImport(entry, "../../node_modules/importmapped/missing.js");
+  const graph = builder.finish();
+  expect(graph.errors).toHaveLength(1);
+  const error = graph.errors[0];
+  expect(error).toBeDefined();
+  if (error === undefined) return;
+  expect(error.message).toContain(
+    `package import '#missing' is not defined by "imports" in ${fixture("node_modules", "importmapped", "package.json")}`,
+  );
+  expect(error.message).not.toContain("cannot find package");
 });
