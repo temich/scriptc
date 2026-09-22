@@ -6438,6 +6438,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2938-fs-sync-overloads.cjs": {
+   "order": [
+    "<repo>/tests/corpus/2938-fs-sync-overloads.cjs"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"

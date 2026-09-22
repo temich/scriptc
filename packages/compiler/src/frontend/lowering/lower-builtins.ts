@@ -1123,6 +1123,107 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
   return null;
 }
 
+type FsSyncBufferWindowSource =
+  | { kind: "options"; node: ts.Expression | undefined }
+  | { kind: "offset"; node: ts.Expression };
+
+/** Normalize fs.readSync/fs.writeSync's shorthand and inline-options buffer
+ * forms into the existing fixed-width descriptor IR. fd and buffer bind
+ * first, option values bind in object-literal order, and only then do the
+ * default window expressions read the bound buffer length. */
+function lowerFsSyncBufferWindow(
+  lowerer: Lowerer,
+  expr: ts.CallExpression,
+  loc: SrcLoc,
+  fn: "fs.readSync" | "fs.writeSync",
+  source: FsSyncBufferWindowSource,
+  supported: string,
+): IrExpr {
+  const fdValue = lowerer.lowerExprExpecting(expr.arguments[0]!, F64);
+  const bufferValue = lowerer.lowerExprExpecting(expr.arguments[1]!, BYTES_U8);
+  const fdLocal = lowerer.declareHiddenLocal("%fsSyncFd", F64);
+  const bufferLocal = lowerer.declareHiddenLocal("%fsSyncBuffer", BYTES_U8);
+  const stmts: IrStmt[] = [
+    { kind: "varDecl", localId: fdLocal.id, init: fdValue, loc: fdValue.loc },
+    { kind: "varDecl", localId: bufferLocal.id, init: bufferValue, loc: bufferValue.loc },
+  ];
+  const fd = (): IrExpr => varRef(fdLocal.id, fdLocal.type, loc);
+  const buffer = (): IrExpr => varRef(bufferLocal.id, bufferLocal.type, loc);
+  const number = (value: number): IrExpr => numLit(value, loc);
+  const stageNumber = (name: string, node: ts.Expression): IrExpr => {
+    const mapped = lowerer.mapTypeOf(lowerer.typeOf(node));
+    if (mapped?.kind !== "f64") {
+      lowerer.noLowering(
+        `${fn} with a '${mapped ? lowerer.fmt(mapped) : lowerer.checker.typeToString(lowerer.typeOf(node))}' ${name}`,
+        node,
+        supported,
+      );
+    }
+    const value = lowerer.lowerExprExpecting(node, F64);
+    const local = lowerer.declareHiddenLocal(`%fsSync${name}`, F64);
+    stmts.push({ kind: "varDecl", localId: local.id, init: value, loc: value.loc });
+    return varRef(local.id, local.type, loc);
+  };
+  const isNull = (node: ts.Expression): boolean => {
+    let value = node;
+    while (ts.isParenthesizedExpression(value)) value = value.expression;
+    return value.kind === ts.SyntaxKind.NullKeyword;
+  };
+
+  let offset: IrExpr | null = null;
+  let length: IrExpr | null = null;
+  let position: IrExpr | null = null;
+  if (source.kind === "offset") {
+    offset = stageNumber("offset", source.node);
+  } else if (source.node !== undefined && !isNull(source.node)) {
+    if (!ts.isObjectLiteralExpression(source.node)) {
+      lowerer.noLowering(
+        `${fn} with a non-literal options argument`,
+        source.node,
+        supported,
+      );
+    }
+    for (const property of (source.node as ts.ObjectLiteralExpression).properties) {
+      const member = optionMember(property);
+      if (member === null) {
+        lowerer.noLowering(
+          `${fn} with a non-plain options member`,
+          property,
+          supported,
+        );
+      }
+      if (member.name === "offset") {
+        offset = stageNumber("offset", member.value);
+      } else if (member.name === "length") {
+        length = stageNumber("length", member.value);
+      } else if (member.name === "position") {
+        position = isNull(member.value) ? null : stageNumber("position", member.value);
+      } else {
+        const effect = lowerer.lowerExpr(member.value);
+        stmts.push({ kind: "exprStmt", expr: effect, loc: effect.loc });
+      }
+    }
+  }
+
+  const normalizedOffset = offset ?? number(0);
+  const normalizedLength = length ?? {
+    kind: "bin",
+    op: "-",
+    left: { kind: "bytesIntrinsic", method: "length", receiver: buffer(), args: [], type: F64, loc },
+    right: normalizedOffset,
+    type: F64,
+    loc,
+  } satisfies IrExpr;
+  const result: IrExpr = {
+    kind: "libCall",
+    fn,
+    args: [fd(), buffer(), normalizedOffset, normalizedLength, position ?? number(-1)],
+    type: F64,
+    loc,
+  };
+  return { kind: "seqExpr", stmts, result, type: F64, loc };
+}
+
 /** One builtin-module function call → its libCall. Completes the call to
    * the table's exact shape: variadicPack functions (path.join/resolve)
    * accept any arity — or ONE spread of a string[] — and pack the
@@ -1493,17 +1594,15 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
       callback = voidizedCallback(lowerer, callback, locOf(expr.arguments[2]!));
       return { kind: "libCall", fn: "fs.renameCb", args: [oldPath, newPath, callback], type: VOID, loc };
     }
-    // fs.readSync(fd, buffer, offset, length[, position]) — normalize the
-    // current-offset forms to Node/libuv's -1 sentinel so the IR and native
-    // ABI stay fixed-width. A real numeric position is a positioned read
-    // and therefore must not advance the descriptor. Literal null is the
-    // documented current-offset spelling; richer nullable expressions must
-    // narrow first so no effectful evaluation is silently discarded.
+    // fs.readSync's classic and options-object buffer forms normalize into
+    // one fixed-width IR call. Current-offset forms use Node/libuv's -1
+    // sentinel; a numeric position performs offset-preserving I/O.
     if (bi.module === "fs" && bi.member === "readSync") {
       const supported =
-        "use readSync(fd, buffer, offset, length[, position]) with a numeric position or literal null; options objects and bigint positions have no lowering";
+        "use readSync(fd, buffer), readSync(fd, buffer, { offset?, length?, position? }), or readSync(fd, buffer, offset, length[, position]); bigint positions and non-literal options objects have no lowering";
       if (
-        (expr.arguments.length !== 4 && expr.arguments.length !== 5) ||
+        expr.arguments.length < 2 ||
+        expr.arguments.length > 5 ||
         expr.arguments.some(ts.isSpreadElement)
       ) {
         lowerer.noLowering(
@@ -1511,6 +1610,18 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
           expr,
           supported,
         );
+      }
+      if (expr.arguments.length === 2) {
+        return lowerFsSyncBufferWindow(lowerer, expr, loc, "fs.readSync", { kind: "options", node: undefined }, supported);
+      }
+      if (expr.arguments.length === 3) {
+        const optionsNode = expr.arguments[2]!;
+        let valueNode = optionsNode;
+        while (ts.isParenthesizedExpression(valueNode)) valueNode = valueNode.expression;
+        if (ts.isObjectLiteralExpression(valueNode) || valueNode.kind === ts.SyntaxKind.NullKeyword) {
+          return lowerFsSyncBufferWindow(lowerer, expr, loc, "fs.readSync", { kind: "options", node: valueNode }, supported);
+        }
+        lowerer.noLowering("readSync with a non-literal options argument", optionsNode, supported);
       }
       const args: IrExpr[] = [
         lowerer.lowerExprExpecting(expr.arguments[0]!, F64),
@@ -1538,15 +1649,14 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
       }
       return { kind: "libCall", fn: "fs.readSync", args, type: F64, loc };
     }
-    // fs.writeSync has two static families. Buffer writes use the classic
-    // (fd, buffer, offset, length[, position]) shape; string writes accept
-    // (fd, string[, position[, "utf8"]]). The runtime uses -1 for the
-    // current-offset forms. Node treats a negative, fractional, non-finite,
-    // or over-MAX_SAFE numeric write position like null rather than throwing;
-    // preserve the value here so the runtime can make that dispatch.
+    // fs.writeSync has buffer and string families. Buffer writes accept
+    // omitted offset/length and inline options; string writes accept
+    // (fd, string[, position[, "utf8"]]). The runtime uses -1 for current
+    // offset. Invalid numeric WRITE positions intentionally reach the
+    // runtime, where Node normalizes them to the current descriptor offset.
     if (bi.module === "fs" && bi.member === "writeSync") {
       const supported =
-        'use writeSync(fd, buffer, offset, length[, position]) or writeSync(fd, string[, position[, "utf8"]]); options objects, bigint positions, and other encodings have no lowering';
+        'use writeSync(fd, buffer[, offset[, length[, position]]]), writeSync(fd, buffer, { offset?, length?, position? }), or writeSync(fd, string[, position[, "utf8"]]); non-literal options objects, bigint positions, and other encodings have no lowering';
       if (expr.arguments.some(ts.isSpreadElement) || expr.arguments.length < 2) {
         lowerer.noLowering(
           `writeSync with ${expr.arguments.length} argument${expr.arguments.length === 1 ? "" : "s"}`,
@@ -1556,7 +1666,6 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
       }
       const dataNode = expr.arguments[1]!;
       const dataType = lowerer.mapTypeOf(lowerer.typeOf(dataNode));
-      const fd = lowerer.lowerExprExpecting(expr.arguments[0]!, F64);
       const position = (node: ts.Expression | undefined): IrExpr => {
         let valueNode = node;
         while (valueNode && ts.isParenthesizedExpression(valueNode)) valueNode = valueNode.expression;
@@ -1581,6 +1690,21 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
             "byte writes take Uint8Array/Buffer data",
           );
         }
+        if (expr.arguments.length === 2) {
+          return lowerFsSyncBufferWindow(lowerer, expr, loc, "fs.writeSync", { kind: "options", node: undefined }, supported);
+        }
+        if (expr.arguments.length === 3) {
+          const thirdNode = expr.arguments[2]!;
+          let valueNode = thirdNode;
+          while (ts.isParenthesizedExpression(valueNode)) valueNode = valueNode.expression;
+          if (ts.isObjectLiteralExpression(valueNode) || valueNode.kind === ts.SyntaxKind.NullKeyword) {
+            return lowerFsSyncBufferWindow(lowerer, expr, loc, "fs.writeSync", { kind: "options", node: valueNode }, supported);
+          }
+          if (lowerer.mapTypeOf(lowerer.typeOf(thirdNode))?.kind === "f64") {
+            return lowerFsSyncBufferWindow(lowerer, expr, loc, "fs.writeSync", { kind: "offset", node: thirdNode }, supported);
+          }
+          lowerer.noLowering("writeSync of Buffer data with a non-numeric offset", thirdNode, supported);
+        }
         if (expr.arguments.length !== 4 && expr.arguments.length !== 5) {
           lowerer.noLowering(
             `writeSync of Buffer data with ${expr.arguments.length} arguments`,
@@ -1588,6 +1712,7 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
             supported,
           );
         }
+        const fd = lowerer.lowerExprExpecting(expr.arguments[0]!, F64);
         return {
           kind: "libCall",
           fn: "fs.writeSync",
@@ -1626,6 +1751,7 @@ function optionMember(p: ts.ObjectLiteralElementLike): { name: string; value: ts
           // a call/getter whose type is the accepted literal cannot vanish.
           enc = lowerer.lowerExprExpecting(encNode, STRING);
         }
+        const fd = lowerer.lowerExprExpecting(expr.arguments[0]!, F64);
         return {
           kind: "libCall",
           fn: "fs.writeStrSync",

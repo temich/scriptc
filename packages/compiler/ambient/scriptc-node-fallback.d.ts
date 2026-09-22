@@ -1102,11 +1102,23 @@ declare module "node:fs" {
   /* Read into a caller buffer from the fd's current position when position
    * is omitted/null, or from a numeric byte position without advancing the
    * fd. Answers the byte count, 0 at EOF. */
+  export interface ReadSyncOptions {
+    offset?: number;
+    length?: number;
+    position?: number | null;
+  }
+  export function readSync(fd: number, buffer: Uint8Array, options?: ReadSyncOptions): number;
   export function readSync(fd: number, buffer: Uint8Array, offset: number, length: number, position?: number | null): number;
   /* Write a caller-buffer window, or a utf8 string, at the fd's current
    * position when position is omitted/null (advancing it), or at a numeric
    * byte position without advancing it. Answers the byte count. */
-  export function writeSync(fd: number, buffer: Uint8Array, offset: number, length: number, position?: number | null): number;
+  export interface WriteSyncOptions {
+    offset?: number;
+    length?: number;
+    position?: number | null;
+  }
+  export function writeSync(fd: number, buffer: Uint8Array, options: WriteSyncOptions): number;
+  export function writeSync(fd: number, buffer: Uint8Array, offset?: number, length?: number, position?: number | null): number;
   export function writeSync(fd: number, string: string, position?: number | null, encoding?: "utf8" | "utf-8"): number;
   /* statSync over an open fd — the same Stats snapshot. */
   export function fstatSync(fd: number): Stats;
