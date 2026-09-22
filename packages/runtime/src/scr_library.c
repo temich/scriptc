@@ -64,6 +64,10 @@ void scr_library_set_sink(ScrLibSinkFn fn, void *ctx) {
 
 static SCR_TL ScrLibCbFn scr_library_cb_fns[SCR_LIB_MAX_CALLBACKS];
 static SCR_TL void *scr_library_cb_ctxs[SCR_LIB_MAX_CALLBACKS];
+/* An unregistered callback is an unrecoverable trap, but its delivery is
+ * deferred until generated code has unwound and released every RC frame.
+ * The message is a program-TU constant and remains valid for the instance. */
+static SCR_TL const char *scr_library_pending_trap = NULL;
 /* A typed host callback runs synchronously inside one ABI entry. Like the
  * sink, slots, poison, arena, and current-entry symbol, this belongs to the
  * localized / thread-instanced library copy rather than the process. */
@@ -78,10 +82,29 @@ void scr_library_cb_set(size_t slot, ScrLibCbFn fn, void *ctx) {
 
 ScrLibCbFn scr_library_cb_require(size_t slot, const char *trap_msg) {
   /* trap_msg is the call site's constant ("scriptc: library callback
-   * '<name>' invoked before registration\n") — a DETECTED trap the funnel
-   * classifies SC4025 and assembles with the entry the host called. */
-  if (scr_library_cb_fns[slot] == NULL) scr_trap(trap_msg);
+   * '<name>' invoked before registration\n"). Defer the detected SC4025
+   * trap so generated callers can unwind through their RC cleanup before
+   * the host sink performs its supported non-local recovery. */
+  if (scr_library_cb_fns[slot] == NULL) {
+    scr_library_pending_trap = trap_msg;
+    /* Runtime callback adapters already stop on the ordinary exception
+     * cell. A payload-free boolean sentinel carries this trap through those
+     * paths; generated checks inspect pending_trap first, so user catch
+     * handlers can never observe or consume it. */
+    scr_throw_bool(false);
+    return NULL;
+  }
   return scr_library_cb_fns[slot];
+}
+
+bool scr_library_trap_pending(void) { return scr_library_pending_trap != NULL; }
+
+void scr_library_check_trap(void) {
+  if (scr_library_pending_trap == NULL) return;
+  const char *msg = scr_library_pending_trap;
+  scr_library_pending_trap = NULL;
+  scr_exc_clear(); /* drop the propagation sentinel before sink recovery */
+  scr_trap(msg);
 }
 
 void *scr_library_cb_ctx(size_t slot) { return scr_library_cb_ctxs[slot]; }
@@ -421,6 +444,7 @@ void scr_library_reset(void) {
    * audit. Everything here is re-runnable; the first call is a cheap
    * no-op pass. */
   scr_exc_clear();
+  scr_library_pending_trap = NULL;
   scr_library_arena_reset();
   for (size_t i = 0; i < scr_library_nresets; i++) scr_library_resets[i]();
   scr_lib_session_cleanup();

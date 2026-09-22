@@ -220,6 +220,11 @@ ScrStr *scr_caught_to_string(const ScrCaught *c) {
  * trap-teaching form (code SC4013, the trapping entry's symbol) before
  * delivery; only the 0x01-led verbatim path below bypasses assembly. */
 void scr_library_check_exc(void) {
+  /* Unregistered host callbacks defer their unrecoverable trap until the
+   * generated call chain has released every RC frame. Deliver it before
+   * considering catchable JavaScript exceptions; this path never enters a
+   * user catch handler. */
+  scr_library_check_trap();
   if (!scr_exc_pending()) return;
   static SCR_TL char buf[1024]; /* the message is copied out before the payload dies */
   /* The ratified verbatim rule: a thrown message that ALREADY begins with

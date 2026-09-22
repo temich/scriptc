@@ -131,9 +131,9 @@ void scr_library_set_sink(ScrLibSinkFn fn, void *ctx); /* latest wins */
  * outbound seam: the profile declares named channels (bytes/scalar
  * signatures), the generated registration symbol maps a channel name to a
  * slot index here, and compiled call sites fetch the slot through
- * scr_library_cb_require — which returns the host's pointer or delivers
- * the call site's trap message through the funnel (the SC4025 detected
- * trap) when the host never registered. The typed shape of each stored
+ * scr_library_cb_require — which returns the host's pointer or defers the
+ * call site's SC4025 trap while generated code unwinds its RC frames when
+ * the host never registered. The typed shape of each stored
  * pointer is the channel's, with the opaque context first:
  *
  *   <ret> (*)(void *ctx, <params...>)
@@ -161,9 +161,13 @@ void scr_library_set_sink(ScrLibSinkFn fn, void *ctx); /* latest wins */
  * channel's typed shape before calling. */
 typedef void (*ScrLibCbFn)(void);
 void scr_library_cb_set(size_t slot, ScrLibCbFn fn, void *ctx);
-/* The call-site fetch: the registered pointer, or the funnel trap with
- * trap_msg (never returns NULL). */
+/* The call-site fetch: the registered pointer, or NULL after arming an
+ * uncatchable pending trap with trap_msg. Generated code checks immediately,
+ * unwinds RC frames through every caller, and the entry boundary delivers. */
 ScrLibCbFn scr_library_cb_require(size_t slot, const char *trap_msg);
+bool scr_library_trap_pending(void);
+/* Boundary delivery for the pending trap above; no-op when clean. */
+void scr_library_check_trap(void);
 void *scr_library_cb_ctx(size_t slot);
 /* Generated typed call sites bracket only the actual host-function call.
  * End is reached only after a normal return; an illegal unwind deliberately

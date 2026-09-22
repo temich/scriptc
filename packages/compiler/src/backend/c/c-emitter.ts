@@ -1686,6 +1686,13 @@ export class CEmitter {
       this.line(`goto ${target.label};`);
       return;
     }
+    this.emitFunctionUnwind();
+  }
+
+  /** Release the whole generated function and return its dummy value. This
+   * bypasses user catch handlers for a deferred library trap, which remains
+   * an unrecoverable host-contract failure while still cleaning RC frames. */
+  private emitFunctionUnwind(): void {
     this.releaseForJump(0, 0);
     const t = this.currentReturnType;
     if (t.kind === "void") this.line(`return;`);
@@ -1713,6 +1720,13 @@ export class CEmitter {
   /** The emitter contract for exceptions: after EVERY call that can throw
    * (per the may-throw analysis), test the pending flag and unwind. */
   emitPendingCheck(): void {
+    if (this.mod.lib !== undefined) {
+      this.line(`if (scr_library_trap_pending()) {`);
+      this.indent++;
+      this.emitFunctionUnwind();
+      this.indent--;
+      this.line(`}`);
+    }
     this.line(`if (scr_exc_pending()) {`);
     this.indent++;
     this.emitUnwind();

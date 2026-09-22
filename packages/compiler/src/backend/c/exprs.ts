@@ -2264,11 +2264,48 @@ function emitCallExpr(
         // buffers are borrowed (ptr, len) for the call's duration, the
         // u8/u32/i32 plumbing classes ride JS's ToUint32/ToInt32, and a
         // scalar return converts to f64 exactly. The host cannot raise a
-        // scriptc exception, so no pending check follows.
+        // scriptc exception, so no pending check follows the host call.
         const libCb = emitter.mod.lib?.callbacks?.find((c) => c.name === e.import);
         if (libCb !== undefined) {
-          const cbArgs = e.args.map((arg) => emitter.emitExpr(arg));
           const natTypes: string[] = ["void *"];
+          for (const cls of libCb.params) {
+            switch (cls) {
+              case "f64":
+                natTypes.push("double");
+                break;
+              case "bool":
+              case "u8":
+                natTypes.push("uint8_t");
+                break;
+              case "u32":
+                natTypes.push("uint32_t");
+                break;
+              case "i32":
+                natTypes.push("int32_t");
+                break;
+              case "string":
+              case "bytes":
+                natTypes.push("const uint8_t *", "size_t");
+                break;
+            }
+          }
+          const retC =
+            libCb.returns === "void" ? "void"
+            : libCb.returns === "f64" ? "double"
+            : libCb.returns === "bool" || libCb.returns === "u8" ? "uint8_t"
+            : libCb.returns === "u32" ? "uint32_t"
+            : "int32_t";
+          const trapLit = cStringLiteral(Buffer.from(libCb.unregisteredTrap, "utf8"));
+          // Resolve the callback before evaluating its arguments, matching
+          // JavaScript's callee-before-arguments order. An unregistered
+          // callback may deliver SC4025 through a non-local host recovery;
+          // resolving first keeps that path from stranding argument temps.
+          const fn = `sc_t${emitter.tempCounter++}`;
+          emitter.line(`${retC} (*${fn})(${natTypes.join(", ")}) = (${retC} (*)(${natTypes.join(", ")}))scr_library_cb_require(${libCb.slot}, ${trapLit});`);
+          emitter.emitPendingCheck();
+          const ctx = `sc_t${emitter.tempCounter++}`;
+          emitter.line(`void *${ctx} = scr_library_cb_ctx(${libCb.slot});`);
+          const cbArgs = e.args.map((arg) => emitter.emitExpr(arg));
           const natArgs: string[] = [];
           libCb.params.forEach((cls, i) => {
             const arg = cbArgs[i]!;
@@ -2277,35 +2314,30 @@ function emitCallExpr(
               case "f64": {
                 const value = native();
                 emitter.line(`double ${value} = ${arg.name};`);
-                natTypes.push("double");
                 natArgs.push(value);
                 break;
               }
               case "bool": {
                 const value = native();
                 emitter.line(`uint8_t ${value} = (uint8_t)(${arg.name} ? 1 : 0);`);
-                natTypes.push("uint8_t");
                 natArgs.push(value);
                 break;
               }
               case "u8": {
                 const value = native();
                 emitter.line(`uint8_t ${value} = (uint8_t)(uint32_t)scr_bit_ushr(${arg.name}, 0.0);`);
-                natTypes.push("uint8_t");
                 natArgs.push(value);
                 break;
               }
               case "u32": {
                 const value = native();
                 emitter.line(`uint32_t ${value} = (uint32_t)scr_bit_ushr(${arg.name}, 0.0);`);
-                natTypes.push("uint32_t");
                 natArgs.push(value);
                 break;
               }
               case "i32": {
                 const value = native();
                 emitter.line(`int32_t ${value} = (int32_t)scr_bit_or(${arg.name}, 0.0);`);
-                natTypes.push("int32_t");
                 natArgs.push(value);
                 break;
               }
@@ -2315,26 +2347,11 @@ function emitCallExpr(
                 const len = native();
                 emitter.line(`const uint8_t *${ptr} = (const uint8_t *)${arg.name}->data;`);
                 emitter.line(`size_t ${len} = ${arg.name}->len;`);
-                natTypes.push("const uint8_t *", "size_t");
                 natArgs.push(ptr, len);
                 break;
               }
             }
           });
-          const retC =
-            libCb.returns === "void" ? "void"
-            : libCb.returns === "f64" ? "double"
-            : libCb.returns === "bool" || libCb.returns === "u8" ? "uint8_t"
-            : libCb.returns === "u32" ? "uint32_t"
-            : "int32_t";
-          const trapLit = cStringLiteral(Buffer.from(libCb.unregisteredTrap, "utf8"));
-          // Materialize the pointer and context before the callback-active
-          // bracket. This keeps the existing SC4025 fetch path outside the
-          // bracket and avoids C argument evaluation-order ambiguity.
-          const fn = `sc_t${emitter.tempCounter++}`;
-          emitter.line(`${retC} (*${fn})(${natTypes.join(", ")}) = (${retC} (*)(${natTypes.join(", ")}))scr_library_cb_require(${libCb.slot}, ${trapLit});`);
-          const ctx = `sc_t${emitter.tempCounter++}`;
-          emitter.line(`void *${ctx} = scr_library_cb_ctx(${libCb.slot});`);
           const call = `${fn}(${[ctx, ...natArgs].join(", ")})`;
           switch (libCb.returns) {
             case "void":

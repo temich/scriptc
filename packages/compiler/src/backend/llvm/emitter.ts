@@ -2347,6 +2347,13 @@ class LlEmitter {
       this.B.terminate(`br label %${target.label}`);
       return;
     }
+    this.emitFunctionUnwind();
+  }
+
+  /** Release the whole generated function and return its dummy value. This
+   * bypasses user catch handlers for a deferred library trap, which remains
+   * an unrecoverable host-contract failure while still cleaning RC frames. */
+  private emitFunctionUnwind(): void {
     this.releaseForJump(0, 0);
     if (this.currentWasiCoro !== null) {
       this.B.terminate(`br label %${this.currentWasiCoro.finalLabel}`);
@@ -2366,6 +2373,17 @@ class LlEmitter {
   private emitPendingCheck(): void {
     const B = this.B;
     if (B.isTerminated()) return;
+    if (this.mod.lib !== undefined) {
+      this.declare(`declare zeroext i1 @scr_library_trap_pending()`);
+      const trap = B.tmp();
+      B.line(`${trap} = call zeroext i1 @scr_library_trap_pending()`);
+      const trapUnwind = B.newLabel("trap.u");
+      const trapClean = B.newLabel("trap.k");
+      B.condBr(trap, trapUnwind, trapClean);
+      B.startBlock(trapUnwind);
+      this.emitFunctionUnwind();
+      B.startBlock(trapClean);
+    }
     this.declare(`declare zeroext i1 @scr_exc_pending()`);
     const p = B.tmp();
     B.line(`${p} = call zeroext i1 @scr_exc_pending()`);

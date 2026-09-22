@@ -61,7 +61,8 @@
  *                          symbol wins, the original sink sees it, pure
  *                          registration retains its post-poison behavior,
  *                          and an independent thread instance survives
- *   CB9 sanitized lane     CB1, CB2, and callback re-entry re-run under ASan
+ *   CB9 sanitized lane     CB1, CB2, and callback re-entry re-run under ASan,
+ *                          with LeakSanitizer enabled on Linux
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -72,6 +73,7 @@ import { compileLibrary } from "@scriptc/compiler";
 const repoRoot = join(import.meta.dirname, "../..");
 const fixtureDir = join(repoRoot, "tests/library-mode/callbacks");
 const platformTest = process.env["SCRIPTC_PORTABLE_ONLY"] === "1" ? test.skip : test;
+const sanitizerTest = process.platform === "linux" ? test : platformTest;
 const localizationTest =
   process.env["SCRIPTC_PORTABLE_ONLY"] === "1" ||
   !(process.platform === "darwin" || process.platform === "linux" || process.platform === "win32")
@@ -173,15 +175,13 @@ function buildProbe(
 }
 
 function runProbe(bin: string, args: string[] = []): { stdout: string; status: number | null; signal: string | null } {
-  // Library poison survival intentionally uses sink longjmp, which abandons
-  // the active outer operation by contract. LeakSanitizer cannot model that
-  // non-local recovery, while ASan still checks the memory-safety paths.
+  const asanOptions = process.platform === "linux" && bin.includes("-san/")
+    ? [process.env["ASAN_OPTIONS"], "detect_leaks=1"].filter((part) => part !== undefined && part !== "").join(":")
+    : process.env["ASAN_OPTIONS"];
   const r = spawnSync(bin, args, {
     encoding: "utf8",
     timeout: 60_000,
-    env: process.env["SCRIPTC_SAN"] === "1" || bin.includes("-san/")
-      ? { ...process.env, ASAN_OPTIONS: "detect_leaks=0" }
-      : undefined,
+    env: asanOptions === undefined ? undefined : { ...process.env, ASAN_OPTIONS: asanOptions },
   });
   return { stdout: r.stdout ?? "", status: r.status, signal: r.signal };
 }
@@ -531,7 +531,7 @@ B: result=5 chunks=1 thread_ok=1 sink_calls=0
 
   /* ── CB9: the sanitized lane ─────────────────────────────────────────── */
 
-  platformTest("CB9: CB1/CB2/CB8 under ASan", async () => {
+  sanitizerTest("CB9: CB1/CB2/CB8 under ASan", async () => {
     const { archive, outDir } = await buildLibrary(emission, { sanitize: true });
     const probe = buildProbe("probe.c", archive, outDir, { sanitize: true, pthread: true });
     const run = runProbe(probe, ["run"]);

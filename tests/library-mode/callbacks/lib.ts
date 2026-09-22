@@ -18,11 +18,22 @@ export function stream(n: number, base: number): number {
   let acc = 0;
   for (let i = 0; i < n; i++) {
     const chunk = chunkFor(i, base);
-    emitChunk(chunk, i);
+    deliverChunk(chunk, i);
     acc += (i + 1) * base; // computation between emits
     note(`chunk ${i} away`, i === n - 1);
   }
   return acc + sessions;
+}
+
+// Keep the channel call one frame below the owned chunk local. The
+// unregistered-channel path must unwind through both functions before the
+// host sink is invoked, releasing the caller's final bytes value too.
+function deliverChunk(chunk: Uint8Array, seq: number): void {
+  try {
+    emitChunk(chunk, seq);
+  } catch {
+    console.log("UNREACHABLE callback trap catch");
+  }
 }
 
 function chunkFor(i: number, base: number): Uint8Array {

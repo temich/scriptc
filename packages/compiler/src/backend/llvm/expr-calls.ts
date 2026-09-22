@@ -46,23 +46,33 @@ export function emitCallExpr(host: LlvmEmitterContext, e: ExprOf<"call" | "ffiCa
         // opaque context first. The bracket makes callback-time ABI re-entry
         // a deterministic SC4026 trap. Marshalling matches the native ffiCall's value
         // classes exactly; the host cannot raise a scriptc exception, so
-        // no pending check follows.
+        // no pending check follows the host call.
         const libCb = host.mod.lib?.callbacks?.find((c) => c.name === e.import);
         if (libCb !== undefined) {
+          host.declare(`declare ptr @scr_library_cb_require(${host.sizeType}, ptr)`);
+          host.declare(`declare ptr @scr_library_cb_ctx(${host.sizeType})`);
+          host.declare(`declare void @scr_library_callback_begin()`);
+          host.declare(`declare void @scr_library_callback_end()`);
+          // Resolve the callback before evaluating its arguments, matching
+          // JavaScript's callee-before-arguments order. An unregistered
+          // callback may deliver SC4025 through a non-local host recovery;
+          // resolving first keeps that path from stranding argument temps.
+          const fn = B.tmp();
+          B.line(`${fn} = call ptr @scr_library_cb_require(${host.sizeType} ${libCb.slot}, ptr @sc_lib_cb_trap_${libCb.slot})`);
+          host.emitPendingCheck();
+          const ctx = B.tmp();
+          B.line(`${ctx} = call ptr @scr_library_cb_ctx(${host.sizeType} ${libCb.slot})`);
           const cbArgs = e.args.map((arg) => host.emitExpr(arg));
-          const natTypes: string[] = ["ptr"];
           const natArgs: string[] = [];
           libCb.params.forEach((cls, i) => {
             const arg = cbArgs[i]!;
             switch (cls) {
               case "f64":
-                natTypes.push("double");
                 natArgs.push(`double ${arg.name}`);
                 break;
               case "bool": {
                 const widened = B.tmp();
                 B.line(`${widened} = zext i1 ${arg.name} to i8`);
-                natTypes.push("i8");
                 natArgs.push(`i8 ${widened}`);
                 break;
               }
@@ -76,10 +86,8 @@ export function emitCallExpr(host: LlvmEmitterContext, e: ExprOf<"call" | "ffiCa
                 if (cls === "u8") {
                   const asU8 = B.tmp();
                   B.line(`${asU8} = trunc i32 ${asU32} to i8`);
-                  natTypes.push("i8");
                   natArgs.push(`i8 ${asU8}`);
                 } else {
-                  natTypes.push("i32");
                   natArgs.push(`i32 ${asU32}`);
                 }
                 break;
@@ -90,7 +98,6 @@ export function emitCallExpr(host: LlvmEmitterContext, e: ExprOf<"call" | "ffiCa
                 const asI32 = B.tmp();
                 B.line(`${asDouble} = call double @scr_bit_or(double ${arg.name}, double ${f64Lit(0)})`);
                 B.line(`${asI32} = fptosi double ${asDouble} to i32`);
-                natTypes.push("i32");
                 natArgs.push(`i32 ${asI32}`);
                 break;
               }
@@ -101,7 +108,6 @@ export function emitCallExpr(host: LlvmEmitterContext, e: ExprOf<"call" | "ffiCa
                 B.line(`${lenPtr} = getelementptr inbounds %ScrStr, ptr ${arg.name}, i64 0, i32 1`);
                 B.line(`${len} = load i64, ptr ${lenPtr}`);
                 B.line(`${data} = getelementptr inbounds i8, ptr ${arg.name}, i64 24`);
-                natTypes.push("ptr", "i64");
                 natArgs.push(`ptr ${data}`, `i64 ${len}`);
                 break;
               }
@@ -114,20 +120,11 @@ export function emitCallExpr(host: LlvmEmitterContext, e: ExprOf<"call" | "ffiCa
                 B.line(`${len} = load i64, ptr ${lenPtr}`);
                 B.line(`${dataPtr} = getelementptr inbounds i8, ptr ${arg.name}, i64 24`);
                 B.line(`${data} = load ptr, ptr ${dataPtr}`);
-                natTypes.push("ptr", "i64");
                 natArgs.push(`ptr ${data}`, `i64 ${len}`);
                 break;
               }
             }
           });
-          host.declare(`declare ptr @scr_library_cb_require(${host.sizeType}, ptr)`);
-          host.declare(`declare ptr @scr_library_cb_ctx(${host.sizeType})`);
-          host.declare(`declare void @scr_library_callback_begin()`);
-          host.declare(`declare void @scr_library_callback_end()`);
-          const fn = B.tmp();
-          B.line(`${fn} = call ptr @scr_library_cb_require(${host.sizeType} ${libCb.slot}, ptr @sc_lib_cb_trap_${libCb.slot})`);
-          const ctx = B.tmp();
-          B.line(`${ctx} = call ptr @scr_library_cb_ctx(${host.sizeType} ${libCb.slot})`);
           const retTy = ffiNativeTypeLl(libCb.returns);
           const call = `call ${retTy} ${fn}(${[`ptr ${ctx}`, ...natArgs].join(", ")})`;
           if (libCb.returns === "void") {
