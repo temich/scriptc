@@ -8,8 +8,8 @@
     "tiers": {
       "static": {
         "replace-refusal": 46,
-        "verify-gap": 2706,
-        "audit-partial": 460,
+        "verify-gap": 2705,
+        "audit-partial": 461,
         "classify": 2,
         "implement": 81
       },
@@ -72226,12 +72226,17 @@
       "priority": "normal",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:process",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "surface-manifest:node-builtin.process.exitCode",
+          "tests": [
+            "tests/corpus/2941-process-exit-code.ts",
+            "tests/corpus/2942-process-exit-code-override.ts",
+            "tests/corpus/2943-process-exit-code-invalid.ts",
+            "tests/corpus/2944-process-exit-code-wrap.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
