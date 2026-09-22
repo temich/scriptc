@@ -770,6 +770,7 @@ interface Request {
   arrayBuffer(): Promise<ArrayBuffer>;
   bytes(): Promise<Uint8Array>;
 }
+type RequestInfo = string | URL | Request;
 interface RequestInit {
   method?: string;
   headers?:
@@ -782,7 +783,7 @@ interface RequestInit {
   signal?: AbortSignal;
 }
 declare var Request: {
-  new (input: string | URL | Request, init?: RequestInit): Request;
+  new (input: RequestInfo, init?: RequestInit): Request;
   readonly prototype: Request;
 };
 declare function fetch(input: string | URL, init?: RequestInit): Promise<Response>;
