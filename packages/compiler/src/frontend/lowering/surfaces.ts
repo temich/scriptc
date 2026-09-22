@@ -1017,6 +1017,13 @@ export const AMBIENT_SURFACE_FNS: readonly AmbientSurfaceRow[] = [
     note: "the live clock",
   },
   {
+    id: "stdlib.date.parse",
+    kind: "stdlib",
+    name: "Date.parse",
+    fns: ["date.parse"],
+    note: "one date string, using the bounded parser shared with new Date(dateString).getTime()",
+  },
+  {
     id: "stdlib.date.constructor",
     kind: "stdlib",
     name: "Date constructor",

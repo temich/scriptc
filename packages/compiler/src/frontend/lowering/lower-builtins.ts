@@ -8031,6 +8031,16 @@ const DATE_METHOD_HINT =
       }
       return { kind: "libCall", fn: "date.now", args: [], type: F64, loc };
     }
+    // Date.parse uses the same bounded date-string parser as
+    // new Date(dateString).getTime(); keep their NaN and TimeClip behavior
+    // identical for the ISO timestamps used by CLI applications.
+    if (lowerer.stdlibGlobalMember(access, "Date") === "parse") {
+      if (call.arguments.length !== 1 || ts.isSpreadElement(call.arguments[0]!)) {
+        lowerer.noLowering(`Date.parse with ${call.arguments.length} arguments`, call);
+      }
+      const input = lowerer.lowerExprExpecting(call.arguments[0]!, STRING);
+      return { kind: "libCall", fn: "date.parse", args: [input], type: F64, loc };
+    }
     // Date.UTC(year[, month[, date[, hours[, minutes[, seconds[, ms]]]]]]):
     // a pure function of its numbers — the runtime's MakeDay/MakeTime/
     // TimeClip. Omitted trailing arguments complete with the spec's

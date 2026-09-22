@@ -820,6 +820,25 @@ describe.each(EMISSIONS)("K14: determinism fences, %s emission", (emission) => {
     expect(diags[0]!.file.endsWith("lib.ts")).toBe(true);
   });
 
+  test("Date.parse fence denies the call but permits date construction and getTime", async () => {
+    const profile = {
+      exports: [{ export: "stamp", symbol: "kx_stamp", params: [], returns: "f64" }],
+      determinism: { fences: [{ id: "stdlib.date.parse" }] },
+    };
+    await acceptance(
+      `export function stamp(): number { return new Date("2026-07-17").getTime(); }\n`,
+      profile,
+      emission,
+    );
+    const diags = await refusal(
+      `export function stamp(): number { return Date.parse("2026-07-17"); }\n`,
+      profile,
+      emission,
+    );
+    expect(diags.map((d) => d.code)).toEqual(["SC4008"]);
+    expect(diags[0]!.message).toContain("'stdlib.date.parse'");
+  });
+
   test("an exact Date.valueOf fence does not also fence getTime", async () => {
     const exportProfile = {
       exports: [{ export: "read", symbol: "kx_read", params: [], returns: "f64" }],

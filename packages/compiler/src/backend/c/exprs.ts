@@ -5272,6 +5272,7 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             // +1 string, or Node's "Invalid time value" RangeError
             // (may-throw seed set).
             return finish(`scr_date_to_iso(${arg(0)})`);
+          case "date.parse":
           case "date.parseGetTime":
             // The bounded date-string parse (X509 validity + ECMA format);
             // NaN elsewhere. Never throws.

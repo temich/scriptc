@@ -4210,6 +4210,8 @@ export type IrLibFn =
   | "date.newNow"
   | "date.newMs"
   | "date.newString"
+  /** Date.parse(dateString), with its own reach witness for exact fences. */
+  | "date.parse"
   | "date.getTime"
   | "date.valueOf"
   | "date.toISOString"

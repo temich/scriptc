@@ -135,6 +135,7 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "date.newNow": "scr_date_now",
   "date.newMs": "scr_date_new_ms",
   "date.newString": "scr_date_parse_get_time",
+  "date.parse": "scr_date_parse_get_time",
   "date.getTime": "scr_date_get_time",
   "date.valueOf": "scr_date_get_time",
   "date.parseGetTime": "scr_date_parse_get_time",
