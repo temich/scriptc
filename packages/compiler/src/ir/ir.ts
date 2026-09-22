@@ -2418,7 +2418,9 @@ export type IrLibFn =
    * cmd/args borrowed; result an owned (+1) child handle. The loop will
    * not exhaust while any spawned child is unreaped — Node's keep-alive.
    *
-   * child.onExit / child.onError — `child.on("exit"|"error", cb)`: the
+   * child.onExit / child.onClose / child.onError — terminal listener
+   * registration through child.on/once. Close uses the exit adapter shape
+   * but fires only after every piped stdio handle reaches EOF. The
    * receiver is borrowed, the CALLBACK MOVES into the child's listener
    * registry (released after the terminal event fires, or at reap for
    * the event that never fires). Both are void (chaining is fenced).
@@ -2437,6 +2439,7 @@ export type IrLibFn =
    * by the validator/backends. */
   | "cp.execFile"
   | "child.onExit"
+  | "child.onClose"
   | "child.onError"
   /** The ChildProcess lifecycle members (scr_child.c), Node's shapes
    * exactly (SEMANTICS.md has the pinned matrix). child.pid is the
@@ -2465,7 +2468,9 @@ export type IrLibFn =
    * arm). stream.onData/onEnd register 'data'/'end' listeners (receiver
    * borrowed, CALLBACK MOVES, trailing once-flag, void — chaining
    * fenced): 'data' fires one Buffer chunk per read (zero-param and
-   * Buffer-param adapters are runtime-provided; a union-param listener —
+   * Buffer/string adapters are runtime-provided; setEncoding threads
+   * split multibyte sequences through the shared StringDecoder core. A
+   * union-param listener —
    * ngrok's `Buffer | string` — gets a compiler-emitted adapter wrapping
    * the chunk at its Buffer arm), 'end' fires once at EOF, always BEFORE
    * the child's 'exit' (the pinned ordering). A flowing stream keeps the
@@ -2473,7 +2478,9 @@ export type IrLibFn =
   | "child.stdout"
   | "child.stderr"
   | "stream.onData"
+  | "stream.onDataStr"
   | "stream.onEnd"
+  | "stream.childSetEncoding"
   /** The piped-input writer (stdio mode 3 on fd 0). child.stdin answers
    * `Writable | null`; writes copy borrowed data into the nonblocking
    * queue, end/destroy settle it, writable is a pure state read, and

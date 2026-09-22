@@ -38,6 +38,7 @@ import { CRYPTO_CIPHERS, CRYPTO_CONSTANTS, CRYPTO_CURVES, CRYPTO_HASHES } from "
 import { generatorMeta, timerStyleCallback, type ParamShape } from "./lower-calls.js";
 import { registerHttpClientFnBinding, voidizedCallback } from "./lower-server.js";
 import { pairsSnapshotHelper } from "./pairs-snapshot.js";
+import { bufEncoding } from "./containers/bytes.js";
 import { BOOL, BYTES_U8, CHILD_T, CHILDSTREAM_T, CHILDWRITER_T, CRYPTOHASH_T, CRYPTOHMAC_T, DYN, F64, FILEHANDLE_T, FSWATCHER_T, PROCSTREAM_T, IrExpr, IrFunction, IrLibFn, IrLocal, IrStmt, IrType, JSVAL, NULL_T, SEARCH_PARAMS_T, SPAWNRES_T, STRING, SrcLoc, UNDEFINED_T, VOID, arrayOf, canBoxFuncIntoDyn, canConvertToDyn, funcOf, isUnitType, typeEquals, typeKey } from "../../ir/ir.js";
 import { boolLit, countedFor, numLit, strLit, varRef } from "../../ir/build.js";
 
@@ -2743,7 +2744,7 @@ function lowerFsSyncBufferWindow(
       lowerer.noLowering(
         "spawn with a non-literal options argument",
         optsNode,
-        "pass stdio, detached, env, cwd, and windowsHide in an inline object literal",
+        "pass stdio, detached, env, cwd, windowsHide, and shell in an inline object literal",
       );
     }
 
@@ -2756,6 +2757,8 @@ function lowerFsSyncBufferWindow(
     let outFd: IrExpr = numLit(0, loc);
     let errFd: IrExpr = numLit(0, loc);
     let detached: IrExpr = boolLit(false, loc);
+    let shell: IrExpr = boolLit(false, loc);
+    let shellEnabled = false;
     let hasEnv: IrExpr = boolLit(false, loc);
     let envPairs: IrExpr = { kind: "arrayLit", elems: [], type: arrayOf(STRING), loc };
     let cwd: IrExpr = emptyStr;
@@ -2893,11 +2896,26 @@ function lowerFsSyncBufferWindow(
           case "windowsHide":
             lowerer.lowerExpr(m.value); // Node no-op on POSIX
             break;
+          case "shell":
+            if (m.value.kind === ts.SyntaxKind.TrueKeyword) {
+              shell = boolLit(true, loc);
+              shellEnabled = true;
+              plain = false;
+            } else if (m.value.kind === ts.SyntaxKind.FalseKeyword) {
+              shell = boolLit(false, loc);
+            } else {
+              lowerer.noLowering(
+                "spawn with a non-literal shell option",
+                m.value,
+                "shell must be a boolean literal",
+              );
+            }
+            break;
           default:
             lowerer.noLowering(
               `spawn option '${m.name}'`,
               p,
-              "stdio, detached, env, cwd, and windowsHide are the supported options",
+              "stdio, detached, env, cwd, windowsHide, and shell are the supported options",
             );
         }
       }
@@ -2906,6 +2924,16 @@ function lowerFsSyncBufferWindow(
       inMode = outMode = errMode = 3;
       plain = false;
     }
+    if (shellEnabled && argsNode !== undefined) {
+      const shellArgs = stripTypeCasts(argsNode);
+      if (!ts.isArrayLiteralExpression(shellArgs) || shellArgs.elements.length !== 0) {
+        lowerer.noLowering(
+          "spawn with shell enabled and separate arguments",
+          argsNode,
+          "put the complete shell command in the first argument and pass [] (Node deprecates unescaped shell argument concatenation)",
+        );
+      }
+    }
     const argv = lowerer.lowerChildArgsArg(argsNode, loc);
     if (plain) {
       return { kind: "libCall", fn: "cp.spawn", args: [cmd, argv], type: CHILD_T, loc };
@@ -2913,7 +2941,7 @@ function lowerFsSyncBufferWindow(
     return {
       kind: "libCall",
       fn: "cp.spawnOpts",
-      args: [cmd, argv, numLit(inMode, loc), numLit(outMode, loc), numLit(errMode, loc), outFd, errFd, detached, hasEnv, envPairs, cwd],
+      args: [cmd, argv, numLit(inMode, loc), numLit(outMode, loc), numLit(errMode, loc), outFd, errFd, detached, shell, hasEnv, envPairs, cwd],
       type: CHILD_T,
       loc,
     };
@@ -5919,31 +5947,31 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
     if (!isChildSurfaceMember(lowerer, access)) return null;
     const name = access.name.text;
     const loc = locOf(call);
-    if (name === "on" && call.arguments.length === 2) {
+    if ((name === "on" || name === "once") && call.arguments.length === 2) {
       const evT = lowerer.typeOf(call.arguments[0]!);
       const event = evT.isStringLiteralType() ? evT.value : null;
-      if (event !== "exit" && event !== "error") {
+      if (event !== "exit" && event !== "close" && event !== "error") {
         lowerer.noLowering(
-          `child.on(${event === null ? "non-literal event" : `"${event}"`}, ...)`,
+          `child.${name}(${event === null ? "non-literal event" : `"${event}"`}, ...)`,
           call.arguments[0]!,
-          '"exit" and "error" are the supported child events (as literals)',
+          '"exit", "close", and "error" are the supported child events (as literals)',
         );
       }
       if (!ts.isExpressionStatement(call.parent)) {
         lowerer.unsupported(
           "SC1090",
           call,
-          "chaining child.on(...) (the result is void here — register each listener as its own statement)",
+          `chaining child.${name}(...) (the result is void here — register each listener as its own statement)`,
         );
       }
       const receiver = lowerer.lowerExpr(access.expression);
       const cb = lowerer.lowerExpr(call.arguments[1]!);
-      if (cb.type.kind !== "func" || cb.type.params.length > (event === "exit" ? 2 : 1)) {
+      if (cb.type.kind !== "func" || cb.type.params.length > (event === "error" ? 1 : 2)) {
         lowerer.unsupported(
           "SC1090",
           call.arguments[1]!,
-          event === "exit"
-            ? "exit listeners with more than two parameters (use (code, signal), (code), or ())"
+          event !== "error"
+            ? `${event} listeners with more than two parameters (use (code, signal), (code), or ())`
             : "error listeners with more than one parameter (use (err) or ())",
         );
       }
@@ -5958,7 +5986,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
         );
       }
       const param = cb.type.params[0];
-      if (event === "exit") {
+      if (event === "exit" || event === "close") {
         const armsOk =
           param === undefined ||
           (param.kind === "union" &&
@@ -5974,7 +6002,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
           lowerer.unsupported(
             "SC1090",
             call.arguments[1]!,
-            `exit listeners whose parameter is not 'number | null' (got '${lowerer.fmt(param!)}')`,
+            `${event} listeners whose parameter is not 'number | null' (got '${lowerer.fmt(param!)}')`,
           );
         }
         // The optional SECOND parameter is Node's signal: the terminating
@@ -5996,10 +6024,10 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
           lowerer.unsupported(
             "SC1090",
             call.arguments[1]!,
-            `exit listeners whose signal parameter is not 'Signals | null' (got '${lowerer.fmt(sigParam!)}')`,
+            `${event} listeners whose signal parameter is not 'Signals | null' (got '${lowerer.fmt(sigParam!)}')`,
           );
         }
-        return { kind: "libCall", fn: "child.onExit", args: [receiver, cb], type: VOID, loc };
+        return { kind: "libCall", fn: event === "close" ? "child.onClose" : "child.onExit", args: [receiver, cb], type: VOID, loc };
       }
       if (param !== undefined && !(param.kind === "object" && param.className === "%Error")) {
         lowerer.unsupported(
@@ -6049,7 +6077,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
     lowerer.noLowering(
       `ChildProcess.${name}`,
       call,
-      "on(\"exit\" | \"error\", cb), pid, exitCode, killed, kill(signal?), and unref() are the supported ChildProcess members",
+      "on/once(\"exit\" | \"close\" | \"error\", cb), pid, exitCode, killed, kill(signal?), and unref() are the supported ChildProcess members",
       lowerer.checker.getSymbolAtLocation(access.name),
     );
   }
@@ -6072,6 +6100,11 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
     if (!lowerer.isStdlibMember(access)) return null;
     const name = access.name.text;
     const loc = locOf(call);
+    if (name === "setEncoding" && call.arguments.length === 1) {
+      const receiver = lowerer.lowerExprExpecting(access.expression, CHILDSTREAM_T);
+      const enc = bufEncoding(lowerer, "child stream setEncoding", call.arguments[0]!);
+      return { kind: "libCall", fn: "stream.childSetEncoding", args: [receiver, strLit(enc, loc)], type: CHILDSTREAM_T, loc };
+    }
     if ((name === "on" || name === "once") && call.arguments.length === 2) {
       const evT = lowerer.typeOf(call.arguments[0]!);
       const event = evT.isStringLiteralType() ? evT.value : null;
@@ -6111,19 +6144,19 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
         const def = lowerer.unions.get(p.unionId);
         return !!def && def.arms.some((a) => a.kind === "bytes" && a.elem === "u8");
       };
-      if (param !== undefined && !(param.kind === "bytes" && param.elem === "u8") && !unionOk(param)) {
+      if (param !== undefined && param.kind !== "string" && !(param.kind === "bytes" && param.elem === "u8") && !unionOk(param)) {
         lowerer.unsupported(
           "SC1090",
           call.arguments[1]!,
-          `data listeners whose parameter is not 'Buffer' (or a Buffer-armed union; got '${lowerer.fmt(param)}')`,
+          `data listeners whose parameter is not 'Buffer', 'string', or a Buffer-armed union (got '${lowerer.fmt(param)}')`,
         );
       }
-      return { kind: "libCall", fn: "stream.onData", args: [receiver, cb, once], type: VOID, loc };
+      return { kind: "libCall", fn: param?.kind === "string" ? "stream.onDataStr" : "stream.onData", args: [receiver, cb, once], type: VOID, loc };
     }
     lowerer.noLowering(
       `ReadableStream.${name}`,
       call,
-      'on/once("data" | "end", cb) are the supported child-stream members',
+      'setEncoding(encoding) and on/once("data" | "end", cb) are the supported child-stream members',
       lowerer.checker.getSymbolAtLocation(access.name),
     );
   }

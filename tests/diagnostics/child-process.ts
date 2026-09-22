@@ -17,6 +17,7 @@ const inherited = spawn("/bin/echo", [], { stdio: "inherit" });
 // A variable options value must fence instead of being dropped.
 const options: { stdio: "ignore"; detached: boolean } = { stdio: "ignore", detached: true };
 spawn("true", [], options);
+spawn("printf", ["unsafe"], { stdio: "ignore", shell: true });
 const c = spawn("true", [], { stdio: "ignore" });
 
 // `() => 5` IS assignable to a void-returning listener slot and now ADOPTS

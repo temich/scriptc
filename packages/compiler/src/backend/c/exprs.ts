@@ -5663,7 +5663,7 @@ function emitChildProcessLibCall(state: LibCallState): Temp {
             // replacement, cwd. Same loop/reap story as cp.spawn.
             emitter.usesTimers = true;
             return finish(
-              `scr_spawn_opts(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)}, ${arg(6)}, ${arg(7)}, ${arg(8)}, ${arg(9)}, ${arg(10)})`,
+              `scr_spawn_opts(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)}, ${arg(6)}, ${arg(7)}, ${arg(8)}, ${arg(9)}, ${arg(10)}, ${arg(11)})`,
             );
           case "cp.execFile": {
             const callbackArg = e.args[2];
@@ -5676,13 +5676,14 @@ function emitChildProcessLibCall(state: LibCallState): Temp {
             emitter.usesTimers = true;
             return finish(`scr_exec_file(${arg(0)}, ${arg(1)}, ${cb.name}, &${adapter})`);
           }
-          case "child.onExit": {
+          case "child.onExit":
+          case "child.onClose": {
             // The callback MOVES into the child's registry; the third
             // ingredient is the ADAPTER — emitted per callback shape,
             // because the `number | null` union's tags are program data
             // (a zero-param listener gets the runtime's ignoring thunk).
             const cbT = e.args[1]!.type;
-            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: child.onExit callback not a func");
+            if (cbT.kind !== "func") throw new InternalCompilerError(`emitter bug: ${e.fn} callback not a func`);
             const cb = args[1]!;
             emitter.moveTemp(cb);
             const adapter =
@@ -5692,7 +5693,7 @@ function emitChildProcessLibCall(state: LibCallState): Temp {
                   ? emitter.childExitThunkFor(cbT.params[0]!)
                   : emitter.childExitSignalThunkFor(cbT.params[0]!, cbT.params[1]!);
             emitter.line(
-              `scr_child_on_exit(${arg(0)}, ${cb.name}, &${adapter});${emitter.srcComment(e.loc)}`,
+              `${e.fn === "child.onClose" ? "scr_child_on_close" : "scr_child_on_exit"}(${arg(0)}, ${cb.name}, &${adapter});${emitter.srcComment(e.loc)}`,
             );
             return { name: "", type: e.type };
           }
@@ -7952,12 +7953,27 @@ function emitStreamLibCall(state: LibCallState): Temp {
             );
             return { name: "", type: e.type };
           }
+          case "stream.onDataStr": {
+            emitter.usesTimers = true;
+            const cbT = e.args[1]!.type;
+            if (cbT.kind !== "func" || cbT.params[0]?.kind !== "string") {
+              throw new InternalCompilerError("emitter bug: stream.onDataStr callback not a string func");
+            }
+            const cb = args[1]!;
+            emitter.moveTemp(cb);
+            emitter.line(
+              `scr_child_stream_on_data_str(${arg(0)}, ${cb.name}, &scr_child_stream_thunk_str, ${arg(2)});${emitter.srcComment(e.loc)}`,
+            );
+            return { name: "", type: e.type };
+          }
           case "stream.onEnd": {
             const cb = args[1]!;
             emitter.moveTemp(cb);
             emitter.line(`scr_child_stream_on_end(${arg(0)}, ${cb.name}, ${arg(2)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
           }
+          case "stream.childSetEncoding":
+            return finish(`scr_child_stream_set_encoding(${arg(0)}, ${arg(1)})`);
           // node:stream (scr_stream.c — linked exactly when these appear,
           // moduleUsesStream). Receivers reinterpret to the shared
           // ScrStream layout (the ScrEmitter prefix plus the stream-state

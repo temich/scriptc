@@ -2642,6 +2642,7 @@ typedef struct ScrChildWriter ScrChildWriter;
 /* The data adapter: the chunk arrives BORROWED (multiple listeners see
  * the same chunk); adapters retain what they keep. */
 typedef void (*ScrChildStreamDataFn)(ScrClosure *cb, ScrBytes *chunk);
+typedef void (*ScrChildStreamDataStrFn)(ScrClosure *cb, ScrStr *chunk);
 /* signal_name: the termination signal's name (static storage) when a
  * signal killed the child, NULL otherwise — Node's second exit-listener
  * parameter; zero/one-param adapters ignore it. */
@@ -2660,12 +2661,13 @@ ScrChild *scr_spawn(ScrStr *cmd, ScrArr *args); /* +1, never throws */
  * into the child's slot, the openSync daemon-log idiom), 3 = pipe
  * (stdin's write end becomes child.stdin; out/err read ends become the
  * child.stdout/stderr streams);
- * detached = POSIX_SPAWN_SETSID (own session/process group); env
+ * detached = POSIX_SPAWN_SETSID (own session/process group); shell runs
+ * the complete command through /bin/sh -c or cmd.exe /d /s /c; env
  * REPLACES the child environment when has_env ([k,v,...] pairs); cwd ""
  * = inherit. */
 ScrChild *scr_spawn_opts(ScrStr *cmd, ScrArr *args, double in_mode,
                           double out_mode, double err_mode, double out_fd,
-                          double err_fd, bool detached, bool has_env,
+                          double err_fd, bool detached, bool shell, bool has_env,
                           ScrArr *env_pairs, ScrStr *cwd);
 /* The callback slice: file + args, default options. The returned child has
  * all three stdio slots piped; stdout/stderr are captured internally and
@@ -2677,6 +2679,7 @@ void scr_child_release(ScrChild *c);
 void *scr_child_retain_v(void *p);
 void scr_child_release_v(void *p);
 void scr_child_on_exit(ScrChild *c, ScrClosure *cb /*moves*/, ScrChildExitFn fn);
+void scr_child_on_close(ScrChild *c, ScrClosure *cb /*moves*/, ScrChildExitFn fn);
 void scr_child_on_error(ScrChild *c, ScrClosure *cb /*moves*/, ScrChildErrFn fn);
 void scr_child_exit_thunk0(ScrClosure *cb, bool has_code, double code,
                             const char *signal_name);
@@ -2686,8 +2689,9 @@ void scr_child_err_thunk_error(ScrClosure *cb, ScrStr *msg);
  * the slot was not piped — Node's null); listeners MOVE in and release
  * at EOF/exit-cleanup (post-'end' registrations release immediately and
  * never fire, the stdin rule). The runtime-provided data adapters cover
- * the zero-param and (chunk: Buffer) shapes; union-param listeners get
- * compiler-emitted adapters (tags are program data). */
+ * zero-param, Buffer, and string shapes; setEncoding uses the shared
+ * StringDecoder core so split multibyte sequences remain intact.
+ * Union-param listeners get compiler-emitted Buffer adapters. */
 ScrChildStream *scr_child_stream_retain(ScrChildStream *s);
 void scr_child_stream_release(ScrChildStream *s);
 void *scr_child_stream_retain_v(void *p);
@@ -2696,9 +2700,13 @@ ScrChildStream *scr_child_stdout(ScrChild *c); /* +1, or NULL */
 ScrChildStream *scr_child_stderr(ScrChild *c); /* +1, or NULL */
 void scr_child_stream_on_data(ScrChildStream *s, ScrClosure *cb /*moves*/,
                                ScrChildStreamDataFn fn, bool once);
+void scr_child_stream_on_data_str(ScrChildStream *s, ScrClosure *cb /*moves*/,
+                                   ScrChildStreamDataStrFn fn, bool once);
 void scr_child_stream_on_end(ScrChildStream *s, ScrClosure *cb /*moves*/, bool once);
+ScrChildStream *scr_child_stream_set_encoding(ScrChildStream *s, ScrStr *enc); /* +1 */
 void scr_child_stream_thunk0(ScrClosure *cb, ScrBytes *chunk);
 void scr_child_stream_thunk_bytes(ScrClosure *cb, ScrBytes *chunk);
+void scr_child_stream_thunk_str(ScrClosure *cb, ScrStr *chunk);
 ScrChildWriter *scr_child_writer_retain(ScrChildWriter *w);
 void scr_child_writer_release(ScrChildWriter *w);
 void *scr_child_writer_retain_v(void *p);

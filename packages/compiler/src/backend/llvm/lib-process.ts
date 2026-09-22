@@ -36,13 +36,13 @@ export function emitChildProcessLibCall(host: LlvmEmitterContext, e: LibCallExpr
       B.line(`${t} = call ptr @${sym}(${args.map((a) => `${host.llType(a.type)} ${a.name}`).join(", ")})`);
       return host.own({ name: t, type: e.type });
     }
-    if (e.fn === "child.onExit") {
+    if (e.fn === "child.onExit" || e.fn === "child.onClose") {
       // The callback MOVES into the child's registry; the third
       // ingredient is the ADAPTER — emitted per callback shape, because
       // the `number | null` union's tags are program data (a zero-param
       // listener gets the runtime's ignoring thunk).
       const cbT = e.args[1]!.type;
-      if (cbT.kind !== "func") throw new InternalCompilerError("llvm emitter bug: child.onExit callback not a func");
+      if (cbT.kind !== "func") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} callback not a func`);
       const child = host.emitExpr(e.args[0]!);
       const cb = host.emitExpr(e.args[1]!);
       host.moveTemp(cb);
@@ -55,8 +55,9 @@ export function emitChildProcessLibCall(host: LlvmEmitterContext, e: LibCallExpr
       } else {
         adapter = host.childExitSignalThunkFor(cbT.params[0]!, cbT.params[1]!);
       }
-      host.declare(`declare void @scr_child_on_exit(ptr, ptr, ptr)`);
-      B.line(`call void @scr_child_on_exit(ptr ${child.name}, ptr ${cb.name}, ptr @${adapter})`);
+      const register = e.fn === "child.onClose" ? "scr_child_on_close" : "scr_child_on_exit";
+      host.declare(`declare void @${register}(ptr, ptr, ptr)`);
+      B.line(`call void @${register}(ptr ${child.name}, ptr ${cb.name}, ptr @${adapter})`);
       return { name: "", type: e.type };
     }
     if (e.fn === "child.onError") {

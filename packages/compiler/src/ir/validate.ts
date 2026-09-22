@@ -728,13 +728,14 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // 2 fd) with the out/err fds for mode 2, detached, env replacement
   // pairs, cwd ("" = inherit).
   "cp.spawnOpts": {
-    argTypes: [STRING, arrayOf(STRING), F64, F64, F64, F64, F64, BOOL, BOOL, arrayOf(STRING), STRING],
+    argTypes: [STRING, arrayOf(STRING), F64, F64, F64, F64, F64, BOOL, BOOL, BOOL, arrayOf(STRING), STRING],
     result: CHILD_T,
   },
   // The callback's func type is program-dependent (zero params, or the
   // `number | null` union / the %Error class) — the libCall case checks
   // the shape; the slot here only pins arity and the child receiver.
   "child.onExit": { argTypes: [CHILD_T, null], result: VOID },
+  "child.onClose": { argTypes: [CHILD_T, null], result: VOID },
   "child.onError": { argTypes: [CHILD_T, null], result: VOID },
   // Like process.envGet, spawnRes.status's result type is program-dependent
   // (the interned `number | null` union) — the libCall case checks the arms.
@@ -765,7 +766,9 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // (zero-param / Buffer / Buffer-armed union) — the slots pin arity,
   // the stream receiver, and the once-flag.
   "stream.onData": { argTypes: [CHILDSTREAM_T, null, BOOL], result: VOID },
+  "stream.onDataStr": { argTypes: [CHILDSTREAM_T, null, BOOL], result: VOID },
   "stream.onEnd": { argTypes: [CHILDSTREAM_T, null, BOOL], result: VOID },
+  "stream.childSetEncoding": { argTypes: [CHILDSTREAM_T, STRING], result: CHILDSTREAM_T },
   "writer.writeString": { argTypes: [CHILDWRITER_T, STRING], result: BOOL },
   "writer.writeBytes": { argTypes: [CHILDWRITER_T, BYTES_U8], result: BOOL },
   "writer.end": { argTypes: [CHILDWRITER_T], result: VOID },
@@ -4431,18 +4434,18 @@ function validateFunction(
             }
           }
         }
-        if (e.fn === "child.onExit" || e.fn === "child.onError") {
+        if (e.fn === "child.onExit" || e.fn === "child.onClose" || e.fn === "child.onError") {
           // The listener: a closure with no params, or exactly the
           // supported parameter shapes per event — exit takes (code:
           // number | null) with an optional (signal: string | null)
           // second parameter, error exactly (err: %Error).
           const cb = e.args[1];
           const cbT = cb?.type;
-          const maxParams = e.fn === "child.onExit" ? 2 : 1;
+          const maxParams = e.fn === "child.onError" ? 1 : 2;
           let ok = cbT?.kind === "func" && cbT.ret.kind === "void" && cbT.params.length <= maxParams;
           if (ok && cbT?.kind === "func" && cbT.params.length >= 1) {
             const p = cbT.params[0]!;
-            if (e.fn === "child.onExit") {
+            if (e.fn === "child.onExit" || e.fn === "child.onClose") {
               const def = p.kind === "union" ? unions.get(p.unionId) : undefined;
               ok =
                 def !== undefined &&

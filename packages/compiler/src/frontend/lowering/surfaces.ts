@@ -786,8 +786,9 @@ export const BUILTIN_MODULE_FNS: Record<string, Record<string, BuiltinModuleFn |
   child_process: {
     // spawnSync's and spawn's call completions are entirely special-cased
     // (an omitted args list completes to an empty string[]; spawnSync
-    // accepts exactly { encoding: "utf8" } as options, spawn requires
-    // exactly { stdio: "ignore" } — see lowerBuiltinModuleCall); the
+    // accepts its documented literal options, while spawn supports the
+    // stdio/detached/env/cwd/windowsHide/shell subset — see
+    // lowerBuiltinModuleCall); the
     // entries carry the canonical shapes.
     spawnSync: { fn: "cp.spawnSync", params: [STRING, arrayOf(STRING)], result: SPAWNRES_T },
     spawn: { fn: "cp.spawn", params: [STRING, arrayOf(STRING)], result: CHILD_T },

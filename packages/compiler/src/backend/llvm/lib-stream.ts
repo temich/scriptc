@@ -49,6 +49,29 @@ export function emitStreamLibCall(host: LlvmEmitterContext, e: LibCallExpr): LlV
       B.line(`call void @scr_child_stream_on_end(ptr ${s0.name}, ptr ${cb.name}, i1 ${once.name})`);
       return { name: "", type: e.type };
     }
+    if (e.fn === "stream.onDataStr") {
+      host.usesTimers = true;
+      const cbT = e.args[1]!.type;
+      if (cbT.kind !== "func" || cbT.params[0]?.kind !== "string") {
+        throw new InternalCompilerError("llvm emitter bug: stream.onDataStr callback not a string func");
+      }
+      const s0 = host.emitExpr(e.args[0]!);
+      const cb = host.emitExpr(e.args[1]!);
+      const once = host.emitExpr(e.args[2]!);
+      host.moveTemp(cb);
+      host.declare(`declare void @scr_child_stream_thunk_str(ptr, ptr)`);
+      host.declare(`declare void @scr_child_stream_on_data_str(ptr, ptr, ptr, i1 zeroext)`);
+      B.line(`call void @scr_child_stream_on_data_str(ptr ${s0.name}, ptr ${cb.name}, ptr @scr_child_stream_thunk_str, i1 ${once.name})`);
+      return { name: "", type: e.type };
+    }
+    if (e.fn === "stream.childSetEncoding") {
+      const s0 = host.emitExpr(e.args[0]!);
+      const enc = host.emitExpr(e.args[1]!);
+      host.declare(`declare ptr @scr_child_stream_set_encoding(ptr, ptr)`);
+      const out = B.tmp();
+      B.line(`${out} = call ptr @scr_child_stream_set_encoding(ptr ${s0.name}, ptr ${enc.name})`);
+      return host.own({ name: out, type: e.type });
+    }
     if (/^(readable|writable|duplex|transform|passthrough)\.(new|init)$/.test(e.fn)) {
       // Head args then flags then the PRESENT option callbacks in
       // canonical order (the flags literal names which; absent ones pass

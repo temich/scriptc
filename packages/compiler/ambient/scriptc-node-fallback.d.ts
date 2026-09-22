@@ -62,15 +62,14 @@ declare namespace NodeJS {
    * keeps the loop alive. */
   interface ReadableStream {
     on(event: "data", listener: (chunk: Buffer) => void): void;
+    on(event: "data", listener: (chunk: string) => void): void;
     on(event: "end", listener: () => void): void;
     once(event: "data", listener: (chunk: Buffer) => void): void;
+    once(event: "data", listener: (chunk: string) => void): void;
     once(event: "end", listener: () => void): void;
-    /* Declared surface without a lowering (chunks stay bytes; decode
-     * with TextDecoder) — string-mode consumers typecheck and fence at
-     * the reached site. With setEncoding in force Node hands strings to
-     * 'data', hence the string arm on the listener above being absent:
-     * the lowered surface is bytes-only. */
-    setEncoding(encoding: string): void;
+    /* setEncoding('utf8') makes subsequent data chunks strings, including
+     * multibyte sequences split across native pipe reads. */
+    setEncoding(encoding: string): this;
   }
 }
 
@@ -1572,16 +1571,16 @@ declare module "child_process" {
 
   /* The asynchronous slice: spawn with stdio "ignore"/"inherit"/fd/"pipe"
    * tuples (piped stdin is writable through child.stdin; piped stdout/stderr
-   * deliver through child.stdout/stderr) and
-   * the two terminal events. "exit" fires once with the exit code, or
+   * deliver through child.stdout/stderr) and the terminal events. "exit"
+   * fires once with the exit code, or
    * null when the child died to a signal; "error" fires ONLY when the
    * child could not be spawned at all (Node's split: a spawn failure
-   * emits "error" and never "exit"). Listeners take at most one
-   * parameter; Node's second "exit" parameter (the signal name) has no
-   * lowering. `on` returns void here (Node returns the child; chaining
-   * is fenced). The event loop keeps the process alive until every
-   * spawned child is reaped, like Node — reaping polls at loop
-   * quiescence (SEMANTICS.md documents the divergence). An "error"
+   * emits "error" and never "exit"). "close" fires after exit/error and
+   * every piped stdio handle reaches EOF. Exit/close listeners may take
+   * Node's code and signal parameters. `on`/`once` return void here (Node
+   * returns the child; chaining is fenced). The event loop keeps the process
+   * alive until every spawned child is reaped, like Node — reaping polls at
+   * loop quiescence (SEMANTICS.md documents the divergence). An "error"
    * event with no registered listener prints the error and exits 1,
    * exactly the unhandled-'error' EventEmitter behavior. */
   export interface ChildStdin {
@@ -1599,7 +1598,11 @@ declare module "child_process" {
     /* The exit listener may also take Node's second parameter — the
      * terminating signal's name, null for a normal exit. */
     on(event: "exit", listener: (code: number | null, signal: string | null) => void): void;
+    on(event: "close", listener: (code: number | null, signal: string | null) => void): void;
     on(event: "error", listener: (err: Error) => void): void;
+    once(event: "exit", listener: (code: number | null, signal: string | null) => void): void;
+    once(event: "close", listener: (code: number | null, signal: string | null) => void): void;
+    once(event: "error", listener: (err: Error) => void): void;
     /* The lifecycle members, Node's exact shapes: pid is undefined exactly
      * when the spawn failed; exitCode is null while running, the code
      * after a normal exit, null for a signal death, and -errno once a
@@ -1634,11 +1637,13 @@ declare module "child_process" {
       stdio: "ignore" | "inherit" | "pipe" | ("ignore" | "inherit" | "pipe" | number)[];
       /* detached gives the child its own session and process group
        * (POSIX_SPAWN_SETSID); env REPLACES the child environment; cwd
-       * sets its working directory; windowsHide is a POSIX no-op. */
+       * sets its working directory; windowsHide is a POSIX no-op; shell
+       * runs the complete command string through /bin/sh or cmd.exe. */
       detached?: boolean;
       env?: { [k: string]: string | undefined };
       cwd?: string;
       windowsHide?: boolean;
+      shell?: boolean;
     },
   ): ChildProcess;
 

@@ -3308,13 +3308,13 @@ function lowerPromiseThenPresence(
         const receiver = lowerer.lowerExpr(expr.expression);
         return { kind: "libCall", fn: "child.killed", args: [receiver], type: BOOL, loc };
       }
-      if (name === "on" || name === "kill" || name === "unref") {
+      if (name === "on" || name === "once" || name === "kill" || name === "unref") {
         lowerer.unsupported("SC1090", expr, `child methods as values (call '${name}' directly)`);
       }
       lowerer.noLowering(
         `ChildProcess.${name}`,
         expr,
-        "on(\"exit\" | \"error\", cb), pid, exitCode, killed, kill(signal?), and unref() are the supported ChildProcess members",
+        "on/once(\"exit\" | \"close\" | \"error\", cb), pid, exitCode, killed, kill(signal?), and unref() are the supported ChildProcess members",
         lowerer.checker.getSymbolAtLocation(expr.name),
       );
     }

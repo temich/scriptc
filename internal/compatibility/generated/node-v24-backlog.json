@@ -8,8 +8,8 @@
     "tiers": {
       "static": {
         "replace-refusal": 46,
-        "verify-gap": 2714,
-        "audit-partial": 452,
+        "verify-gap": 2711,
+        "audit-partial": 455,
         "classify": 2,
         "implement": 81
       },
@@ -5745,7 +5745,8 @@
           "tests": [
             "tests/corpus/1361-spawn-events.ts",
             "tests/corpus/1565-spawn-pipe-streams.ts",
-            "tests/corpus/2911-execfile-callback.ts"
+            "tests/corpus/2911-execfile-callback.ts",
+            "tests/corpus/2939-child-shell-text.ts"
           ]
         },
         "dynamic": {
@@ -5848,7 +5849,8 @@
           "tests": [
             "tests/corpus/1361-spawn-events.ts",
             "tests/corpus/1565-spawn-pipe-streams.ts",
-            "tests/corpus/2911-execfile-callback.ts"
+            "tests/corpus/2911-execfile-callback.ts",
+            "tests/corpus/2939-child-shell-text.ts"
           ]
         },
         "dynamic": {
@@ -5885,7 +5887,8 @@
           "tests": [
             "tests/corpus/1361-spawn-events.ts",
             "tests/corpus/1565-spawn-pipe-streams.ts",
-            "tests/corpus/2911-execfile-callback.ts"
+            "tests/corpus/2911-execfile-callback.ts",
+            "tests/corpus/2939-child-shell-text.ts"
           ]
         },
         "dynamic": {
@@ -5922,7 +5925,8 @@
           "tests": [
             "tests/corpus/1361-spawn-events.ts",
             "tests/corpus/1565-spawn-pipe-streams.ts",
-            "tests/corpus/2911-execfile-callback.ts"
+            "tests/corpus/2911-execfile-callback.ts",
+            "tests/corpus/2939-child-shell-text.ts"
           ]
         },
         "dynamic": {
@@ -6547,12 +6551,15 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:child_process",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:child_process.stderr",
+          "tests": [
+            "tests/corpus/1565-spawn-pipe-streams.ts",
+            "tests/corpus/2939-child-shell-text.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -6653,12 +6660,15 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:child_process",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:child_process.stdout",
+          "tests": [
+            "tests/corpus/1565-spawn-pipe-streams.ts",
+            "tests/corpus/2939-child-shell-text.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -6686,12 +6696,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:child_process",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:child_process.'close'",
+          "tests": [
+            "tests/corpus/2939-child-shell-text.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
