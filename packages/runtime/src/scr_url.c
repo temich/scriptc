@@ -653,6 +653,48 @@ ScrStr *scr_url_host(ScrUrl *u) {
  * authority-less URLs); IPv6 literals retain their brackets. */
 ScrStr *scr_url_hostname(ScrUrl *u) { return scr_str_retain(u->host); }
 
+/* WHATWG origin is opaque for file and non-special schemes. A blob URL
+ * inherits the origin of an embedded http(s) URL when its path parses. */
+ScrStr *scr_url_origin(ScrUrl *u) {
+  const char *scheme = u->scheme->data;
+  size_t len = u->scheme->len;
+  if (len == 4 && memcmp(scheme, "blob", 4) == 0) {
+    ScrUrl *inner = scr_url_new(u->path);
+    if (!inner) {
+      scr_exc_clear();
+      return scr_str_new("null", 4);
+    }
+    bool http = (inner->scheme->len == 4 && memcmp(inner->scheme->data, "http", 4) == 0) ||
+                (inner->scheme->len == 5 && memcmp(inner->scheme->data, "https", 5) == 0);
+    ScrStr *result = http ? scr_url_origin(inner) : scr_str_new("null", 4);
+    scr_url_release(inner);
+    return result;
+  }
+  if (!((len == 4 && memcmp(scheme, "http", 4) == 0) ||
+        (len == 5 && memcmp(scheme, "https", 5) == 0) ||
+        (len == 2 && memcmp(scheme, "ws", 2) == 0) ||
+        (len == 3 && memcmp(scheme, "wss", 3) == 0) ||
+        (len == 3 && memcmp(scheme, "ftp", 3) == 0))) {
+    return scr_str_new("null", 4);
+  }
+  UrlBuf b;
+  ub_init(&b);
+  ub_append(&b, scheme, len);
+  ub_append(&b, "://", 3);
+  ub_append(&b, u->host->data, u->host->len);
+  if (u->port->len > 0) {
+    ub_push(&b, ':');
+    ub_append(&b, u->port->data, u->port->len);
+  }
+  return ub_take(&b);
+}
+
+ScrStr *scr_url_username(ScrUrl *u) {
+  const char *separator = memchr(u->userinfo->data, ':', u->userinfo->len);
+  size_t len = separator ? (size_t)(separator - u->userinfo->data) : u->userinfo->len;
+  return scr_str_new(u->userinfo->data, len);
+}
+
 ScrStr *scr_url_href(ScrUrl *u) {
   UrlBuf b;
   ub_init(&b);

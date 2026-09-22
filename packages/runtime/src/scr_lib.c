@@ -1335,6 +1335,36 @@ void scr_os_ifaddrs_free(ScrIfaddrs *s) {
 void (*scr_process_exit_hook)(double code) = NULL;
 void (*scr_stdin_destroy_hook)(void) = NULL;
 
+void scr_process_set_exit_code(double code) {
+  if (!isfinite(code) || trunc(code) != code) {
+    char recv[48], msg[160];
+    scr_num_received(code, recv);
+    int len = snprintf(msg, sizeof msg,
+                       "The value of \"code\" is out of range. It must be an integer. Received %s", recv);
+    scr_throw_error_msg_code(SCR_ERR_RANGE, msg, (size_t)len, "ERR_OUT_OF_RANGE");
+    return;
+  }
+  if (fabs(code) > 9007199254740991.0) {
+    char recv[48], msg[192];
+    scr_num_received(code, recv);
+    int len = snprintf(msg, sizeof msg,
+                       "The value of \"code\" is out of range. It must be >= -9007199254740991 && <= 9007199254740991. Received %s", recv);
+    scr_throw_error_msg_code(SCR_ERR_RANGE, msg, (size_t)len, "ERR_OUT_OF_RANGE");
+    return;
+  }
+  /* Node converts valid safe integers to signed int32 for exitCode and
+   * exit listeners. The OS subsequently observes the low eight bits. */
+  double low = fmod(code, 4294967296.0);
+  if (low < 0) low += 4294967296.0;
+  int64_t signed_code = (int64_t)low;
+  if (signed_code > INT_MAX) signed_code -= 4294967296LL;
+  scr_exit_code_note((int)signed_code);
+}
+
+double scr_process_exit_code_or_zero(void) {
+  return (double)scr_exit_code_hint_get();
+}
+
 void scr_process_exit(double code) {
   /* Node runs 'exit' listeners on explicit process.exit() too — they run
    * HERE, synchronously, before the teardown-free exit below. The hook is

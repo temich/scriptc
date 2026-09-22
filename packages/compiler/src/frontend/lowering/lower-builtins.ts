@@ -7186,10 +7186,8 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
 
 /** `process.exit(code)` / `process.cwd()` → libCall. The fallback
    * declaration makes exit's code required; @types/node declares it
-   * optional, and a bare `process.exit()` lowers as exit(0) — exactly
-   * Node's behavior when process.exitCode was never set (setting exitCode
-   * is fenced like every other unsupported process member, so "never set"
-   * always holds in a compiled program). */
+   * optional. A bare `process.exit()` uses the current exitCode, or zero
+   * when unset. */
   export function lowerProcessMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     access: ts.PropertyAccessExpression,): IrExpr | null {
     if (call.questionDotToken) return null;
@@ -7906,7 +7904,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
       const code: IrExpr =
         arg !== undefined
           ? lowerer.lowerExprExpecting(arg, F64)
-          : { kind: "numLit", value: 0, type: F64, loc };
+          : { kind: "libCall", fn: "process.currentExitCode", args: [], type: F64, loc };
       return { kind: "libCall", fn: "process.exit", args: [code], type: VOID, loc };
     }
     return null; // process.argv(...) etc. are tsc errors before lowering

@@ -1163,6 +1163,13 @@ export const AMBIENT_SURFACE_FNS: readonly AmbientSurfaceRow[] = [
     fns: ["process.exit", "process.exiting"],
     note: "process.exit and the process._exiting flag read are one surface",
   },
+  {
+    id: "node-builtin.process.exitCode",
+    kind: "node-builtin",
+    name: "process.exitCode",
+    fns: ["process.setExitCode"],
+    note: "numeric writes in statement position set the implicit exit status; process.exit() reads it",
+  },
   // ── the tls CA store (lowerTlsCaCall / lowerTlsRootCertificates): the
   // host's trust anchors, read and replaced. Dedicated paths, and
   // rootCertificates is a VALUE read with no call form at all, so none of

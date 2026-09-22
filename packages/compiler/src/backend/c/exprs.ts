@@ -4938,6 +4938,10 @@ function emitPathUrlLibCall(state: LibCallState): Temp {
             return finish(`scr_url_new(${arg(0)})`);
           case "url.protocol":
             return finish(`scr_url_protocol(${arg(0)})`);
+          case "url.origin":
+            return finish(`scr_url_origin(${arg(0)})`);
+          case "url.username":
+            return finish(`scr_url_username(${arg(0)})`);
           case "url.host":
             return finish(`scr_url_host(${arg(0)})`);
           case "url.hostname":
@@ -7606,6 +7610,10 @@ function emitProcessLibCall(state: LibCallState): Temp {
             // Flushes stdout and _Exit()s — never returns (exit handlers,
             // including the RC audit, deliberately do not run).
             return finish(`scr_process_exit(${arg(0)})`);
+          case "process.setExitCode":
+            return finish(`scr_process_set_exit_code(${arg(0)})`);
+          case "process.currentExitCode":
+            return finish(`scr_process_exit_code_or_zero()`);
           case "process.nextTick": {
             // The tick queue owns the callback until the drain fires it;
             // ticks run before promise jobs at every loop checkpoint and

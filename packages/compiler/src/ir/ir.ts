@@ -2255,6 +2255,8 @@ export type IrLibFn =
    * path (getcwd) and never throws. */
   | "url.new"
   | "url.protocol"
+  | "url.origin"
+  | "url.username"
   | "url.host"
   | "url.hostname"
   | "url.pathname"
@@ -3346,6 +3348,10 @@ export type IrLibFn =
    * array; never throws. */
   | "process.envPairs"
   | "process.exit"
+  /** Numeric process.exitCode write (integer validation, implicit exit status). */
+  | "process.setExitCode"
+  /** The code for process.exit() with no argument, or zero when unset. */
+  | "process.currentExitCode"
   | "process.cwd"
   /** getpid(2) / getuid(2): zero args → f64. POSIX-only target, so both
    * always answer (the checker's `getuid?` optionality covers Windows —
@@ -7198,6 +7204,7 @@ export const LIB_NONDETERMINISTIC_PREFIXES: readonly [string, string][] = [
   ["process.kill", "process authority (kill)"],
   ["process.umask", "process authority (umask)"],
   ["process.exit", "process authority (exit)"],
+  ["process.setExitCode", "process authority (exit status)"],
   ["fs.", "the filesystem"],
   ["os.", "machine/OS identity"],
   // The CA-store surface reads the host's certificate bundle (and the
@@ -7234,8 +7241,7 @@ export function moduleLibNondeterministicSurface(mod: IrModule): string | null {
 /** The may-throw seed: libCall members that can raise. Every fs.* member
  * EXCEPT existsSync (which, like Node's, swallows errors and returns false)
  * throws a catchable error on failure; json.parse throws a catchable
- * SyntaxError-shaped string on malformed input; process.* members never
- * throw. Backends' may-throw analyses must treat a function containing one
+ * SyntaxError-shaped string on malformed input. Backends' may-throw analyses must treat a function containing one
  * of these as throwing, exactly like a `throw` statement (and must ALSO
  * seed on `dynCheck` and `awaitExpr` nodes, which throw on validation
  * failure / promise rejection). */
@@ -7412,6 +7418,7 @@ export const MAY_THROW_LIB_FNS: ReadonlySet<IrLibFn> = new Set([
   "http.requestConnCb",
   "process.kill",
   "process.killNum",
+  "process.setExitCode",
   // cpuUsage(prev)'s field validation: negative/non-finite prev fields
   // throw Node's ERR_INVALID_ARG_VALUE RangeError, catchably.
   "process.cpuPrevValidate",

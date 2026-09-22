@@ -894,7 +894,7 @@ export class CEmitter {
       ? "scr_test_exit_code()"
       : usesIsland
         ? "scr_island_exit_code()"
-        : "0";
+        : "scr_exit_code_hint_get()";
     // Exit listeners can read MODULE GLOBALS directly (test/common's
     // runCallChecks over its mustCallChecks ledger — an interned top-level
     // closure, no capture boxes keeping anything alive), so they must run

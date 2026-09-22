@@ -125,6 +125,8 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "process.activeResources": "scr_active_resources",
   "process.exiting": "scr_process_exiting",
   "process.exit": "scr_process_exit",
+  "process.setExitCode": "scr_process_set_exit_code",
+  "process.currentExitCode": "scr_process_exit_code_or_zero",
   "process.envSet": "scr_env_set",
   "process.envUnset": "scr_env_unset",
   "process.envPairs": "scr_env_pairs",
@@ -322,6 +324,8 @@ export const LIB_FN_SYMS: Record<string, string> = {
   // pathToFileURL flavor, and sp.fromPairs throw catchably (may-throw).
   "url.new": "scr_url_new",
   "url.protocol": "scr_url_protocol",
+  "url.origin": "scr_url_origin",
+  "url.username": "scr_url_username",
   "url.host": "scr_url_host",
   "url.hostname": "scr_url_hostname",
   "url.pathname": "scr_url_pathname",

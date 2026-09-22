@@ -2260,6 +2260,8 @@ bool scr_process_kill_named(double pid, const ScrStr *signal);
 /* fflush stdout, then _Exit((int)code): no atexit handlers run — the RC
  * audit is deliberately skipped (exiting mid-program leaves live values). */
 void scr_process_exit(double code);
+void scr_process_set_exit_code(double code);
+double scr_process_exit_code_or_zero(void);
 /* process._exiting: true once the exit sequence began (process.exit or
  * the exit-listener runner set the flag). Never throws. */
 extern SCR_TL bool scr_process_in_exit;
@@ -2926,6 +2928,8 @@ void scr_url_release(ScrUrl *u);
 void *scr_url_retain_v(void *p);
 void scr_url_release_v(void *p);
 ScrStr *scr_url_protocol(ScrUrl *u); /* +1 "https:" */
+ScrStr *scr_url_origin(ScrUrl *u);   /* +1 "https://host" or "null" */
+ScrStr *scr_url_username(ScrUrl *u); /* +1 encoded username, possibly empty */
 ScrStr *scr_url_host(ScrUrl *u);     /* +1 "host[:port]" (defaults stripped) */
 ScrStr *scr_url_hostname(ScrUrl *u); /* +1 port-less host ("" when none) */
 ScrStr *scr_url_pathname(ScrUrl *u); /* +1 */

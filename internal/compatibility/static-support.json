@@ -54,6 +54,7 @@
     "node-builtin.path": ["tests/corpus/957-builtins-namespace.ts", "tests/corpus/2915-path-function-values.ts", "tests/corpus/2916-path-function-values-cjs.ts", "tests/corpus/2917-builtin-callable-widths.ts", "tests/corpus/2918-builtin-callable-widths-cjs.ts"],
     "node-builtin.perf_hooks": ["tests/corpus/957-builtins-namespace.ts"],
     "node-builtin.process": ["tests/corpus/990-process-basics.ts", "tests/corpus/2314-process-introspection.ts"],
+    "node-builtin.process.exitCode": ["tests/corpus/2941-process-exit-code.ts", "tests/corpus/2942-process-exit-code-override.ts", "tests/corpus/2943-process-exit-code-invalid.ts", "tests/corpus/2944-process-exit-code-wrap.ts"],
     "node-builtin.querystring": ["tests/corpus/957-builtins-namespace.ts", "tests/corpus/2917-builtin-callable-widths.ts"],
     "node-builtin.readline": ["tests/corpus/1475-readline-closed-stdin.ts"],
     "node-builtin.stream": ["tests/corpus/1685-stream-readable-basics.ts", "tests/corpus/1746-stream-for-await.ts", "tests/corpus/1814-stream-pipeline.cjs", "tests/corpus/2629-stream-consumers.ts", "tests/corpus/2861-readable-iterator-close.ts"],

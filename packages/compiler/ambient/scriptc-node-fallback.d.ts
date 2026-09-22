@@ -180,11 +180,13 @@ declare var process: {
    * callers forward a `string | null` result field. */
   kill(pid: number, signal?: string | number | null): true;
   env: { [name: string]: string | undefined };
+  /** Numeric writes set the status returned by ordinary program exit. */
+  exitCode?: number;
   /* `never`, like @types/node: code behind an early-exit guard narrows
    * (`if (!x) process.exit(1)` proves x afterwards) — typed `void` the
    * guard narrows nothing and correct programs fail preflight. The
-   * lowering already handles the optional code (bare exit() is exit(0),
-   * Node's behavior when exitCode was never set). */
+   * lowering already handles the optional code (bare exit() uses exitCode,
+   * or zero when it was never set). */
   exit(code?: number | null): never;
   cwd(): string;
   /* The user tick queue: callbacks run before promise jobs at every loop
@@ -1359,7 +1361,7 @@ declare module "node:os" {
 /* The WHATWG URL class (a Node global; the es2023 lib doesn't declare it),
  * typed as exactly the supported surface: construction from ONE absolute-
  * URL string (invalid input throws a catchable TypeError, like Node), the
- * protocol/pathname/href/host/hostname/search getters, searchParams (the
+ * protocol/origin/username/pathname/href/host/hostname/search getters, searchParams (the
  * LIVE query view — mutations through it re-serialize into the URL, so
  * href reflects immediately; every read answers the same object, Node's
  * caching), and toString() (the href serialization).
@@ -1371,6 +1373,8 @@ declare module "node:os" {
  * documented in SEMANTICS.md. */
 interface URL {
   readonly protocol: string;
+  readonly origin: string;
+  readonly username: string;
   readonly pathname: string;
   readonly href: string;
   readonly host: string;
