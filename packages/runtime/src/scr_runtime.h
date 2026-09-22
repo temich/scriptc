@@ -2312,6 +2312,7 @@ ScrStr *scr_fs_read_file(ScrStr *path);
 /* realpath(3) (+1 fresh); failures throw with Node's realpathSync
  * spelling (syscall "lstat"). */
 ScrStr *scr_fs_realpath(ScrStr *path);
+ScrStr *scr_fs_realpath_promise(ScrStr *path);
 void scr_fs_write_file(ScrStr *path, ScrStr *data);
 void scr_fs_append_file(ScrStr *path, ScrStr *data);
 bool scr_fs_exists(ScrStr *path);
@@ -2428,6 +2429,7 @@ ScrPromise *scr_fsp_chmod(ScrStr *path, double mode);
 ScrPromise *scr_fsp_readdir(ScrStr *path);
 ScrPromise *scr_fsp_rm(ScrStr *path);
 ScrPromise *scr_fsp_stat(ScrStr *path);
+ScrPromise *scr_fsp_realpath(ScrStr *path);
 ScrPromise *scr_fsp_rename(ScrStr *oldpath, ScrStr *newpath);
 ScrPromise *scr_fsp_open(ScrStr *path, ScrStr *flags, double mode);
 ScrPromise *scr_file_handle_close_promise(ScrFileHandle *h);

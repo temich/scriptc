@@ -967,6 +967,12 @@
       "status": "static"
     },
     {
+      "id": "node-builtin.fs.promises.realpath",
+      "kind": "node-builtin",
+      "name": "fs/promises.realpath",
+      "status": "static"
+    },
+    {
       "id": "node-builtin.fs.promises.rename",
       "kind": "node-builtin",
       "name": "fs/promises.rename",

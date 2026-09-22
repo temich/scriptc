@@ -397,6 +397,7 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "fsp.readdir": "scr_fsp_readdir",
   "fsp.rm": "scr_fsp_rm",
   "fsp.stat": "scr_fsp_stat",
+  "fsp.realpath": "scr_fsp_realpath",
   "fsp.open": "scr_fsp_open",
   "fileHandle.fd": "scr_file_handle_fd",
   "fileHandle.close": "scr_file_handle_close_promise",

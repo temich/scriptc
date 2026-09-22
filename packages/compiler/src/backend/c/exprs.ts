@@ -4667,6 +4667,8 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             return finish(`scr_fsp_rm(${arg(0)})`);
           case "fsp.stat":
             return finish(`scr_fsp_stat(${arg(0)})`);
+          case "fsp.realpath":
+            return finish(`scr_fsp_realpath(${arg(0)})`);
           case "fsp.open":
             return finish(`scr_fsp_open(${arg(0)}, ${arg(1)}, ${arg(2)})`);
           case "fileHandle.fd":

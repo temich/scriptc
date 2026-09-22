@@ -1852,32 +1852,92 @@ ScrStr *scr_fs_read_file(ScrStr *path) {
   return s;
 }
 
-ScrStr *scr_fs_realpath(ScrStr *path) {
 #ifdef _WIN32
-  /* _fullpath resolves . / .. and drive-relative forms (symlink-free —
-   * the honest Windows approximation); a missing path throws Node's
-   * lstat-spelled ENOENT like the POSIX arm. */
-  char buf[PATH_MAX];
-  if (_fullpath(buf, path->data, sizeof buf) == NULL) {
-    scr_fs_throw(errno ? errno : ENOENT, "lstat", path);
+static WCHAR *scr_fs_win_wide(const ScrStr *path);
+static int scr_fs_win_errno(DWORD error);
+#endif
+
+static ScrStr *scr_fs_realpath_common(ScrStr *path, const char *op) {
+#ifdef _WIN32
+  WCHAR *wide = scr_fs_win_wide(path);
+  if (!wide) {
+    scr_fs_throw(scr_fs_win_errno(GetLastError()), op, path);
     return NULL;
   }
-  if (GetFileAttributesA(buf) == INVALID_FILE_ATTRIBUTES) {
-    scr_fs_throw(ENOENT, "lstat", path);
+  HANDLE handle = CreateFileW(wide, FILE_READ_ATTRIBUTES,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  free(wide);
+  if (handle == INVALID_HANDLE_VALUE) {
+    scr_fs_throw(scr_fs_win_errno(GetLastError()), op, path);
     return NULL;
   }
-  return scr_str_new(buf, strlen(buf));
+  DWORD needed = GetFinalPathNameByHandleW(handle, NULL, 0, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+  if (needed == 0) {
+    DWORD error = GetLastError();
+    CloseHandle(handle);
+    scr_fs_throw(scr_fs_win_errno(error), op, path);
+    return NULL;
+  }
+  WCHAR *resolved = malloc(((size_t)needed + 1) * sizeof *resolved);
+  if (!resolved) {
+    CloseHandle(handle);
+    scr_trap("scriptc: out of memory\n");
+  }
+  DWORD length = GetFinalPathNameByHandleW(handle, resolved, needed + 1,
+                                           FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+  DWORD error = length == 0 ? GetLastError() : length > needed ? ERROR_INSUFFICIENT_BUFFER : ERROR_SUCCESS;
+  CloseHandle(handle);
+  if (error != ERROR_SUCCESS) {
+    free(resolved);
+    scr_fs_throw(scr_fs_win_errno(error), op, path);
+    return NULL;
+  }
+  size_t prefix = 0;
+  bool unc = false;
+  if (length >= 8 && wcsncmp(resolved, L"\\\\?\\UNC\\", 8) == 0) {
+    prefix = 8;
+    unc = true;
+  } else if (length >= 4 && wcsncmp(resolved, L"\\\\?\\", 4) == 0) {
+    prefix = 4;
+  }
+  int utf8_len = WideCharToMultiByte(CP_UTF8, 0, resolved + prefix,
+                                     (int)(length - prefix), NULL, 0, NULL, NULL);
+  if (utf8_len <= 0) {
+    error = GetLastError();
+    free(resolved);
+    scr_fs_throw(scr_fs_win_errno(error), op, path);
+    return NULL;
+  }
+  size_t extra = unc ? 2 : 0;
+  char *utf8 = malloc(extra + (size_t)utf8_len);
+  if (!utf8) {
+    free(resolved);
+    scr_trap("scriptc: out of memory\n");
+  }
+  if (unc) { utf8[0] = '\\'; utf8[1] = '\\'; }
+  (void)WideCharToMultiByte(CP_UTF8, 0, resolved + prefix, (int)(length - prefix),
+                            utf8 + extra, utf8_len, NULL, NULL);
+  ScrStr *result = scr_str_new(utf8, extra + (size_t)utf8_len);
+  free(utf8);
+  free(resolved);
+  return result;
 #else
-  /* realpath(3); Node's realpathSync reports failures with the "lstat"
-   * syscall in the message ("ENOENT: no such file or directory, lstat
-   * 'x'") — its own resolution walks lstat by component. */
   char buf[PATH_MAX];
   if (realpath(path->data, buf) == NULL) {
-    scr_fs_throw(errno, "lstat", path);
+    scr_fs_throw(errno, op, path);
     return NULL;
   }
   return scr_str_new(buf, strlen(buf));
 #endif
+}
+
+ScrStr *scr_fs_realpath(ScrStr *path) {
+  return scr_fs_realpath_common(path, "lstat");
+}
+
+ScrStr *scr_fs_realpath_promise(ScrStr *path) {
+  return scr_fs_realpath_common(path, "realpath");
 }
 
 static void scr_fs_write_common(ScrStr *path, ScrStr *data, const char *mode) {

@@ -1657,6 +1657,10 @@ ScrPromise *scr_fsp_stat(ScrStr *path) {
   return scr_promise_settled_ref(st, &scr_stats_retain_v, &scr_stats_release_v, NULL);
 }
 
+ScrPromise *scr_fsp_realpath(ScrStr *path) {
+  return scr_promise_settled_str(scr_fs_realpath_promise(path));
+}
+
 ScrPromise *scr_fsp_rename(ScrStr *oldpath, ScrStr *newpath) {
   scr_fs_rename(oldpath, newpath);
   return scr_promise_settled_void();
