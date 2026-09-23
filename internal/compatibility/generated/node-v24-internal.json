@@ -507,9 +507,9 @@
       "apiEntries": 276,
       "static": {
         "supported": 0,
-        "partial": 40,
+        "partial": 44,
         "refused": 0,
-        "not-implemented": 236,
+        "not-implemented": 232,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -915,9 +915,9 @@
       "apiEntries": 119,
       "static": {
         "supported": 0,
-        "partial": 19,
+        "partial": 20,
         "refused": 0,
-        "not-implemented": 100,
+        "not-implemented": 99,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -50573,7 +50573,8 @@
           "tests/corpus/2844-node-disposable-resources.ts",
           "tests/corpus/2919-fs-function-values.ts",
           "tests/corpus/2920-fs-promises-function-values.ts",
-          "tests/corpus/2940-fsp-realpath.ts"
+          "tests/corpus/2940-fsp-realpath.ts",
+          "tests/corpus/2941-fsp-lstat-identity.ts"
         ]
       },
       "dynamic": {
@@ -51758,8 +51759,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:fs"
+        "status": "partial",
+        "evidence": "compiler-feature:fs.fsPromises.lstat",
+        "tests": [
+          "tests/corpus/2941-fsp-lstat-identity.ts"
+        ]
       },
       "dynamic": {
         "status": "partial",
@@ -57104,8 +57108,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:fs"
+        "status": "partial",
+        "evidence": "compiler-feature:fs.dev",
+        "tests": [
+          "tests/corpus/2941-fsp-lstat-identity.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -57131,8 +57138,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:fs"
+        "status": "partial",
+        "evidence": "compiler-feature:fs.ino",
+        "tests": [
+          "tests/corpus/2941-fsp-lstat-identity.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -57428,8 +57438,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:fs"
+        "status": "partial",
+        "evidence": "compiler-feature:fs.ctimeMs",
+        "tests": [
+          "tests/corpus/2941-fsp-lstat-identity.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -86328,6 +86341,10 @@
         "evidence": "derived:descendants",
         "tests": [
           "tests/corpus/2314-process-introspection.ts",
+          "tests/corpus/2941-process-exit-code.ts",
+          "tests/corpus/2942-process-exit-code-override.ts",
+          "tests/corpus/2943-process-exit-code-invalid.ts",
+          "tests/corpus/2944-process-exit-code-wrap.ts",
           "tests/corpus/990-process-basics.ts"
         ]
       },
@@ -88292,8 +88309,14 @@
       "anchor": "",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:process"
+        "status": "partial",
+        "evidence": "surface-manifest:node-builtin.process.exitCode",
+        "tests": [
+          "tests/corpus/2941-process-exit-code.ts",
+          "tests/corpus/2942-process-exit-code-override.ts",
+          "tests/corpus/2943-process-exit-code-invalid.ts",
+          "tests/corpus/2944-process-exit-code-wrap.ts"
+        ]
       },
       "dynamic": {
         "status": "partial",

@@ -86,7 +86,7 @@ fenced.ts:47:13 - error SC2020: 'URL.hash' is typed by @types/node but has no sc
      |             ^~~~~~
   48 | u.searchParams.get("a");
 
-  hint: protocol, pathname, href, host, hostname, search, searchParams, and toString() are the supported URL members
+  hint: protocol, origin, username, pathname, href, host, hostname, search, searchParams, and toString() are the supported URL members
 
 fenced.ts:53:21 - error SC2020: 'deflateSync with explicit options' is part of the standard library types but has no scriptc lowering yet
 

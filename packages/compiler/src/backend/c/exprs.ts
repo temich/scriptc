@@ -4528,12 +4528,18 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             return finish(`scr_stats_atime_ms(${arg(0)})`);
           case "stats.mtimeMs":
             return finish(`scr_stats_mtime_ms(${arg(0)})`);
+          case "stats.ctimeMs":
+            return finish(`scr_stats_ctime_ms(${arg(0)})`);
           case "stats.isFile":
             return finish(`scr_stats_is_file(${arg(0)})`);
           case "stats.isDirectory":
             return finish(`scr_stats_is_dir(${arg(0)})`);
           case "stats.size":
             return finish(`scr_stats_size(${arg(0)})`);
+          case "stats.dev":
+            return finish(`scr_stats_dev(${arg(0)})`);
+          case "stats.ino":
+            return finish(`scr_stats_ino(${arg(0)})`);
           case "fs.toUnixTimestamp":
             return finish(`scr_fs_to_unix_timestamp(${arg(0)})`);
           // The fs argument-validation ladders: the always-throw Chk
@@ -4669,6 +4675,8 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             return finish(`scr_fsp_stat(${arg(0)})`);
           case "fsp.realpath":
             return finish(`scr_fsp_realpath(${arg(0)})`);
+          case "fsp.lstat":
+            return finish(`scr_fsp_lstat(${arg(0)})`);
           case "fsp.open":
             return finish(`scr_fsp_open(${arg(0)}, ${arg(1)}, ${arg(2)})`);
           case "fileHandle.fd":
@@ -4930,6 +4938,10 @@ function emitPathUrlLibCall(state: LibCallState): Temp {
             return finish(`scr_url_new(${arg(0)})`);
           case "url.protocol":
             return finish(`scr_url_protocol(${arg(0)})`);
+          case "url.origin":
+            return finish(`scr_url_origin(${arg(0)})`);
+          case "url.username":
+            return finish(`scr_url_username(${arg(0)})`);
           case "url.host":
             return finish(`scr_url_host(${arg(0)})`);
           case "url.hostname":
@@ -5264,6 +5276,7 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             // +1 string, or Node's "Invalid time value" RangeError
             // (may-throw seed set).
             return finish(`scr_date_to_iso(${arg(0)})`);
+          case "date.parse":
           case "date.parseGetTime":
             // The bounded date-string parse (X509 validity + ECMA format);
             // NaN elsewhere. Never throws.
@@ -7597,6 +7610,10 @@ function emitProcessLibCall(state: LibCallState): Temp {
             // Flushes stdout and _Exit()s — never returns (exit handlers,
             // including the RC audit, deliberately do not run).
             return finish(`scr_process_exit(${arg(0)})`);
+          case "process.setExitCode":
+            return finish(`scr_process_set_exit_code(${arg(0)})`);
+          case "process.currentExitCode":
+            return finish(`scr_process_exit_code_or_zero()`);
           case "process.nextTick": {
             // The tick queue owns the callback until the drain fires it;
             // ticks run before promise jobs at every loop checkpoint and

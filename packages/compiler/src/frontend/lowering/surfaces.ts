@@ -697,6 +697,7 @@ export const BUILTIN_MODULE_FNS: Record<string, Record<string, BuiltinModuleFn |
     rm: { fn: "fsp.rm", params: [STRING], result: { kind: "promise", inner: VOID } },
     stat: { fn: "fsp.stat", params: [STRING], result: { kind: "promise", inner: STATS_T } },
     realpath: { fn: "fsp.realpath", params: [STRING], result: { kind: "promise", inner: STRING } },
+    lstat: { fn: "fsp.lstat", params: [STRING], result: { kind: "promise", inner: STATS_T } },
     unlink: { fn: "fsp.unlink", params: [STRING], result: { kind: "promise", inner: VOID }, valueParams: exactValueParams(STRING) },
     chmod: { fn: "fsp.chmod", params: [STRING, F64], result: { kind: "promise", inner: VOID }, valueParams: exactValueParams(STRING, F64) },
     rename: { fn: "fsp.rename", params: [STRING, STRING], result: { kind: "promise", inner: VOID }, valueParams: exactValueParams(STRING, STRING) },
@@ -1016,6 +1017,13 @@ export const AMBIENT_SURFACE_FNS: readonly AmbientSurfaceRow[] = [
     note: "the live clock",
   },
   {
+    id: "stdlib.date.parse",
+    kind: "stdlib",
+    name: "Date.parse",
+    fns: ["date.parse"],
+    note: "one date string, using the bounded parser shared with new Date(dateString).getTime()",
+  },
+  {
     id: "stdlib.date.constructor",
     kind: "stdlib",
     name: "Date constructor",
@@ -1154,6 +1162,13 @@ export const AMBIENT_SURFACE_FNS: readonly AmbientSurfaceRow[] = [
     name: "process.exit",
     fns: ["process.exit", "process.exiting"],
     note: "process.exit and the process._exiting flag read are one surface",
+  },
+  {
+    id: "node-builtin.process.exitCode",
+    kind: "node-builtin",
+    name: "process.exitCode",
+    fns: ["process.setExitCode"],
+    note: "numeric writes in statement position set the implicit exit status; process.exit() reads it",
   },
   // ── the tls CA store (lowerTlsCaCall / lowerTlsRootCertificates): the
   // host's trust anchors, read and replaced. Dedicated paths, and

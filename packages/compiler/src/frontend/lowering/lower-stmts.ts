@@ -5229,6 +5229,15 @@ function isEsModuleStamp(expr: ts.Expression): boolean {
               }
             }
           }
+          if (!expr.left.questionDotToken && lowerer.stdlibGlobalMember(expr.left, "process") === "exitCode") {
+            const loc = locOf(expr);
+            const value = lowerer.lowerExprExpecting(expr.right, F64);
+            return {
+              kind: "exprStmt",
+              expr: { kind: "libCall", fn: "process.setExitCode", args: [value], type: VOID, loc },
+              loc,
+            };
+          }
           // `r._read = fn` / `w._write = fn` (and the other underscore
           // methods) on a runtime-stream-rooted receiver: Node's
           // own-property shadow of the prototype method — the runtime

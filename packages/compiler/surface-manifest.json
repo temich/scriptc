@@ -943,6 +943,12 @@
       "status": "static"
     },
     {
+      "id": "node-builtin.fs.promises.lstat",
+      "kind": "node-builtin",
+      "name": "fs/promises.lstat",
+      "status": "static"
+    },
+    {
       "id": "node-builtin.fs.promises.mkdir",
       "kind": "node-builtin",
       "name": "fs/promises.mkdir",
@@ -1531,6 +1537,13 @@
       "name": "process.exit",
       "status": "static",
       "note": "process.exit and the process._exiting flag read are one surface"
+    },
+    {
+      "id": "node-builtin.process.exitCode",
+      "kind": "node-builtin",
+      "name": "process.exitCode",
+      "status": "static",
+      "note": "numeric writes in statement position set the implicit exit status; process.exit() reads it"
     },
     {
       "id": "node-builtin.process.getgid",
@@ -2339,6 +2352,13 @@
       "name": "Date.now",
       "status": "static",
       "note": "the live clock"
+    },
+    {
+      "id": "stdlib.date.parse",
+      "kind": "stdlib",
+      "name": "Date.parse",
+      "status": "static",
+      "note": "one date string, using the bounded parser shared with new Date(dateString).getTime()"
     },
     {
       "id": "stdlib.date.toISOString",

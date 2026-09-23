@@ -180,11 +180,13 @@ declare var process: {
    * callers forward a `string | null` result field. */
   kill(pid: number, signal?: string | number | null): true;
   env: { [name: string]: string | undefined };
+  /** Numeric writes set the status returned by ordinary program exit. */
+  exitCode?: number;
   /* `never`, like @types/node: code behind an early-exit guard narrows
    * (`if (!x) process.exit(1)` proves x afterwards) — typed `void` the
    * guard narrows nothing and correct programs fail preflight. The
-   * lowering already handles the optional code (bare exit() is exit(0),
-   * Node's behavior when exitCode was never set). */
+   * lowering already handles the optional code (bare exit() uses exitCode,
+   * or zero when it was never set). */
   exit(code?: number | null): never;
   cwd(): string;
   /* The user tick queue: callbacks run before promise jobs at every loop
@@ -1080,17 +1082,21 @@ declare module "node:fs" {
   };
   /* A stat(2) snapshot (statSync follows symlinks, lstatSync does not —
    * Node's split) — immutable; the supported surface is exactly these
-   * members. blocks is the allocated size in 512-byte units; the time
-   * fields are milliseconds with their sub-second fractions. */
+   * members. dev/ino identify the filesystem entry, blocks is the allocated
+   * size in 512-byte units, and the time fields are milliseconds with their
+   * sub-second fractions. */
   export interface Stats {
     isFile(): boolean;
     isDirectory(): boolean;
     isSymbolicLink(): boolean;
+    readonly dev: number;
+    readonly ino: number;
     readonly size: number;
     readonly blocks: number;
     readonly nlink: number;
     readonly atimeMs: number;
     readonly mtimeMs: number;
+    readonly ctimeMs: number;
   }
   export function statSync(path: string): Stats;
   export function lstatSync(path: string): Stats;
@@ -1226,6 +1232,7 @@ declare module "fs/promises" {
   export function rm(path: string): Promise<void>;
   export function stat(path: string): Promise<import("node:fs").Stats>;
   export function realpath(path: string): Promise<string>;
+  export function lstat(path: string): Promise<import("node:fs").Stats>;
   export function unlink(path: string): Promise<void>;
   export function chmod(path: string, mode: number): Promise<void>;
   export function rename(oldPath: string, newPath: string): Promise<void>;
@@ -1354,7 +1361,7 @@ declare module "node:os" {
 /* The WHATWG URL class (a Node global; the es2023 lib doesn't declare it),
  * typed as exactly the supported surface: construction from ONE absolute-
  * URL string (invalid input throws a catchable TypeError, like Node), the
- * protocol/pathname/href/host/hostname/search getters, searchParams (the
+ * protocol/origin/username/pathname/href/host/hostname/search getters, searchParams (the
  * LIVE query view — mutations through it re-serialize into the URL, so
  * href reflects immediately; every read answers the same object, Node's
  * caching), and toString() (the href serialization).
@@ -1366,6 +1373,8 @@ declare module "node:os" {
  * documented in SEMANTICS.md. */
 interface URL {
   readonly protocol: string;
+  readonly origin: string;
+  readonly username: string;
   readonly pathname: string;
   readonly href: string;
   readonly host: string;

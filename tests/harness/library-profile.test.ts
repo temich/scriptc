@@ -457,6 +457,7 @@ describe("library profile fences", () => {
       "stdlib.date.getUTCMonth",
       "stdlib.date.getUTCSeconds",
       "stdlib.date.now",
+      "stdlib.date.parse",
       "stdlib.date.toISOString",
       "stdlib.date.valueOf",
     ]);
@@ -489,6 +490,19 @@ describe("library profile fences", () => {
       "date.parseGetTime",
     ]);
     expect(r.profile.fences[1]!.surfaces[0]!.detector?.libFns).toEqual(["date.valueOf"]);
+  });
+
+  test("Date.parse and Date.prototype.getTime have distinct fence witnesses", () => {
+    const r = loadLibraryProfile(
+      writeProfile({
+        ...good,
+        determinism: { fences: [{ id: "stdlib.date.parse" }, { id: "stdlib.date.getTime" }] },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.profile.fences[0]!.surfaces[0]!.detector?.libFns).toEqual(["date.parse"]);
+    expect(r.profile.fences[1]!.surfaces[0]!.detector?.libFns).toEqual(["date.getTime", "date.parseGetTime"]);
   });
 
   test("a prefix matching nothing refuses — the spec's illustrative spelling included", () => {

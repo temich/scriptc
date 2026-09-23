@@ -2255,6 +2255,8 @@ export type IrLibFn =
    * path (getcwd) and never throws. */
   | "url.new"
   | "url.protocol"
+  | "url.origin"
+  | "url.username"
   | "url.host"
   | "url.hostname"
   | "url.pathname"
@@ -2388,6 +2390,8 @@ export type IrLibFn =
   | "stats.isFile"
   | "stats.isDirectory"
   | "stats.size"
+  | "stats.dev"
+  | "stats.ino"
   /** child_process.spawnSync (scr_child.c): posix_spawn + waitpid + piped
    * utf8 capture — cmd borrowed, args one borrowed string[] (the frontend
    * completes an omitted list to an empty literal), result an owned (+1)
@@ -3309,6 +3313,7 @@ export type IrLibFn =
   | "fsp.rm"
   | "fsp.stat"
   | "fsp.realpath"
+  | "fsp.lstat"
   /** fs/promises.open and the statically represented FileHandle surface.
    * Every operation returns an already-settled promise; syscall failures
    * become rejections rather than escaping synchronously. read/write
@@ -3343,6 +3348,10 @@ export type IrLibFn =
    * array; never throws. */
   | "process.envPairs"
   | "process.exit"
+  /** Numeric process.exitCode write (integer validation, implicit exit status). */
+  | "process.setExitCode"
+  /** The code for process.exit() with no argument, or zero when unset. */
+  | "process.currentExitCode"
   | "process.cwd"
   /** getpid(2) / getuid(2): zero args → f64. POSIX-only target, so both
    * always answer (the checker's `getuid?` optionality covers Windows —
@@ -4207,6 +4216,8 @@ export type IrLibFn =
   | "date.newNow"
   | "date.newMs"
   | "date.newString"
+  /** Date.parse(dateString), with its own reach witness for exact fences. */
+  | "date.parse"
   | "date.getTime"
   | "date.valueOf"
   | "date.toISOString"
@@ -4334,7 +4345,7 @@ export type IrLibFn =
    * uv_fs_copyfile behavior); its errors carry BOTH paths — Node's
    * "copyfile 'src' -> 'dest'". lstatSync is statSync without following
    * a trailing symlink (Node reports lstat); stats.isSymbolicLink /
-   * stats.blocks / nlink / atimeMs / mtimeMs are pure reads on the widened
+   * stats.dev / ino / blocks / nlink / atimeMs / mtimeMs / ctimeMs are pure reads on the widened
    * snapshot (blocks is allocated 512-byte units; the times are milliseconds
    * with their sub-second fractions, Node's arithmetic).
    * writeFileModeSync is writeFileSync(path, data, { mode }): the mode
@@ -4402,6 +4413,7 @@ export type IrLibFn =
   | "stats.nlink"
   | "stats.atimeMs"
   | "stats.mtimeMs"
+  | "stats.ctimeMs"
   | "fs.writeFileModeSync"
   | "fs.mkdirModeSync"
   | "fs.mkdirRecursiveModeSync"
@@ -7192,6 +7204,7 @@ export const LIB_NONDETERMINISTIC_PREFIXES: readonly [string, string][] = [
   ["process.kill", "process authority (kill)"],
   ["process.umask", "process authority (umask)"],
   ["process.exit", "process authority (exit)"],
+  ["process.setExitCode", "process authority (exit status)"],
   ["fs.", "the filesystem"],
   ["os.", "machine/OS identity"],
   // The CA-store surface reads the host's certificate bundle (and the
@@ -7228,8 +7241,7 @@ export function moduleLibNondeterministicSurface(mod: IrModule): string | null {
 /** The may-throw seed: libCall members that can raise. Every fs.* member
  * EXCEPT existsSync (which, like Node's, swallows errors and returns false)
  * throws a catchable error on failure; json.parse throws a catchable
- * SyntaxError-shaped string on malformed input; process.* members never
- * throw. Backends' may-throw analyses must treat a function containing one
+ * SyntaxError-shaped string on malformed input. Backends' may-throw analyses must treat a function containing one
  * of these as throwing, exactly like a `throw` statement (and must ALSO
  * seed on `dynCheck` and `awaitExpr` nodes, which throw on validation
  * failure / promise rejection). */
@@ -7406,6 +7418,7 @@ export const MAY_THROW_LIB_FNS: ReadonlySet<IrLibFn> = new Set([
   "http.requestConnCb",
   "process.kill",
   "process.killNum",
+  "process.setExitCode",
   // cpuUsage(prev)'s field validation: negative/non-finite prev fields
   // throw Node's ERR_INVALID_ARG_VALUE RangeError, catchably.
   "process.cpuPrevValidate",

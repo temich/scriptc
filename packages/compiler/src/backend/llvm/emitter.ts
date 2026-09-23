@@ -902,6 +902,7 @@ class LlEmitter {
     // unchanged.
     const hasRefGlobals = globals.some((g) => isRefCounted(g.type)) || fnValueProps.length > 0;
     const inlineExitListeners = usesEvents && (hasRefGlobals || this.ffiHasRetainedCallback);
+    if (!usesNodeTest && !usesIsland) this.declare(`declare i32 @scr_exit_code_hint_get()`);
     if (inlineExitListeners) {
       this.declare(`declare void @scr_run_exit_listeners(double)`);
       this.declare(`declare i32 @scr_exit_code_hint_get()`);
@@ -1401,7 +1402,7 @@ class LlEmitter {
         ? [`  %test_exit = call i32 @scr_test_exit_code()`, `  ret i32 %test_exit`]
         : usesIsland
         ? [`  %island_exit = call i32 @scr_island_exit_code()`, `  ret i32 %island_exit`]
-        : [`  ret i32 0`]),
+        : [`  %native_exit = call i32 @scr_exit_code_hint_get()`, `  ret i32 %native_exit`]),
       `}`,
       ``,
       // sanitize_address is inert under the plain pipeline; the sanitized
