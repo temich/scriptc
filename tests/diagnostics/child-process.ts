@@ -27,10 +27,14 @@ const c = spawn("true", [], { stdio: "ignore" });
 c.on("exit", (): number => 5);
 // Methods have no bound-value form — call on directly.
 const f = c.on;
-// The callback slice is deliberately narrower than Node's complete
-// options/optional-callback overload family.
+// The callback slice accepts inline utf8/maxBuffer options, but not all of
+// Node's options or the optional-callback overload family.
 execFile("true");
-execFile("true", [], { encoding: "utf8" }, () => {});
+execFile("true", [], { cwd: "/tmp" }, () => {});
+const bufferLimit = 1024;
+execFile("true", [], { maxBuffer: bufferLimit }, () => {});
+const getEncoding = (): "utf8" => "utf8";
+execFile("true", [], { encoding: getEncoding() }, () => {});
 // Fork targets are part of the compiled graph and therefore must resolve at
 // build time. The remaining channel is JSON-only and occupies stdio slot 3.
 fork(process.argv[1]!);

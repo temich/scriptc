@@ -1386,8 +1386,8 @@ export const BUILTIN_MODULE_FENCE_HINTS: Record<string, Record<string, string | 
   },
   child_process: {
     execFile:
-      "the callback forms execFile(file, callback) and execFile(file, args, callback) lower; " +
-      "options and reached no-callback calls remain fenced, while util.promisify(execFile) retains its wider options slice",
+      "the callback forms execFile(file, callback), execFile(file, args, callback), and execFile(file, args, { encoding: 'utf8', maxBuffer: N }, callback) lower; " +
+      "maxBuffer is not enforced by the growing native capture; other options and reached no-callback calls remain fenced, while util.promisify(execFile) retains its wider options slice",
   },
   crypto: {
     ...Object.fromEntries(

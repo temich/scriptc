@@ -3168,25 +3168,54 @@ export function lowerForkCall(lowerer: Lowerer, expr: ts.CallExpression, loc: Sr
   };
 }
 
-/** `execFile(file[, args], callback)` — the first asynchronous callback
+/** `execFile(file[, args][, options], callback)` — the asynchronous callback
  * slice. The child starts immediately with stdin/stdout/stderr piped; the
  * runtime captures both outputs and invokes the error-first callback after
  * settlement. The callback may ignore a suffix of `(error, stdout,
- * stderr)`, but every declared parameter must have the Node shape. Options
- * remain fenced until their timeout/env/cwd lifecycle can share this same
- * asynchronous core without falling back to the old blocking capture. */
+ * stderr)`, but every declared parameter must have the Node shape. Inline
+ * `encoding: "utf8"` and a pure numeric `maxBuffer` are accepted; the latter
+ * is not enforced by the growing native capture, as
+ * with the synchronous and promisified capture forms. Other options remain
+ * fenced until their lifecycle can share this asynchronous core. */
   export function lowerExecFileCall(lowerer: Lowerer, expr: ts.CallExpression, loc: SrcLoc): IrExpr {
-    if (expr.arguments.some(ts.isSpreadElement) || expr.arguments.length < 2 || expr.arguments.length > 3) {
+    if (expr.arguments.some(ts.isSpreadElement) || expr.arguments.length < 2 || expr.arguments.length > 4) {
       lowerer.noLowering(
         `execFile with ${expr.arguments.length} arguments`,
         expr,
-        "the supported callback forms are execFile(file, callback) and execFile(file, args, callback)",
+        "the supported callback forms are execFile(file, callback), execFile(file, args, callback), and execFile(file, args, { encoding: 'utf8', maxBuffer: N }, callback)",
       );
     }
     const cmd = lowerer.lowerExprExpecting(expr.arguments[0]!, STRING);
-    const argsNode = expr.arguments.length === 3 ? expr.arguments[1] : undefined;
+    const argsNode = expr.arguments.length >= 3 ? expr.arguments[1] : undefined;
     const callbackNode = expr.arguments[expr.arguments.length - 1]!;
     const argv = lowerer.lowerChildArgsArg(argsNode, loc);
+    if (expr.arguments.length === 4) {
+      const options = expr.arguments[2]!;
+      if (!ts.isObjectLiteralExpression(options)) {
+        lowerer.noLowering("execFile with a non-literal options argument", options, "pass encoding and maxBuffer in an inline object literal");
+      }
+      const pureNumber = (node: ts.Expression): boolean =>
+        ts.isNumericLiteral(node) ||
+        (ts.isParenthesizedExpression(node) && pureNumber(node.expression)) ||
+        (ts.isBinaryExpression(node) &&
+          [ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken].includes(node.operatorToken.kind) &&
+          pureNumber(node.left) && pureNumber(node.right));
+      for (const property of options.properties) {
+        const member = optionMember(property);
+        if (!member) lowerer.noLowering("execFile with this options shape", property, "use plain encoding and maxBuffer properties without spreads or computed keys");
+        if (member.name === "encoding") {
+          if (!ts.isStringLiteral(member.value) || (member.value.text !== "utf8" && member.value.text !== "utf-8")) {
+            lowerer.noLowering("execFile with a non-literal utf8 encoding", member.value, "pass the literal 'utf8' or 'utf-8' (other expressions might have side effects)");
+          }
+        } else if (member.name === "maxBuffer") {
+          if (!pureNumber(member.value)) {
+            lowerer.noLowering("execFile with a non-literal maxBuffer", member.value, "pass a numeric literal or literal arithmetic (the native capture grows without enforcing this limit)");
+          }
+        } else {
+          lowerer.noLowering(`execFile option '${member.name}'`, property, "only encoding: 'utf8' and a pure numeric maxBuffer are supported in the callback form");
+        }
+      }
+    }
     const callback = lowerer.lowerExpr(callbackNode);
     if (callback.type.kind !== "func" || callback.type.rest === true || callback.type.params.length > 3) {
       lowerer.unsupported(
