@@ -1498,6 +1498,52 @@ function lowerFsSyncBufferWindow(
     fn: BuiltinModuleFn,
     loc: SrcLoc,): IrExpr {
     const name = expr.expression.getText();
+    // Numeric open flags are interpreted symbolically at the call site. The
+    // O_* bit values differ between Darwin and Linux, so emit a stable mask
+    // and let the target runtime select its own native constants.
+    if (bi.module === "fs" && bi.member === "openSync" && expr.arguments.length >= 2 &&
+        lowerer.mapTypeOf(lowerer.typeOf(expr.arguments[1]!))?.kind === "f64") {
+      if (expr.arguments.length > 3 || expr.arguments.some(ts.isSpreadElement)) {
+        lowerer.noLowering("openSync with numeric flags and this argument shape", expr);
+      }
+      const bits: Record<string, number | undefined> = {
+        O_RDONLY: 0, O_WRONLY: 1, O_RDWR: 2, O_CREAT: 4, O_EXCL: 8,
+        O_NOFOLLOW: 16, O_NONBLOCK: 32, O_TRUNC: 64, O_APPEND: 128,
+      };
+      const flagsOf = (input: ts.Expression): number | null => {
+        let node = input;
+        while (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)) node = node.expression;
+        if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.BarToken) {
+          const left = flagsOf(node.left);
+          const right = flagsOf(node.right);
+          return left === null || right === null ? null : left | right;
+        }
+        if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+          const imported = lowerer.builtinImportOf(node.expression);
+          if (imported?.module === "fs" && imported.member === "constants") {
+            return bits[node.name.text] ?? null;
+          }
+        }
+        if (ts.isPropertyAccessExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+          const imported = lowerer.builtinMemberOf(node.expression);
+          if (imported?.module === "fs" && imported.member === "constants") {
+            return bits[node.name.text] ?? null;
+          }
+        }
+        return null;
+      };
+      const mask = flagsOf(expr.arguments[1]!);
+      if (mask === null) {
+        lowerer.noLowering("openSync with computed numeric flags", expr.arguments[1]!,
+          "use an inline bitwise OR of fs.constants.O_RDONLY/O_WRONLY/O_RDWR/O_CREAT/O_EXCL/O_NOFOLLOW/O_NONBLOCK/O_TRUNC/O_APPEND");
+      }
+      const path = lowerer.lowerExprExpecting(expr.arguments[0]!, STRING);
+      const mode = expr.arguments[2]
+        ? lowerer.lowerExprExpecting(expr.arguments[2]!, F64)
+        : { kind: "numLit", value: 0o666, type: F64, loc } satisfies IrExpr;
+      return { kind: "libCall", fn: "fs.openNumericSync", args: [path,
+        { kind: "numLit", value: mask, type: F64, loc }, mode], type: F64, loc };
+    }
     if (bi.module === "zlib") return lowerZlibModuleCall(lowerer, expr, bi, loc);
     if (bi.module === "child_process" && bi.member === "spawnSync") {
       return lowerer.lowerSpawnSyncCall(expr, loc);

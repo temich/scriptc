@@ -2400,6 +2400,10 @@ typedef struct ScrPromise ScrPromise; /* full section further down */
 
 ScrStats *scr_fs_stat(ScrStr *path);  /* +1, or throws */
 ScrStats *scr_fs_lstat(ScrStr *path); /* +1, or throws; NO follow (lstat) */
+ScrStats *scr_fs_fstat(double fd); /* +1, or throws */
+void scr_fs_fchmod(double fd, double mode);
+void scr_fs_fsync(double fd);
+void scr_fs_link(ScrStr *source, ScrStr *dest);
 ScrStats *scr_stats_retain(ScrStats *s);
 void scr_stats_release(ScrStats *s);
 void *scr_stats_retain_v(void *p);
@@ -2876,6 +2880,7 @@ ScrStr *scr_path_win32_to_namespaced_path(ScrStr *path);
  * (failure throws the path-less "EBADF: bad file descriptor, close").
  * The pair behind spawn's fd-stdio form. */
 double scr_fs_open(ScrStr *path, ScrStr *flags);
+double scr_fs_open_numeric(ScrStr *path, double flags, double mode);
 ScrFileHandle *scr_file_handle_open(ScrStr *path, ScrStr *flags, double mode);
 ScrFileHandle *scr_file_handle_retain(ScrFileHandle *h);
 void scr_file_handle_release(ScrFileHandle *h);
@@ -2930,6 +2935,7 @@ void scr_url_release_v(void *p);
 ScrStr *scr_url_protocol(ScrUrl *u); /* +1 "https:" */
 ScrStr *scr_url_origin(ScrUrl *u);   /* +1 "https://host" or "null" */
 ScrStr *scr_url_username(ScrUrl *u); /* +1 encoded username, possibly empty */
+ScrStr *scr_url_password(ScrUrl *u); /* +1 encoded password, possibly empty */
 ScrStr *scr_url_host(ScrUrl *u);     /* +1 "host[:port]" (defaults stripped) */
 ScrStr *scr_url_hostname(ScrUrl *u); /* +1 port-less host ("" when none) */
 ScrStr *scr_url_pathname(ScrUrl *u); /* +1 */

@@ -4487,6 +4487,16 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             // Throws Node-shaped fs errors (may-throw seed set); the fd
             // comes back as f64.
             return finish(`scr_fs_open(${arg(0)}, ${arg(1)})`);
+          case "fs.openNumericSync":
+            return finish(`scr_fs_open_numeric(${arg(0)}, ${arg(1)}, ${arg(2)})`);
+          case "fs.fstatSync":
+            return finish(`scr_fs_fstat(${arg(0)})`);
+          case "fs.fchmodSync":
+            return finish(`scr_fs_fchmod(${arg(0)}, ${arg(1)})`);
+          case "fs.fsyncSync":
+            return finish(`scr_fs_fsync(${arg(0)})`);
+          case "fs.linkSync":
+            return finish(`scr_fs_link(${arg(0)}, ${arg(1)})`);
           case "fs.readSync":
             return finish(`scr_fs_read_sync(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)})`);
           case "fs.writeSync":
@@ -4942,6 +4952,8 @@ function emitPathUrlLibCall(state: LibCallState): Temp {
             return finish(`scr_url_origin(${arg(0)})`);
           case "url.username":
             return finish(`scr_url_username(${arg(0)})`);
+          case "url.password":
+            return finish(`scr_url_password(${arg(0)})`);
           case "url.host":
             return finish(`scr_url_host(${arg(0)})`);
           case "url.hostname":

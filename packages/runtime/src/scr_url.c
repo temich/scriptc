@@ -337,6 +337,13 @@ static bool parse_authority(const char *raw, size_t len, bool special, bool is_f
     }
   }
   *userinfo = ub_take(&ub);
+  /* An empty password is omitted from the serialized credentials. When
+   * both username and password are empty, the authority has no userinfo. */
+  if ((*userinfo)->len > 0 && (*userinfo)->data[(*userinfo)->len - 1] == ':') {
+    ScrStr *canonical = scr_str_new((*userinfo)->data, (*userinfo)->len - 1);
+    scr_str_release(*userinfo);
+    *userinfo = canonical;
+  }
   const char *hp = at >= 0 ? raw + at + 1 : raw;
   size_t hp_len = at >= 0 ? len - (size_t)at - 1 : len;
   /* host[:port], with IPv6 literals bracketed per WHATWG. */
@@ -693,6 +700,13 @@ ScrStr *scr_url_username(ScrUrl *u) {
   const char *separator = memchr(u->userinfo->data, ':', u->userinfo->len);
   size_t len = separator ? (size_t)(separator - u->userinfo->data) : u->userinfo->len;
   return scr_str_new(u->userinfo->data, len);
+}
+
+ScrStr *scr_url_password(ScrUrl *u) {
+  const char *separator = memchr(u->userinfo->data, ':', u->userinfo->len);
+  if (!separator) return scr_str_new("", 0);
+  const char *start = separator + 1;
+  return scr_str_new(start, u->userinfo->len - (size_t)(start - u->userinfo->data));
 }
 
 ScrStr *scr_url_href(ScrUrl *u) {

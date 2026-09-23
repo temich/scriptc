@@ -6498,6 +6498,24 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2946-stdio-callback-record.ts": {
+   "order": [
+    "<repo>/tests/corpus/2946-stdio-callback-record.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2947-url-password.ts": {
+   "order": [
+    "<repo>/tests/corpus/2947-url-password.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2948-fs-descriptor-publication.ts": {
+   "order": [
+    "<repo>/tests/corpus/2948-fs-descriptor-publication.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"

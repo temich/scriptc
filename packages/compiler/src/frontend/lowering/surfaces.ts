@@ -663,14 +663,18 @@ export const BUILTIN_MODULE_FNS: Record<string, Record<string, BuiltinModuleFn |
     // statSync's no-follow sibling; stats.isSymbolicLink answers what the
     // follow-free snapshot saw.
     lstatSync: { fn: "fs.lstatSync", params: [STRING], result: STATS_T },
+    fstatSync: { fn: "fs.fstatSync", params: [F64], result: STATS_T, valueParams: exactValueParams(F64) },
+    fchmodSync: { fn: "fs.fchmodSync", params: [F64, F64], result: VOID, valueParams: exactValueParams(F64, F64) },
+    fsyncSync: { fn: "fs.fsyncSync", params: [F64], result: VOID, valueParams: exactValueParams(F64) },
+    linkSync: { fn: "fs.linkSync", params: [STRING, STRING], result: VOID, valueParams: exactValueParams(STRING, STRING) },
     // realpath(3) — Node's realpathSync (failures spell syscall "lstat",
     // Node's own message shape).
     realpathSync: { fn: "fs.realpathSync", params: [STRING], result: STRING },
     // The fd pair behind spawn's fd-stdio form (the daemon-log idiom:
     // openSync(logPath, "a") → spawn stdio ["ignore", fd, fd] →
-    // closeSync). openSync takes Node's string flags ("r", "w", "a", the
-    // +/x variants — unknown flags throw Node's TypeError text); the
-    // numeric-mode third argument fences by arity.
+    // closeSync). String flags use the established two-argument path;
+    // inline numeric O_* expressions route through openNumericSync, with
+    // an optional creation mode as the third argument.
     openSync: { fn: "fs.openSync", params: [STRING, STRING], result: F64 },
     // The buffer forms (fd, buffer, offset, length[, position]). The
     // lowering completes an omitted or literal-null position to -1 (the
@@ -942,6 +946,8 @@ export const BUILTIN_MODULE_CONSTS: Record<string, Record<string, string | numbe
  * (library/fence-eval.ts) and the attestation-parity test. */
 export const BUILTIN_MODULE_FN_ALIASES: Record<string, Record<string, readonly IrLibFn[] | undefined> | undefined> = {
   fs: {
+    // Inline numeric O_* flags use a target-neutral runtime entry point.
+    openSync: ["fs.openNumericSync"],
     // The Buffer form (no encoding), the fd forms (readFileSync(fd[,
     // "utf8"])), and the checked-dynamic encoding form.
     readFileSync: ["fs.readFileSyncBuf", "fs.readFileSyncBytes", "fs.readFileSyncDyn", "fs.readFdSync", "fs.readFdSyncBytes"],

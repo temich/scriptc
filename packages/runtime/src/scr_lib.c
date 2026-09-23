@@ -1765,6 +1765,8 @@ static const char *scr_errno_name(int e, char *fallback, size_t cap) {
   case EFBIG: return "EFBIG";
   case EPIPE: return "EPIPE";
   case ESPIPE: return "ESPIPE";
+  case ELOOP: return "ELOOP";
+  case ENOSYS: return "ENOSYS";
   default:
     snprintf(fallback, cap, "E%d", e);
     return fallback;
@@ -1793,6 +1795,8 @@ static const char *scr_errno_text(int e) {
   case EFBIG: return "file too large";
   case EPIPE: return "broken pipe";
   case ESPIPE: return "invalid seek";
+  case ELOOP: return "too many levels of symbolic links";
+  case ENOSYS: return "function not implemented";
   default: return strerror(e);
   }
 }
@@ -2111,6 +2115,62 @@ double scr_fs_open(ScrStr *path, ScrStr *flags) {
     return 0;
   }
   return (double)fd;
+}
+
+/* fs.openSync(path, fs.constants.O_* [, mode]). The compiler passes a
+ * platform-independent mask for inline flag expressions; native flags are
+ * chosen here so cross-compiled programs retain the target's values. */
+double scr_fs_open_numeric(ScrStr *path, double flags, double mode) {
+  int bits = (int)flags;
+  int access = bits & 3;
+  if (access == 3 || !(isfinite(mode) && trunc(mode) == mode && mode >= 0 && mode <= 4294967295.0)) {
+    scr_throw_error_msg(SCR_ERR_RANGE, "Invalid open flags or mode", 26);
+    return 0;
+  }
+  int native = access == 1 ? O_WRONLY : access == 2 ? O_RDWR : O_RDONLY;
+  if (bits & 4) native |= O_CREAT;
+  if (bits & 8) native |= O_EXCL;
+  if (bits & 64) native |= O_TRUNC;
+  if (bits & 128) native |= O_APPEND;
+#ifdef _WIN32
+  /* The CRT cannot open a reparse point without following it. Fail closed
+   * until a handle-based no-follow open is available on this target. */
+  if (bits & 16) {
+    scr_fs_throw(ENOSYS, "open", path);
+    return 0;
+  }
+#else
+  if (bits & 16) native |= O_NOFOLLOW;
+  if (bits & 32) native |= O_NONBLOCK;
+#endif
+  int fd = open(path->data, native | O_BINARY, (mode_t)mode);
+  if (fd < 0) {
+    scr_fs_throw(errno, "open", path);
+    return 0;
+  }
+  return (double)fd;
+}
+
+static void scr_fs_throw_nopath(int e, const char *op);
+
+void scr_fs_fchmod(double fd, double mode) {
+#ifdef _WIN32
+  (void)fd;
+  (void)mode;
+  /* The CRT cannot enforce Unix permission bits through a descriptor.
+   * A silent success would misrepresent a security-sensitive operation. */
+  scr_fs_throw_nopath(ENOSYS, "fchmod");
+#else
+  if (fchmod((int)fd, (mode_t)mode) != 0) scr_fs_throw_nopath(errno, "fchmod");
+#endif
+}
+
+void scr_fs_fsync(double fd) {
+#ifdef _WIN32
+  if (_commit((int)fd) != 0) scr_fs_throw_nopath(errno, "fsync");
+#else
+  if (fsync((int)fd) != 0) scr_fs_throw_nopath(errno, "fsync");
+#endif
 }
 
 /* fs.closeSync(fd) — close(2); failure throws Node's path-less fs error
@@ -2539,6 +2599,28 @@ static void scr_fs_throw2(int e, const char *op, const ScrStr *src, const ScrStr
   int len = snprintf(msg, cap, "%s: %s, %s '%s' -> '%s'", name, text, op, shown_src, shown_dest);
   scr_throw_error_msg_code(SCR_ERR_ERROR, msg, (size_t)len, name);
   free(msg);
+}
+
+void scr_fs_link(ScrStr *source, ScrStr *dest) {
+#ifdef _WIN32
+  WCHAR *from = scr_fs_win_wide(source);
+  WCHAR *to = scr_fs_win_wide(dest);
+  if (!from || !to) {
+    free(from); free(to);
+    scr_fs_throw2(EINVAL, "link", source, dest);
+    return;
+  }
+  BOOL ok = CreateHardLinkW(to, from, NULL);
+  DWORD error = ok ? 0 : GetLastError();
+  free(from); free(to);
+  if (!ok) {
+    int code = error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS ? EEXIST :
+      error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? ENOENT : EACCES;
+    scr_fs_throw2(code, "link", source, dest);
+  }
+#else
+  if (link(source->data, dest->data) != 0) scr_fs_throw2(errno, "link", source, dest);
+#endif
 }
 
 /* copyFileSync(src, dest): contents copied into a created-or-truncated
@@ -3552,6 +3634,31 @@ ScrStats *scr_fs_lstat(ScrStr *path) {
     scr_fs_throw(errno, "lstat", path);
     return NULL;
   }
+  return scr_stats_of(&st);
+#endif
+}
+
+ScrStats *scr_fs_fstat(double fd) {
+  struct stat st;
+  if (fstat((int)fd, &st) != 0) {
+    scr_fs_throw_nopath(errno, "fstat");
+    return NULL;
+  }
+#ifdef _WIN32
+  ScrStats *s = scr_stats_new();
+  s->is_file = S_ISREG(st.st_mode);
+  s->is_dir = S_ISDIR(st.st_mode);
+  s->is_symlink = false;
+  s->dev = (double)st.st_dev;
+  s->ino = (double)st.st_ino;
+  s->size = (double)st.st_size;
+  s->blocks = s->size <= 0 ? 0 : ceil(s->size / 512.0);
+  s->nlink = (double)st.st_nlink;
+  s->atime_ms = (double)st.st_atime * 1000.0;
+  s->mtime_ms = (double)st.st_mtime * 1000.0;
+  s->ctime_ms = (double)st.st_ctime * 1000.0;
+  return s;
+#else
   return scr_stats_of(&st);
 #endif
 }

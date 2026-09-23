@@ -3431,7 +3431,7 @@ function lowerPromiseThenPresence(
       // a non-default port is present (scr_url_host — Node-exact,
       // opaque-path URLs answer ""); `hostname` is the stored port-less
       // host field verbatim, including IPv6 brackets.
-      if (name === "protocol" || name === "origin" || name === "username" || name === "pathname" || name === "href" || name === "host" || name === "hostname" || name === "search") {
+      if (name === "protocol" || name === "origin" || name === "username" || name === "password" || name === "pathname" || name === "href" || name === "host" || name === "hostname" || name === "search") {
         const receiver = lowerer.lowerExpr(expr.expression);
         const fn =
           name === "protocol"
@@ -3440,6 +3440,8 @@ function lowerPromiseThenPresence(
               ? "url.origin"
               : name === "username"
                 ? "url.username"
+              : name === "password"
+                ? "url.password"
             : name === "pathname"
               ? "url.pathname"
               : name === "host"
@@ -3464,7 +3466,7 @@ function lowerPromiseThenPresence(
       lowerer.noLowering(
         `URL.${name}`,
         expr,
-        "protocol, origin, username, pathname, href, host, hostname, search, searchParams, and toString() are the supported URL members",
+        "protocol, origin, username, password, pathname, href, host, hostname, search, searchParams, and toString() are the supported URL members",
         lowerer.checker.getSymbolAtLocation(expr.name),
       );
     }

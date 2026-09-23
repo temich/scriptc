@@ -906,6 +906,30 @@
       "status": "static"
     },
     {
+      "id": "node-builtin.fs.fchmodSync",
+      "kind": "node-builtin",
+      "name": "fs.fchmodSync",
+      "status": "static"
+    },
+    {
+      "id": "node-builtin.fs.fstatSync",
+      "kind": "node-builtin",
+      "name": "fs.fstatSync",
+      "status": "static"
+    },
+    {
+      "id": "node-builtin.fs.fsyncSync",
+      "kind": "node-builtin",
+      "name": "fs.fsyncSync",
+      "status": "static"
+    },
+    {
+      "id": "node-builtin.fs.linkSync",
+      "kind": "node-builtin",
+      "name": "fs.linkSync",
+      "status": "static"
+    },
+    {
       "id": "node-builtin.fs.lstatSync",
       "kind": "node-builtin",
       "name": "fs.lstatSync",

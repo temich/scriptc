@@ -2657,8 +2657,10 @@ function mapTypeInner(type: ts.Type, ctx: TypeMapperCtx): IrType | null {
   // handle: in a compiled program the only VALUE producer is spawn
   // itself (a mock object literal in this slot fences at its
   // construction site), and every member the interface may declare is
-  // exactly a lowered child member, so uses typecheck against the
-  // interface and lower against the handle.
+  // exactly a lowered child member WITH the corresponding handle type, so
+  // uses typecheck against the interface and lower against the handle.
+  // Names alone are insufficient: a record of stdout/stderr callbacks is
+  // an ordinary data shape, not a child process.
   if (
     flags & ts.TypeFlags.Object &&
     callSigs.length === 0 &&
@@ -2675,10 +2677,24 @@ function mapTypeInner(type: ts.Type, ctx: TypeMapperCtx): IrType | null {
     const CHILD_CORE = new Set(["kill", "on", "stdin", "stdout", "stderr", "unref", "exitCode"]);
     const props = checker.getPropertiesOfType(widened);
     let core = 0;
+    const childMemberType = (p: ts.Symbol): boolean => {
+      if (["kill", "on", "once", "off", "removeListener", "unref", "ref"].includes(p.name)) {
+        return checker.getCallSignatures(checker.getTypeOfSymbol(p)).length > 0;
+      }
+      const expected = p.name === "stdout" || p.name === "stderr" ? "childStream"
+        : p.name === "stdin" ? "childWriter"
+        : p.name === "killed" ? "bool" : "f64";
+      const unit = p.name === "pid" ? "undefinedT" : p.name === "exitCode" || p.name === "stdin" || p.name === "stdout" || p.name === "stderr" ? "nullT" : null;
+      const mapped = mapType(checker.getTypeOfSymbol(p), ctx);
+      if (!mapped) return false;
+      const arms = mapped.kind === "union" ? ctx.unions.get(mapped.unionId)?.arms : [mapped];
+      return arms !== undefined && arms.some((arm) => arm.kind === expected) &&
+        arms.every((arm) => arm.kind === expected || arm.kind === unit);
+    };
     const childShaped =
       props.length > 0 &&
       props.every((p) => {
-        if (!CHILD_SURFACE.has(p.name)) return false;
+        if (!CHILD_SURFACE.has(p.name) || !childMemberType(p)) return false;
         if (CHILD_CORE.has(p.name)) core++;
         return true;
       });

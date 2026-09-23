@@ -1041,6 +1041,9 @@ declare module "node:fs" {
   export function mkdirSync(path: string, options: { recursive?: boolean; mode?: number }): void;
   export function unlinkSync(path: string): void;
   export function chmodSync(path: string, mode: number): void;
+  export function fchmodSync(fd: number, mode: number): void;
+  export function fsyncSync(fd: number): void;
+  export function linkSync(existingPath: string, newPath: string): void;
   export function chownSync(path: string, uid: number, gid: number): void;
   /* The 2-argument form only (Node's mode flags have no lowering). The
    * destination is created or truncated carrying the SOURCE's mode. */
@@ -1079,6 +1082,15 @@ declare module "node:fs" {
     readonly R_OK: number;
     readonly W_OK: number;
     readonly X_OK: number;
+    readonly O_RDONLY: number;
+    readonly O_WRONLY: number;
+    readonly O_RDWR: number;
+    readonly O_CREAT: number;
+    readonly O_EXCL: number;
+    readonly O_NOFOLLOW: number;
+    readonly O_NONBLOCK: number;
+    readonly O_TRUNC: number;
+    readonly O_APPEND: number;
   };
   /* A stat(2) snapshot (statSync follows symlinks, lstatSync does not —
    * Node's split) — immutable; the supported surface is exactly these
@@ -1101,9 +1113,9 @@ declare module "node:fs" {
   export function statSync(path: string): Stats;
   export function lstatSync(path: string): Stats;
   /* The fd pair behind spawn's fd-stdio form: openSync(path, flags) →
-   * the raw fd (string flags only — "r", "w", "a" and the +/x/s
-   * variants), closeSync(fd). */
+   * the raw fd. Numeric flags use an inline OR of the O_* constants. */
   export function openSync(path: string, flags: string): number;
+  export function openSync(path: string, flags: number, mode?: number): number;
   export function closeSync(fd: number): void;
   /* Read into a caller buffer from the fd's current position when position
    * is omitted/null, or from a numeric byte position without advancing the
@@ -1375,6 +1387,7 @@ interface URL {
   readonly protocol: string;
   readonly origin: string;
   readonly username: string;
+  readonly password: string;
   readonly pathname: string;
   readonly href: string;
   readonly host: string;

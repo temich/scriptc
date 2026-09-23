@@ -2257,6 +2257,7 @@ export type IrLibFn =
   | "url.protocol"
   | "url.origin"
   | "url.username"
+  | "url.password"
   | "url.host"
   | "url.hostname"
   | "url.pathname"
@@ -4364,6 +4365,10 @@ export type IrLibFn =
   | "fs.renameSync"
   | "fs.renameCb"
   | "fs.lstatSync"
+  | "fs.fstatSync"
+  | "fs.fchmodSync"
+  | "fs.fsyncSync"
+  | "fs.linkSync"
   /** fs.openSync(path, flags) → the raw fd as f64; fs.readSync/fs.writeSync
    * over Buffer windows perform sequential I/O when position is -1 and
    * offset-preserving positioned I/O otherwise; fs.writeStrSync is the
@@ -4375,6 +4380,7 @@ export type IrLibFn =
    * fs errors (openSync ENOENT/EACCES..., readSync EBADF/range errors,
    * closeSync EBADF). */
   | "fs.openSync"
+  | "fs.openNumericSync"
   | "fs.readSync"
   | "fs.writeSync"
   | "fs.writeStrSync"
@@ -7650,10 +7656,15 @@ export const MAY_THROW_LIB_FNS: ReadonlySet<IrLibFn> = new Set([
   "fs.copyFileSync",
   "fs.renameSync",
   "fs.lstatSync",
+  "fs.fstatSync",
+  "fs.fchmodSync",
+  "fs.fsyncSync",
+  "fs.linkSync",
   "fs.writeFileModeSync",
   "fs.mkdirModeSync",
   "fs.mkdirRecursiveModeSync",
   "fs.openSync",
+  "fs.openNumericSync",
   "fs.readSync",
   "fs.writeSync",
   "fs.writeStrSync",
