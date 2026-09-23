@@ -555,9 +555,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 24,
+        "partial": 40,
         "refused": 0,
-        "not-implemented": 150,
+        "not-implemented": 134,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -62157,7 +62157,11 @@
           "tests/corpus/2500-net-autosel-timeout.ts",
           "tests/corpus/2596-net-arg-ladders.cjs",
           "tests/corpus/2672-http-request-response-callback.ts",
-          "tests/corpus/2689-http-server-timeout-properties.ts"
+          "tests/corpus/2689-http-server-timeout-properties.ts",
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
       "dynamic": {
@@ -62658,8 +62662,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.cork",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -62782,8 +62792,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.flushHeaders",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "partial",
@@ -63099,8 +63115,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.uncork",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64463,8 +64485,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.addTrailers",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64490,8 +64518,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.cork",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64549,8 +64583,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.flushHeaders",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64785,8 +64825,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.uncork",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65503,8 +65549,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.headersDistinct",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65611,8 +65663,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.rawTrailers",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65719,8 +65777,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.trailers",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65746,8 +65810,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.trailersDistinct",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65881,8 +65951,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.outgoingMessage.addTrailers",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65935,8 +66011,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.outgoingMessage.cork",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66016,8 +66098,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.outgoingMessage.flushHeaders",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66286,8 +66374,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.outgoingMessage.uncork",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66421,8 +66515,14 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.writableCorked",
+        "tests": [
+          "tests/corpus/2700-http-static-trailers.ts",
+          "tests/corpus/2701-http-static-trailer-wire.ts",
+          "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/fixtures/server/cases/http-trailers/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",

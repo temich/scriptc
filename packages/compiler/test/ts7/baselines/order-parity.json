@@ -5688,6 +5688,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2700-http-static-trailers.ts": {
+   "order": [
+    "<repo>/tests/corpus/2700-http-static-trailers.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2700-wasi-core.ts": {
    "order": [
     "<repo>/tests/corpus/2700-wasi-core.ts"
@@ -5700,10 +5706,22 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2701-http-static-trailer-wire.ts": {
+   "order": [
+    "<repo>/tests/corpus/2701-http-static-trailer-wire.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2701-import-meta/main.mjs": {
    "order": [
     "<repo>/tests/corpus/2701-import-meta/module with space.mjs",
     "<repo>/tests/corpus/2701-import-meta/main.mjs"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2702-http-static-trailer-end.ts": {
+   "order": [
+    "<repo>/tests/corpus/2702-http-static-trailer-end.ts"
    ],
    "diags": []
   },
@@ -7999,6 +8017,12 @@
   "<repo>/tests/diagnostics/http2-module.ts": {
    "order": [
     "<repo>/tests/diagnostics/http2-module.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/diagnostics/http2-response-trailers.ts": {
+   "order": [
+    "<repo>/tests/diagnostics/http2-response-trailers.ts"
    ],
    "diags": []
   },

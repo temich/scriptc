@@ -8,8 +8,8 @@
     "tiers": {
       "static": {
         "replace-refusal": 46,
-        "verify-gap": 2688,
-        "audit-partial": 478,
+        "verify-gap": 2672,
+        "audit-partial": 494,
         "classify": 2,
         "implement": 81
       },
@@ -46960,12 +46960,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.cork",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47104,12 +47109,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.flushHeaders",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -47481,12 +47491,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.uncork",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49130,12 +49145,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.addTrailers",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49163,12 +49183,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.cork",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49233,12 +49258,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.flushHeaders",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49513,12 +49543,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.uncork",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50383,12 +50418,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.headersDistinct",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50515,12 +50555,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.rawTrailers",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50647,12 +50692,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.trailers",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50680,12 +50730,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.trailersDistinct",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50845,12 +50900,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.outgoingMessage.addTrailers",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50911,12 +50971,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.outgoingMessage.cork",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -51010,12 +51075,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.outgoingMessage.flushHeaders",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -51340,12 +51410,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.outgoingMessage.uncork",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -51505,12 +51580,17 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.writableCorked",
+          "tests": [
+            "tests/corpus/2700-http-static-trailers.ts",
+            "tests/corpus/2701-http-static-trailer-wire.ts",
+            "tests/corpus/2702-http-static-trailer-end.ts",
+            "tests/fixtures/server/cases/http-trailers/main.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",

@@ -2751,6 +2751,9 @@ export type IrLibFn =
   | "http.reqUrl"
   | "http.reqMethod"
   | "http.reqHeader"
+  | "http.reqTrailer"
+  | "http.reqHeaderValues"
+  | "http.reqTrailerValues"
   | "http.reqOnData"
   | "http.reqOnEnd"
   | "http.resSetHeader"
@@ -2765,6 +2768,11 @@ export type IrLibFn =
   | "http.resWriteDyn"
   | "http.resEndDyn"
   | "http.resHeadersSent"
+  | "http.resFlushHeaders"
+  | "http.resAddTrailers"
+  | "http.resCork"
+  | "http.resUncork"
+  | "http.resWritableCorked"
   /** The server-surface member follow-ups: reqStatusCode answers the
    * interned `number | undefined` union (negative = the undefined arm —
    * a SERVER request, where Node's statusCode is undefined; every client
@@ -2792,11 +2800,13 @@ export type IrLibFn =
    * statusCode split). sockDestroyed is socket.destroyed — true once the
    * fd is gone (destroy() or full close). */
   | "http.reqRawHeaders"
+  | "http.reqRawTrailers"
   | "http.reqStatusMessage"
   /** The `{ ...req.headers }` snapshot feed: [lowercased name, value,
    * ...] pairs in arrival order — the interned %headers.snapshot helper
    * builds the record over it, exactly the process.envPairs pattern. */
   | "http.reqHeaderPairs"
+  | "http.reqTrailerPairs"
   | "net.sockDestroyed"
   /** socket.writable — the write half is open: no end() yet, no FIN sent,
    * fd alive (connecting sockets answer true; writes queue). Node's
@@ -3143,6 +3153,11 @@ export type IrLibFn =
   /** The checked-dynamic chunk twins (the net.sockWriteDyn story). */
   | "http.clientWriteDyn"
   | "http.clientEndDyn"
+  | "http.clientFlushHeaders"
+  | "http.clientAddTrailers"
+  | "http.clientCork"
+  | "http.clientUncork"
+  | "http.clientWritableCorked"
   /** request/get with a URL-STRING first argument: the runtime parses it
    * (WHATWG) and dials — throws catchably on an unparsable input or a
    * non-http scheme. */
@@ -7369,8 +7384,27 @@ export const MAY_THROW_LIB_FNS: ReadonlySet<IrLibFn> = new Set([
   "net.sockEndDyn",
   "http.resWriteDyn",
   "http.resEndDyn",
+  "http.resAddTrailers",
+  "http.resFlushHeaders",
+  "http.resUncork",
+  "http.resWriteHead",
+  "http.resWriteHeadN",
+  "http.resWriteHeadPairs",
+  "http.resWrite",
+  "http.resWriteBytes",
+  "http.resEnd",
+  "http.resEndStr",
+  "http.resEndBytes",
   "http.clientWriteDyn",
   "http.clientEndDyn",
+  "http.clientAddTrailers",
+  "http.clientFlushHeaders",
+  "http.clientUncork",
+  "http.clientWrite",
+  "http.clientWriteBytes",
+  "http.clientEnd",
+  "http.clientEndStr",
+  "http.clientEndBytes",
   // The URL-string client form throws catchably on an unparsable input
   // ("Invalid URL") or a non-http scheme (ERR_INVALID_PROTOCOL).
   "http.requestUrl",

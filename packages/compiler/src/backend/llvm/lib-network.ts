@@ -1,7 +1,7 @@
 /* Focused LLVM library-call emission extracted from emitter.ts. */
 import { InternalCompilerError } from "../../errors.js";
 import { undefinedArmTag } from "../../ir/analysis.js";
-import { STRING } from "../../ir/ir.js";
+import { arrayOf, STRING } from "../../ir/ir.js";
 import { mangleRecordNew, mangleRecordStruct } from "../mangle.js";
 import type { LlvmEmitterContext, LibCallExpr, LlValue } from "./expr-context.js";
 import { f64Lit } from "./common.js";
@@ -242,7 +242,7 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       B.line(`${raw} = call ptr @scr_net_sock_read_bytes(ptr ${args[0]!.name}, double ${args[1]!.name}) ; +1 or NULL`);
       return host.wrapNullable(raw, raw, def!.arms[bytesTag]!, bytesTag, e.type, nullTag);
     }
-    if (e.fn === "net.sockRemoteAddress" || e.fn === "http.reqHeader" || e.fn === "http.resGetHeader" || e.fn === "http.reqStatusMessage") {
+    if (e.fn === "net.sockRemoteAddress" || e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader" || e.fn === "http.reqStatusMessage") {
       // string | undefined: +1 or NULL, NULL takes the undefined arm.
       if (e.type.kind !== "union") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} result is not a union`);
       const def = host.unionsById.get(e.type.unionId);
@@ -252,6 +252,7 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       const entry = {
         "net.sockRemoteAddress": "scr_net_sock_remote_address",
         "http.reqHeader": "scr_http_req_header",
+        "http.reqTrailer": "scr_http_req_trailer",
         "http.resGetHeader": "scr_http_res_get_header",
         "http.reqStatusMessage": "scr_http_req_status_message",
       }[e.fn]!;
@@ -261,6 +262,19 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       const raw = B.tmp();
       B.line(`${raw} = call ptr @${entry}(${argList}) ; +1 or NULL`);
       return host.wrapNullable(raw, raw, STRING, strTag, e.type, undefTag);
+    }
+    if (e.fn === "http.reqHeaderValues" || e.fn === "http.reqTrailerValues") {
+      if (e.type.kind !== "union") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} result is not a union`);
+      const def = host.unionsById.get(e.type.unionId);
+      const arrTag = def ? def.arms.findIndex((a) => a.kind === "array" && a.elem.kind === "string") : -1;
+      const undefTag = undefinedArmTag(e.type, host.unionsById);
+      if (arrTag < 0 || undefTag < 0) throw new InternalCompilerError(`llvm emitter bug: ${e.fn} union lacks its arms`);
+      const entry = e.fn === "http.reqHeaderValues" ? "scr_http_req_header_values" : "scr_http_req_trailer_values";
+      const args = e.args.map((a) => host.emitExpr(a));
+      host.declare(`declare ptr @${entry}(ptr, ptr)`);
+      const raw = B.tmp();
+      B.line(`${raw} = call ptr @${entry}(ptr ${args[0]!.name}, ptr ${args[1]!.name}) ; +1 or NULL`);
+      return host.wrapNullable(raw, raw, arrayOf(STRING), arrTag, e.type, undefTag);
     }
     if (e.fn === "net.sockEncrypted") {
       // boolean | undefined: the true arm iff a TLS transport.

@@ -1763,6 +1763,15 @@ function headersSnapshotHelper(lowerer: Lowerer, shapeId: string, loc: SrcLoc): 
   });
 }
 
+function trailersSnapshotHelper(lowerer: Lowerer, shapeId: string, loc: SrcLoc): string | null {
+  return pairsSnapshotHelper(lowerer, shapeId, loc, {
+    keyPrefix: "trailers",
+    libCall: "http.reqTrailerPairs",
+    params: [{ localId: "r.0", name: "r", type: HTTPREQ_T }],
+    callArgs: [varRef("r.0", HTTPREQ_T, loc)],
+  });
+}
+
 /** The `endStream` boolean of an h2 options object literal, as a literal
  * bool. Returns undefined when absent (or the arg is absent). Fences on
  * a non-literal endStream value or unknown keys that would matter. */
@@ -2088,11 +2097,12 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
       const fn: IrLibFn = name === "aborted" ? "http.reqAborted" : "http.reqComplete";
       return { kind: "libCall", fn, args: [receiver], type: BOOL, loc };
     }
-    if (name === "rawHeaders") {
+    if (name === "rawHeaders" || name === "rawTrailers") {
       // [name, value, name, value, ...] in arrival order, names in their
       // ORIGINAL case — Node's shape; a fresh string[] per read.
       const receiver = coerceToHandle(lowerer, expr.expression, HTTPREQ_T);
-      return { kind: "libCall", fn: "http.reqRawHeaders", args: [receiver], type: arrayOf(STRING), loc };
+      const fn: IrLibFn = name === "rawHeaders" ? "http.reqRawHeaders" : "http.reqRawTrailers";
+      return { kind: "libCall", fn, args: [receiver], type: arrayOf(STRING), loc };
     }
     if (name === "statusMessage") {
       // `string | undefined` — the reason phrase on client responses (""
@@ -2137,13 +2147,15 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
         "compatibility requests do not expose their backing h2 stream/session yet; guarded method calls no-op and other reads have no lowering",
       );
     }
-    if (name === "headers") {
+    if (name === "headers" || name === "trailers") {
       // `req.headers` as a VALUE — the `{ ...req.headers }` spread and
       // record flows: a fresh snapshot record per read (Node's spread
       // copies too; the per-name READS keep their direct lowerings).
       const mapped = lowerer.mapTypeOf(lowerer.typeOf(expr));
       if (mapped?.kind === "record") {
-        const helper = headersSnapshotHelper(lowerer, mapped.shapeId, loc);
+        const helper = name === "headers"
+          ? headersSnapshotHelper(lowerer, mapped.shapeId, loc)
+          : trailersSnapshotHelper(lowerer, mapped.shapeId, loc);
         if (helper !== null) {
           const receiver = coerceToHandle(lowerer, expr.expression, HTTPREQ_T);
           return { kind: "call", callee: helper, args: [receiver], type: mapped, loc };
@@ -2152,8 +2164,11 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
       lowerer.unsupported(
         "SC1090",
         expr,
-        "req.headers as a value of this type (read one header: req.headers.name or req.headers[name])",
+        `req.${name} as a value of this type (read one field: req.${name}.name or req.${name}[name])`,
       );
+    }
+    if (name === "headersDistinct" || name === "trailersDistinct") {
+      lowerer.unsupported("SC1090", expr, `req.${name} as a value (read one name with req.${name}[name])`);
     }
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "stream") {
@@ -2226,14 +2241,27 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
     return { kind: "libCall", fn: "http.clientDestroyed", args: [receiver], type: BOOL, loc };
   }
-  if (isHttpReqHeaders(lowerer, expr.expression)) {
+  if (recvKind === "httpClientReq" && lowerer.isStdlibMember(expr) && expr.name.text === "writableCorked") {
+    const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
+    return { kind: "libCall", fn: "http.clientWritableCorked", args: [receiver], type: F64, loc };
+  }
+  if (httpReqFieldCollection(lowerer, expr.expression) !== null) {
+    const collection = httpReqFieldCollection(lowerer, expr.expression)!;
     const receiver = coerceToHandle(lowerer, (expr.expression as ts.PropertyAccessExpression).expression, HTTPREQ_T);
     const key: IrExpr = { kind: "strLit", value: expr.name.text, type: STRING, loc };
-    return { kind: "libCall", fn: "http.reqHeader", args: [receiver, key], type: lowerer.envValueType(), loc };
+    const fn: IrLibFn = collection === "headers" ? "http.reqHeader"
+      : collection === "trailers" ? "http.reqTrailer"
+      : collection === "headersDistinct" ? "http.reqHeaderValues" : "http.reqTrailerValues";
+    const type = collection.endsWith("Distinct") ? lowerer.withUndefinedArm(arrayOf(STRING)) : lowerer.envValueType();
+    return { kind: "libCall", fn, args: [receiver, key], type, loc };
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "headersSent") {
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
     return { kind: "libCall", fn: "http.resHeadersSent", args: [receiver], type: BOOL, loc };
+  }
+  if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "writableCorked") {
+    const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+    return { kind: "libCall", fn: "http.resWritableCorked", args: [receiver], type: F64, loc };
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "statusCode") {
     // 200 until assigned — Node's fresh-response default; the assignment
@@ -4175,6 +4203,28 @@ function lowerClientHeadersOption(lowerer: Lowerer, node: ts.Expression): IrExpr
   return { kind: "call", callee: helper, args: [v], type: arrayOf(STRING), loc };
 }
 
+/** OutgoingMessage.addTrailers accepts an object or a pair-list literal.
+ * Flatten the latter in source order; non-literal nested arrays currently
+ * fence rather than reaching the C runtime with the wrong wire shape. */
+function lowerHttpTrailersOption(lowerer: Lowerer, node: ts.Expression): IrExpr {
+  if (!ts.isArrayLiteralExpression(node)) return lowerClientHeadersOption(lowerer, node);
+  const loc = locOf(node);
+  const flat: IrExpr[] = [];
+  for (const entry of node.elements) {
+    if (!ts.isArrayLiteralExpression(entry) || entry.elements.length !== 2) {
+      lowerer.noLowering("addTrailers pair list", entry, "use an object/Record or literal [name, value] pairs");
+    }
+    const pair = entry as ts.ArrayLiteralExpression;
+    const name = pair.elements[0]!;
+    const value = pair.elements[1]!;
+    if (ts.isSpreadElement(name) || ts.isSpreadElement(value)) {
+      lowerer.noLowering("addTrailers pair with spread", entry, "use direct string name/value expressions");
+    }
+    flat.push(lowerer.lowerExprExpecting(name, STRING), lowerer.lowerExprExpecting(value, STRING));
+  }
+  return { kind: "arrayLit", elems: flat, type: arrayOf(STRING), loc };
+}
+
 /** Method calls on ClientRequest receivers: write/end/destroy and
  * on/once("response" | "error" | "timeout" | "close"). Null for other
  * receivers. */
@@ -4185,6 +4235,21 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "flushHeaders" || name === "cork" || name === "uncork") {
+    requireStatementPosition(lowerer, call, `request.${name}()`);
+    if (args.length !== 0) lowerer.noLowering(`request.${name} with arguments`, call, `${name}() takes no arguments`);
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const fn: IrLibFn = name === "flushHeaders" ? "http.clientFlushHeaders"
+      : name === "cork" ? "http.clientCork" : "http.clientUncork";
+    return { kind: "libCall", fn, args: [receiver], type: VOID, loc };
+  }
+  if (name === "addTrailers") {
+    requireStatementPosition(lowerer, call, "request.addTrailers(...)");
+    if (args.length !== 1) lowerer.noLowering("request.addTrailers argument count", call, "pass one trailer object or pair-list literal");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const pairs = lowerHttpTrailersOption(lowerer, args[0]!);
+    return { kind: "libCall", fn: "http.clientAddTrailers", args: [receiver, pairs], type: VOID, loc };
+  }
   if (name === "write" || name === "end") {
     requireStatementPosition(lowerer, call, `request.${name}(...)`);
     const minArgs = name === "write" ? 1 : 0;
@@ -4348,14 +4413,16 @@ export function lowerSocketInstanceOf(lowerer: Lowerer, expr: ts.BinaryExpressio
 
 /** True when `node` reads `.headers` off an IncomingMessage — the
  * receiver shape of both header-read forms. */
-function isHttpReqHeaders(lowerer: Lowerer, node: ts.Expression): boolean {
-  return (
+function httpReqFieldCollection(lowerer: Lowerer, node: ts.Expression): "headers" | "trailers" | "headersDistinct" | "trailersDistinct" | null {
+  if (
     ts.isPropertyAccessExpression(node) &&
     !node.questionDotToken &&
-    node.name.text === "headers" &&
+    (node.name.text === "headers" || node.name.text === "trailers" ||
+      node.name.text === "headersDistinct" || node.name.text === "trailersDistinct") &&
     lowerer.mapTypeOf(lowerer.typeOf(node.expression))?.kind === "httpReq" &&
     lowerer.isStdlibMember(node)
-  );
+  ) return node.name.text;
+  return null;
 }
 
 /** `req.headers["x-name"]` — the element twin of the property read below;
@@ -4363,18 +4430,21 @@ function isHttpReqHeaders(lowerer: Lowerer, node: ts.Expression): boolean {
  * interned `string | undefined` union; names match case-insensitively
  * (the runtime stores them lowercased, like Node). */
 export function lowerHttpHeadersElement(lowerer: Lowerer, expr: ts.ElementAccessExpression): IrExpr | null {
-  if (!isHttpReqHeaders(lowerer, expr.expression)) return null;
+  const collection = httpReqFieldCollection(lowerer, expr.expression);
+  if (collection === null) return null;
   const recv = (expr.expression as ts.PropertyAccessExpression).expression;
   const key = lowerer.lowerExpr(expr.argumentExpression);
   if (key.type.kind !== "string") {
-    lowerer.unsupported("SC1090", expr.argumentExpression, "indexing req.headers with non-string keys");
+    lowerer.unsupported("SC1090", expr.argumentExpression, `indexing req.${collection} with non-string keys`);
   }
   const receiver = lowerer.lowerExpr(recv);
   return {
     kind: "libCall",
-    fn: "http.reqHeader",
+    fn: collection === "headers" ? "http.reqHeader"
+      : collection === "trailers" ? "http.reqTrailer"
+      : collection === "headersDistinct" ? "http.reqHeaderValues" : "http.reqTrailerValues",
     args: [receiver, key],
-    type: lowerer.envValueType(),
+    type: collection.endsWith("Distinct") ? lowerer.withUndefinedArm(arrayOf(STRING)) : lowerer.envValueType(),
     loc: locOf(expr),
   };
 }
@@ -4494,6 +4564,24 @@ function lowerHttpResMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "flushHeaders" || name === "cork" || name === "uncork") {
+    requireStatementPosition(lowerer, call, `res.${name}()`);
+    if (args.length !== 0) lowerer.noLowering(`res.${name} with arguments`, call, `${name}() takes no arguments`);
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPRES_T);
+    const fn: IrLibFn = name === "flushHeaders" ? "http.resFlushHeaders"
+      : name === "cork" ? "http.resCork" : "http.resUncork";
+    return { kind: "libCall", fn, args: [receiver], type: VOID, loc };
+  }
+  if (name === "addTrailers") {
+    requireStatementPosition(lowerer, call, "res.addTrailers(...)");
+    if (lowerer.typeOf(access.expression).getSymbol()?.name === "Http2ServerResponse") {
+      lowerer.noLowering("Http2ServerResponse.addTrailers", call, "HTTP/2 response trailers are not supported by the static runtime yet");
+    }
+    if (args.length !== 1) lowerer.noLowering("res.addTrailers argument count", call, "pass one trailer object or pair-list literal");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPRES_T);
+    const pairs = lowerHttpTrailersOption(lowerer, args[0]!);
+    return { kind: "libCall", fn: "http.resAddTrailers", args: [receiver, pairs], type: VOID, loc };
+  }
   if (name === "setHeader") {
     requireStatementPosition(lowerer, call, "res.setHeader(...)");
     if (args.length !== 2) {

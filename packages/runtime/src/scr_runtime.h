@@ -6065,6 +6065,9 @@ void scr_http1_ctx_settle(void *ctx);
 ScrStr *scr_http_req_url(ScrHttpReq *r);      /* +1 */
 ScrStr *scr_http_req_method(ScrHttpReq *r);   /* +1 */
 ScrStr *scr_http_req_header(ScrHttpReq *r, ScrStr *name /*borrowed*/); /* +1 or NULL (undefined arm) */
+ScrStr *scr_http_req_trailer(ScrHttpReq *r, ScrStr *name /*borrowed*/); /* +1 or NULL */
+ScrArr *scr_http_req_header_values(ScrHttpReq *r, ScrStr *name /*borrowed*/); /* +1 or NULL */
+ScrArr *scr_http_req_trailer_values(ScrHttpReq *r, ScrStr *name /*borrowed*/); /* +1 or NULL */
 void scr_http_req_on_data(ScrHttpReq *r, ScrClosure *cb /*moves*/, ScrNetDataFn fn, bool once);
 /* req.pipe(dest): the IncomingMessage body streams into the destination;
  * natural end ends it (Node's pipe default). Declared below the client
@@ -6087,6 +6090,7 @@ void scr_http_res_end(ScrHttpRes *r);
 void scr_http_sock_pipe_res(ScrNetSocket *src, ScrHttpRes *dst /*borrowed*/);
 void scr_http_res_end_str(ScrHttpRes *r, ScrStr *data /*borrowed*/);
 void scr_http_res_end_bytes(ScrHttpRes *r, ScrBytes *data /*borrowed*/);
+void scr_http_res_add_trailers(ScrHttpRes *r, ScrArr *pairs /*borrowed: [name, value, ...] */);
 /* Checked-dynamic chunk forms (the scr_net_sock_write_dynv story). */
 void scr_http_res_write_dynv(ScrHttpRes *r, const ScrDyn *d /*borrowed*/);
 void scr_http_res_end_dynv(ScrHttpRes *r, const ScrDyn *d /*borrowed*/);
@@ -6119,6 +6123,8 @@ void scr_http_server_on_connect(ScrNetServer *s, ScrClosure *cb /*moves*/,
 void scr_http_server_on_upgrade(ScrNetServer *s, ScrClosure *cb /*moves*/, ScrHttpUpgradeFn fn, bool once);
 ScrArr *scr_http_req_raw_headers(ScrHttpReq *r); /* +1 — [name, value, ...], arrival order/case */
 ScrArr *scr_http_req_header_pairs(ScrHttpReq *r); /* +1 — lowercased names, the headers snapshot */
+ScrArr *scr_http_req_raw_trailers(ScrHttpReq *r); /* +1 — wire order/case after end */
+ScrArr *scr_http_req_trailer_pairs(ScrHttpReq *r); /* +1 — lowercased, joined snapshot after end */
 ScrStr *scr_http_req_status_message(ScrHttpReq *r); /* +1 or NULL (undefined arm: server request) */
 void scr_http_upgrade_thunk0(ScrClosure *cb, ScrHttpReq *req, ScrNetSocket *sock, ScrBytes *head);
 void scr_http_upgrade_thunk1(ScrClosure *cb, ScrHttpReq *req, ScrNetSocket *sock, ScrBytes *head);
@@ -6179,6 +6185,11 @@ void scr_http_client_write_bytes(ScrHttpClientReq *c, ScrBytes *data /*borrowed*
 void scr_http_client_end(ScrHttpClientReq *c);
 void scr_http_client_end_str(ScrHttpClientReq *c, ScrStr *data /*borrowed*/);
 void scr_http_client_end_bytes(ScrHttpClientReq *c, ScrBytes *data /*borrowed*/);
+void scr_http_client_flush_headers(ScrHttpClientReq *c);
+void scr_http_client_add_trailers(ScrHttpClientReq *c, ScrArr *pairs /*borrowed*/);
+void scr_http_client_cork(ScrHttpClientReq *c);
+void scr_http_client_uncork(ScrHttpClientReq *c);
+double scr_http_client_writable_corked(ScrHttpClientReq *c);
 /* Checked-dynamic chunk forms (the scr_net_sock_write_dynv story). */
 void scr_http_client_write_dynv(ScrHttpClientReq *c, const ScrDyn *d /*borrowed*/);
 void scr_http_client_end_dynv(ScrHttpClientReq *c, const ScrDyn *d /*borrowed*/);

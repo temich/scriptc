@@ -145,6 +145,10 @@ struct ScrHttpReq {
   ScrStr **hnames_raw; /* arrival case — rawHeaders */
   ScrStr **hvalues;
   size_t nheaders;
+  ScrStr **tnames; /* parsed chunk trailers: lowercased, separate from headers */
+  ScrStr **tnames_raw; /* wire case for rawTrailers */
+  ScrStr **tvalues;
+  size_t ntrailers;
   ScrStr *status_msg; /* client responses' reason phrase; NULL on server requests */
   ScrNetLs data_ls, end_ls, err_ls, close_ls;
   /* pipe destinations (req.pipe(...) — one of each kind, +1; released at
@@ -224,6 +228,14 @@ void scr_http_req_release(ScrHttpReq *r) {
     free(r->hnames);
     free(r->hnames_raw);
     free(r->hvalues);
+    for (size_t i = 0; i < r->ntrailers; i++) {
+      scr_str_release(r->tnames[i]);
+      scr_str_release(r->tnames_raw[i]);
+      scr_str_release(r->tvalues[i]);
+    }
+    free(r->tnames);
+    free(r->tnames_raw);
+    free(r->tvalues);
     scr_str_release(r->status_msg);
     scr_net_ls_drop(&r->data_ls);
     scr_net_ls_drop(&r->end_ls);
@@ -318,6 +330,96 @@ ScrArr *scr_http_req_raw_headers(ScrHttpReq *r) {
   for (size_t i = 0; i < r->nheaders; i++) {
     scr_arr_push_ref(out, scr_str_retain(r->hnames_raw[i]));
     scr_arr_push_ref(out, scr_str_retain(r->hvalues[i]));
+  }
+  return out;
+}
+
+static ScrArr *scr_http_req_distinct_values(ScrStr *const *names, ScrStr *const *values,
+                                            size_t count, ScrStr *name) {
+  ScrArr *out = NULL;
+  for (size_t i = 0; i < count; i++) {
+    if (!scr_http_name_eq(names[i], name)) continue;
+    if (!out) out = scr_arr_new(SCR_ELEM_STR, count);
+    scr_arr_push_ref(out, scr_str_retain(values[i]));
+  }
+  return out;
+}
+
+ScrArr *scr_http_req_header_values(ScrHttpReq *r, ScrStr *name /*borrowed*/) {
+  return scr_http_req_distinct_values(r->hnames, r->hvalues, r->nheaders, name);
+}
+
+ScrArr *scr_http_req_trailer_values(ScrHttpReq *r, ScrStr *name /*borrowed*/) {
+  return r->ended ? scr_http_req_distinct_values(r->tnames, r->tvalues, r->ntrailers, name) : NULL;
+}
+
+/* Trailers become visible only once the body reaches its natural end.
+ * Unlike request headers, ordinary duplicate trailer fields join with
+ * ", "; Node keeps the first value of its single-value field names. */
+static bool scr_http_trailer_single_value(const ScrStr *name) {
+  static const char *const names[] = { "age", "authorization", "content-length",
+    "content-type", "etag", "expires", "from", "host", "if-modified-since",
+    "if-unmodified-since", "last-modified", "location", "max-forwards",
+    "proxy-authorization", "referer", "retry-after", "user-agent", NULL };
+  for (size_t i = 0; names[i]; i++) {
+    if (name->len == strlen(names[i]) && memcmp(name->data, names[i], name->len) == 0) return true;
+  }
+  return false;
+}
+
+static ScrStr *scr_http_req_trailer_at(ScrHttpReq *r, size_t index) {
+  const ScrStr *name = r->tnames[index];
+  if (scr_http_trailer_single_value(name)) return scr_str_retain(r->tvalues[index]);
+  size_t total = 0, count = 0;
+  for (size_t i = 0; i < r->ntrailers; i++) {
+    if (!scr_http_name_eq(r->tnames[i], name)) continue;
+    total += r->tvalues[i]->len;
+    count++;
+  }
+  if (count == 1) return scr_str_retain(r->tvalues[index]);
+  bool cookie = name->len == 6 && memcmp(name->data, "cookie", 6) == 0;
+  const char *sep = cookie ? "; " : ", ";
+  char *buf = malloc(total + (count - 1) * 2);
+  if (!buf) scr_http_oom();
+  size_t off = 0;
+  for (size_t i = 0; i < r->ntrailers; i++) {
+    if (!scr_http_name_eq(r->tnames[i], name)) continue;
+    if (off) { memcpy(buf + off, sep, 2); off += 2; }
+    memcpy(buf + off, r->tvalues[i]->data, r->tvalues[i]->len);
+    off += r->tvalues[i]->len;
+  }
+  ScrStr *value = scr_str_new(buf, off);
+  free(buf);
+  return value;
+}
+
+ScrStr *scr_http_req_trailer(ScrHttpReq *r, ScrStr *name /*borrowed*/) {
+  if (!r->ended) return NULL;
+  for (size_t i = 0; i < r->ntrailers; i++) {
+    if (scr_http_name_eq(r->tnames[i], name)) return scr_http_req_trailer_at(r, i);
+  }
+  return NULL;
+}
+
+ScrArr *scr_http_req_trailer_pairs(ScrHttpReq *r) {
+  ScrArr *out = scr_arr_new(SCR_ELEM_STR, r->ended ? r->ntrailers * 2 : 0);
+  if (!r->ended) return out;
+  for (size_t i = 0; i < r->ntrailers; i++) {
+    bool seen = false;
+    for (size_t j = 0; j < i && !seen; j++) seen = scr_http_name_eq(r->tnames[j], r->tnames[i]);
+    if (seen) continue;
+    scr_arr_push_ref(out, scr_str_retain(r->tnames[i]));
+    scr_arr_push_ref(out, scr_http_req_trailer_at(r, i));
+  }
+  return out;
+}
+
+ScrArr *scr_http_req_raw_trailers(ScrHttpReq *r) {
+  ScrArr *out = scr_arr_new(SCR_ELEM_STR, r->ended ? r->ntrailers * 2 : 0);
+  if (!r->ended) return out;
+  for (size_t i = 0; i < r->ntrailers; i++) {
+    scr_arr_push_ref(out, scr_str_retain(r->tnames_raw[i]));
+    scr_arr_push_ref(out, scr_str_retain(r->tvalues[i]));
   }
   return out;
 }
@@ -551,6 +653,74 @@ static void scr_http_req_finish(ScrHttpReq *r, bool fire) {
   }
 }
 
+/* A pending outgoing trailer block belongs to exactly one message.
+ * Repeated addTrailers calls replace it, as Node's _trailer assignment does. */
+typedef struct {
+  ScrStr **names, **values;
+  size_t len;
+} ScrHttpTrailers;
+
+static void scr_http_trailers_clear(ScrHttpTrailers *t) {
+  for (size_t i = 0; i < t->len; i++) {
+    scr_str_release(t->names[i]);
+    scr_str_release(t->values[i]);
+  }
+  free(t->names);
+  free(t->values);
+  t->names = t->values = NULL;
+  t->len = 0;
+}
+
+static bool scr_http_token_char(unsigned char ch) {
+  return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') ||
+    (ch >= 'a' && ch <= 'z') || (ch != 0 && strchr("!#$%&'*+-.^_`|~", ch) != NULL);
+}
+
+static bool scr_http_trailers_replace(ScrHttpTrailers *t, ScrArr *pairs /*borrowed*/) {
+  scr_http_trailers_clear(t);
+  size_t n = (size_t)scr_arr_len(pairs);
+  if (n % 2 != 0) {
+    static const char msg[] = "The argument 'headers' is invalid.";
+    scr_throw_error_msg_code(SCR_ERR_TYPE, msg, sizeof msg - 1, "ERR_INVALID_ARG_VALUE");
+    return false;
+  }
+  t->names = calloc(n / 2, sizeof *t->names);
+  t->values = calloc(n / 2, sizeof *t->values);
+  if (n > 0 && (!t->names || !t->values)) scr_http_oom();
+  for (size_t i = 0; i < n; i += 2) {
+    ScrStr *name = (ScrStr *)scr_arr_get_ref(pairs, (double)i);
+    ScrStr *value = (ScrStr *)scr_arr_get_ref(pairs, (double)(i + 1));
+    bool valid = name->len > 0;
+    for (size_t j = 0; j < name->len; j++) valid &= scr_http_token_char((unsigned char)name->data[j]);
+    if (!valid) {
+      char msg[256];
+      int len = snprintf(msg, sizeof msg, "Trailer name must be a valid HTTP token [\"%.*s\"]",
+                         (int)(name->len < 160 ? name->len : 160), name->data);
+      scr_throw_error_msg_code(SCR_ERR_TYPE, msg, (size_t)len, "ERR_INVALID_HTTP_TOKEN");
+    } else {
+      for (size_t j = 0; j < value->len; j++) {
+        unsigned char ch = (unsigned char)value->data[j];
+        if ((ch < 32 && ch != '\t') || ch == 127) { valid = false; break; }
+      }
+      if (!valid) {
+        char msg[256];
+        int len = snprintf(msg, sizeof msg, "Invalid character in trailer content [\"%.*s\"]",
+                           (int)(name->len < 160 ? name->len : 160), name->data);
+        scr_throw_error_msg_code(SCR_ERR_TYPE, msg, (size_t)len, "ERR_INVALID_CHAR");
+      }
+    }
+    if (!valid) {
+      scr_str_release(name);
+      scr_str_release(value);
+      return false;
+    }
+    t->names[t->len] = name;
+    t->values[t->len] = value;
+    t->len++;
+  }
+  return true;
+}
+
 /* ── the response handle ─────────────────────────────────────────────── */
 
 struct ScrHttpRes {
@@ -565,6 +735,7 @@ struct ScrHttpRes {
   ScrStr **hnames; /* as-set (serialized verbatim, Node keeps the case) */
   ScrStr **hvalues;
   size_t nheaders, cap_headers;
+  ScrHttpTrailers trailers;
   bool head_sent;
   bool chunked;
   bool finished;
@@ -606,6 +777,7 @@ void scr_http_res_release(ScrHttpRes *r) {
     }
     free(r->hnames);
     free(r->hvalues);
+    scr_http_trailers_clear(&r->trailers);
     scr_str_release(r->status_msg);
     scr_net_ls_drop(&r->close_ls);
     scr_net_ls_drop(&r->finish_ls);
@@ -773,6 +945,20 @@ static void scr_http_buf_append(ScrHttpBuf *b, const char *s, size_t n) {
 
 static void scr_http_buf_str(ScrHttpBuf *b, const char *s) { scr_http_buf_append(b, s, strlen(s)); }
 
+static void scr_http_send_chunk_end(ScrNetSocket *sock, const ScrHttpTrailers *t) {
+  ScrHttpBuf b = {NULL, 0, 0};
+  scr_http_buf_str(&b, "0\r\n");
+  for (size_t i = 0; i < t->len; i++) {
+    scr_http_buf_append(&b, t->names[i]->data, t->names[i]->len);
+    scr_http_buf_str(&b, ": ");
+    scr_http_buf_append(&b, t->values[i]->data, t->values[i]->len);
+    scr_http_buf_str(&b, "\r\n");
+  }
+  scr_http_buf_str(&b, "\r\n");
+  scr_net_sock_write_native(sock, b.data, b.len);
+  free(b.data);
+}
+
 static void scr_http_buf_date(ScrHttpBuf *b) {
   time_t now = time(NULL);
   struct tm tm;
@@ -815,13 +1001,13 @@ static bool scr_http_header_has_token(const ScrStr *value, const char *token) {
  * then the injected Date / Connection (+Keep-Alive) / framing header. */
 static void scr_http_res_send_head(ScrHttpRes *r, long long body_len) {
   if (r->head_sent) return;
-  r->head_sent = true;
   int status = r->status > 0 ? r->status : 200;
   if (r->h2_stream != NULL) {
     /* the h2 transport: a HEADERS frame — no HTTP/1 framing headers */
     (void)body_len;
     scr_http_h2_ops->respond(r->h2_stream, (double)status, r->hnames, r->hvalues,
                              r->nheaders, !r->no_date);
+    r->head_sent = true;
     return;
   }
   ScrHttpBuf b = {NULL, 0, 0};
@@ -862,8 +1048,9 @@ static void scr_http_res_send_head(ScrHttpRes *r, long long body_len) {
   (void)user_close;
   bool have_len = scr_http_res_has_header(r, "content-length") ||
                   scr_http_res_has_header(r, "transfer-encoding");
+  bool declared_trailer = scr_http_res_has_header(r, "trailer");
   if (!have_len) {
-    if (body_len >= 0) {
+    if (body_len >= 0 && !declared_trailer) {
       char cl[48];
       snprintf(cl, sizeof cl, "Content-Length: %lld\r\n", body_len);
       scr_http_buf_str(&b, cl);
@@ -872,7 +1059,14 @@ static void scr_http_res_send_head(ScrHttpRes *r, long long body_len) {
       r->chunked = true;
     }
   }
+  if (declared_trailer && !r->chunked) {
+    static const char msg[] = "Trailers are invalid with this transfer encoding";
+    free(b.data);
+    scr_throw_error_msg_code(SCR_ERR_ERROR, msg, sizeof msg - 1, "ERR_HTTP_TRAILER_INVALID");
+    return;
+  }
   scr_http_buf_str(&b, "\r\n");
+  r->head_sent = true;
   if (r->sock) scr_net_sock_write_native(r->sock, b.data, b.len);
   free(b.data);
 }
@@ -880,26 +1074,28 @@ static void scr_http_res_send_head(ScrHttpRes *r, long long body_len) {
 /* Writes while corked coalesce here and flush as ONE write when the
  * cork count reaches zero (or at end()) — Node's coalescing, and one
  * DATA frame on the h2 lane. */
-static void scr_http_res_cork_buffer(ScrHttpRes *r, const char *data, size_t len) {
+static void scr_http_cork_buffer(char **buf, size_t *held_len, size_t *held_cap,
+                                 const char *data, size_t len) {
   if (len == 0) return;
-  if (r->cork_len + len > r->cork_cap) {
-    size_t cap = r->cork_cap ? r->cork_cap : 1024;
-    while (cap < r->cork_len + len) cap *= 2;
-    r->cork_buf = realloc(r->cork_buf, cap);
-    if (!r->cork_buf) scr_http_oom();
-    r->cork_cap = cap;
+  if (*held_len + len > *held_cap) {
+    size_t cap = *held_cap ? *held_cap : 1024;
+    while (cap < *held_len + len) cap *= 2;
+    *buf = realloc(*buf, cap);
+    if (!*buf) scr_http_oom();
+    *held_cap = cap;
   }
-  memcpy(r->cork_buf + r->cork_len, data, len);
-  r->cork_len += len;
+  memcpy(*buf + *held_len, data, len);
+  *held_len += len;
 }
 
 static void scr_http_res_write_raw(ScrHttpRes *r, const char *data, size_t len) {
   if (r->finished) return;
   if (r->corked > 0) {
-    scr_http_res_cork_buffer(r, data, len);
+    scr_http_cork_buffer(&r->cork_buf, &r->cork_len, &r->cork_cap, data, len);
     return;
   }
   if (!r->head_sent) scr_http_res_send_head(r, -1); /* streaming: chunked */
+  if (scr_exc_pending()) return;
   if (r->h2_stream != NULL) {
     scr_http_h2_ops->write(r->h2_stream, data, len);
     return;
@@ -930,6 +1126,11 @@ void scr_http_res_write_bytes(ScrHttpRes *r, ScrBytes *data /*borrowed*/) {
  * unless the user fixed the length; the h2 lane's HEADERS frame). */
 void scr_http_res_flush_headers(ScrHttpRes *r) {
   if (!r->head_sent && !r->finished) scr_http_res_send_head(r, -1);
+}
+
+void scr_http_res_add_trailers(ScrHttpRes *r, ScrArr *pairs /*borrowed*/) {
+  if (r->finished) return;
+  scr_http_trailers_replace(&r->trailers, pairs);
 }
 
 /* cork()/uncork(): the count IS res.writableCorked; the last uncork
@@ -983,6 +1184,7 @@ static void scr_http_res_end_raw(ScrHttpRes *r, const char *data, size_t len) {
      * framing below takes the already-committed streaming path */
     r->corked = 0;
     scr_http_res_cork_flush(r);
+    if (scr_exc_pending()) return;
     if (r->finished) return; /* a teardown inside the flush */
   }
   if (r->h2_stream != NULL) {
@@ -995,10 +1197,16 @@ static void scr_http_res_end_raw(ScrHttpRes *r, const char *data, size_t len) {
   if (!r->head_sent) {
     /* whole body known NOW: Content-Length framing, Node's implicit head */
     scr_http_res_send_head(r, (long long)len);
-    if (r->sock && len > 0) scr_net_sock_write_native(r->sock, data, len);
+    if (scr_exc_pending()) return;
+    if (r->chunked) {
+      scr_http_res_write_raw(r, data, len);
+      if (r->sock) scr_http_send_chunk_end(r->sock, &r->trailers);
+    } else if (r->sock && len > 0) {
+      scr_net_sock_write_native(r->sock, data, len);
+    }
   } else {
     scr_http_res_write_raw(r, data, len);
-    if (r->chunked && r->sock) scr_net_sock_write_native(r->sock, "0\r\n\r\n", 5);
+    if (r->chunked && r->sock) scr_http_send_chunk_end(r->sock, &r->trailers);
   }
   r->finished = true;
   if (r->finish_ls.n > 0) scr_http_queue_res_finish(r);
@@ -1539,6 +1747,23 @@ static void scr_http_req_add_header(ScrHttpReq *r, const char *name, size_t nlen
   free(lower);
 }
 
+static void scr_http_req_add_trailer(ScrHttpReq *r, const char *name, size_t nlen,
+                                     const char *value, size_t vlen) {
+  char *lower = malloc(nlen);
+  if (!lower && nlen > 0) scr_http_oom();
+  for (size_t i = 0; i < nlen; i++) lower[i] = (char)tolower((unsigned char)name[i]);
+  size_t n = r->ntrailers + 1;
+  r->tnames = realloc(r->tnames, n * sizeof *r->tnames);
+  r->tnames_raw = realloc(r->tnames_raw, n * sizeof *r->tnames_raw);
+  r->tvalues = realloc(r->tvalues, n * sizeof *r->tvalues);
+  if (!r->tnames || !r->tnames_raw || !r->tvalues) scr_http_oom();
+  r->tnames[r->ntrailers] = scr_str_new(lower, nlen);
+  r->tnames_raw[r->ntrailers] = scr_str_new(name, nlen);
+  r->tvalues[r->ntrailers] = scr_str_new(value, vlen);
+  r->ntrailers = n;
+  free(lower);
+}
+
 /* Malformed input: answer 400 and close. Node's lenient spots (bare LF
  * line endings, obsolete folding) are NOT accepted; SEMANTICS.md states
  * the bound. */
@@ -1996,7 +2221,8 @@ static void scr_http_conn_pump(ScrHttpConn *conn) {
       return;
     }
     if (conn->state == SCR_HTTP_CHUNK_TRAILER) {
-      /* trailers until the blank line; all discarded */
+      /* One complete field per pass; preserve wire case/order and keep
+       * trailers separate from the head until 'end' fires. */
       if (conn->len < 2) return;
       if (conn->buf[0] == '\r' && conn->buf[1] == '\n') {
         memmove(conn->buf, conn->buf + 2, conn->len - 2);
@@ -2011,7 +2237,36 @@ static void scr_http_conn_pump(ScrHttpConn *conn) {
           break;
         }
       }
-      if (!eol) return;
+      if (!eol) {
+        if (conn->len > 65536) {
+          if (conn->client_mode) scr_http_client_head_overflow(conn);
+          else scr_http_conn_bad_request(conn);
+        }
+        return;
+      }
+      char *colon = memchr(conn->buf, ':', (size_t)(eol - conn->buf));
+      bool valid = colon != NULL && colon != conn->buf;
+      for (char *p = conn->buf; valid && p < colon; p++) valid = scr_http_token_char((unsigned char)*p);
+      if (!valid) {
+        if (conn->client_mode) scr_http_client_head_overflow(conn);
+        else scr_http_conn_bad_request(conn);
+        return;
+      }
+      char *value = colon + 1;
+      while (value < eol && (*value == ' ' || *value == '\t')) value++;
+      char *end = eol;
+      while (end > value && (end[-1] == ' ' || end[-1] == '\t')) end--;
+      for (char *p = value; valid && p < end; p++) {
+        unsigned char ch = (unsigned char)*p;
+        valid = (ch >= 32 || ch == '\t') && ch != 127;
+      }
+      if (!valid) {
+        if (conn->client_mode) scr_http_client_head_overflow(conn);
+        else scr_http_conn_bad_request(conn);
+        return;
+      }
+      scr_http_req_add_trailer(conn->req, conn->buf, (size_t)(colon - conn->buf),
+                               value, (size_t)(end - value));
       size_t consumed = (size_t)(eol - conn->buf) + 2;
       memmove(conn->buf, conn->buf + consumed, conn->len - consumed);
       conn->len -= consumed;
@@ -2380,9 +2635,13 @@ struct ScrHttpClientReq {
   ScrStr **hnames; /* user headers, verbatim case */
   ScrStr **hvalues;
   size_t nheaders;
+  ScrHttpTrailers trailers;
   bool user_cl;      /* caller set content-length/transfer-encoding */
   bool head_sent;
   bool chunked;      /* streaming framing committed */
+  int corked;
+  char *cork_buf;
+  size_t cork_len, cork_cap;
   bool ended;
   bool destroyed;
   bool response_started; /* head parsed, res exists */
@@ -2423,6 +2682,8 @@ void scr_http_client_release(ScrHttpClientReq *c) {
     }
     free(c->hnames);
     free(c->hvalues);
+    scr_http_trailers_clear(&c->trailers);
+    free(c->cork_buf);
     if (c->res) scr_http_req_release(c->res);
     if (c->sock) scr_net_sock_release(c->sock);
 #ifdef SCR_RC_AUDIT
@@ -2519,7 +2780,6 @@ static bool scr_http_client_has_header(ScrHttpClientReq *c, const char *name) {
  * set), Connection: keep-alive, and the framing header. */
 static void scr_http_client_send_head(ScrHttpClientReq *c, long long body_len) {
   if (c->head_sent) return;
-  c->head_sent = true;
   ScrHttpBuf b = {NULL, 0, 0};
   scr_http_buf_append(&b, c->method->data, c->method->len);
   scr_http_buf_str(&b, " ");
@@ -2530,6 +2790,11 @@ static void scr_http_client_send_head(ScrHttpClientReq *c, long long body_len) {
     scr_http_buf_str(&b, ": ");
     scr_http_buf_append(&b, c->hvalues[i]->data, c->hvalues[i]->len);
     scr_http_buf_str(&b, "\r\n");
+    bool transfer = c->hnames[i]->len == 17;
+    for (size_t j = 0; j < 17 && transfer; j++) {
+      if (tolower((unsigned char)c->hnames[i]->data[j]) != "transfer-encoding"[j]) transfer = false;
+    }
+    if (transfer && scr_http_header_has_token(c->hvalues[i], "chunked")) c->chunked = true;
   }
   if (!scr_http_client_has_header(c, "host")) {
     /* Host: name[:port] — the scheme's default port omitted (80 http,
@@ -2550,7 +2815,7 @@ static void scr_http_client_send_head(ScrHttpClientReq *c, long long body_len) {
     scr_http_buf_str(&b, "Connection: keep-alive\r\n");
   }
   if (!c->user_cl) {
-    if (body_len < 0) {
+    if (body_len < 0 || scr_http_client_has_header(c, "trailer")) {
       scr_http_buf_str(&b, "Transfer-Encoding: chunked\r\n");
       c->chunked = true;
     } else if (body_len > 0) {
@@ -2567,14 +2832,26 @@ static void scr_http_client_send_head(ScrHttpClientReq *c, long long body_len) {
       if (bodied) scr_http_buf_str(&b, "Content-Length: 0\r\n");
     }
   }
+  if (scr_http_client_has_header(c, "trailer") && !c->chunked) {
+    static const char msg[] = "Trailers are invalid with this transfer encoding";
+    free(b.data);
+    scr_throw_error_msg_code(SCR_ERR_ERROR, msg, sizeof msg - 1, "ERR_HTTP_TRAILER_INVALID");
+    return;
+  }
   scr_http_buf_str(&b, "\r\n");
+  c->head_sent = true;
   if (c->sock) scr_net_sock_write_native(c->sock, b.data, b.len);
   free(b.data);
 }
 
 static void scr_http_client_write_raw(ScrHttpClientReq *c, const char *data, size_t len) {
   if (c->ended || c->destroyed || c->close_emitted) return; /* write-after-end drops (divergence 48's stance) */
+  if (c->corked > 0) {
+    scr_http_cork_buffer(&c->cork_buf, &c->cork_len, &c->cork_cap, data, len);
+    return;
+  }
   if (!c->head_sent) scr_http_client_send_head(c, -1); /* streaming: chunked */
+  if (scr_exc_pending()) return;
   if (!c->sock || len == 0) return;
   if (c->chunked) {
     char size[32];
@@ -2595,16 +2872,47 @@ void scr_http_client_write_bytes(ScrHttpClientReq *c, ScrBytes *data /*borrowed*
   scr_http_client_write_raw(c, (const char *)data->data, data->len);
 }
 
+static void scr_http_client_cork_flush(ScrHttpClientReq *c) {
+  if (c->cork_len == 0) return;
+  char *held = c->cork_buf;
+  size_t held_len = c->cork_len;
+  c->cork_buf = NULL;
+  c->cork_len = c->cork_cap = 0;
+  scr_http_client_write_raw(c, held, held_len);
+  free(held);
+}
+
+void scr_http_client_cork(ScrHttpClientReq *c) { c->corked++; }
+
+void scr_http_client_uncork(ScrHttpClientReq *c) {
+  if (c->corked == 0) return;
+  if (--c->corked == 0) scr_http_client_cork_flush(c);
+}
+
+double scr_http_client_writable_corked(ScrHttpClientReq *c) { return (double)c->corked; }
+
 static void scr_http_client_end_raw(ScrHttpClientReq *c, const char *data, size_t len) {
   if (c->ended || c->destroyed || c->close_emitted) return;
+  if (c->corked > 0 || c->cork_len > 0) {
+    c->corked = 0;
+    scr_http_client_cork_flush(c);
+    if (scr_exc_pending()) return;
+    if (c->destroyed || c->close_emitted) return;
+  }
   if (!c->head_sent) {
     /* whole body known NOW: Content-Length framing (or none — the head
      * serializer's empty-body method split) */
     scr_http_client_send_head(c, (long long)len);
-    if (c->sock && len > 0) scr_net_sock_write_native(c->sock, data, len);
+    if (scr_exc_pending()) return;
+    if (c->chunked) {
+      scr_http_client_write_raw(c, data, len);
+      if (c->sock) scr_http_send_chunk_end(c->sock, &c->trailers);
+    } else if (c->sock && len > 0) {
+      scr_net_sock_write_native(c->sock, data, len);
+    }
   } else {
     scr_http_client_write_raw(c, data, len);
-    if (c->chunked && c->sock) scr_net_sock_write_native(c->sock, "0\r\n\r\n", 5);
+    if (c->chunked && c->sock) scr_http_send_chunk_end(c->sock, &c->trailers);
   }
   c->ended = true;
 }
@@ -2617,6 +2925,15 @@ void scr_http_client_end_str(ScrHttpClientReq *c, ScrStr *data /*borrowed*/) {
 
 void scr_http_client_end_bytes(ScrHttpClientReq *c, ScrBytes *data /*borrowed*/) {
   scr_http_client_end_raw(c, (const char *)data->data, data->len);
+}
+
+void scr_http_client_flush_headers(ScrHttpClientReq *c) {
+  if (!c->head_sent && !c->ended && !c->destroyed) scr_http_client_send_head(c, -1);
+}
+
+void scr_http_client_add_trailers(ScrHttpClientReq *c, ScrArr *pairs /*borrowed*/) {
+  if (c->ended || c->destroyed) return;
+  scr_http_trailers_replace(&c->trailers, pairs);
 }
 
 /* req.setTimeout(ms) after construction (the island bridge's late arm —

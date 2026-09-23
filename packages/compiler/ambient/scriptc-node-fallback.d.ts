@@ -2360,7 +2360,11 @@ declare module "http" {
     readonly statusMessage: string | undefined;
     readonly socket: Socket;
     readonly headers: { [name: string]: string | undefined };
+    readonly headersDistinct: { [name: string]: string[] | undefined };
     readonly rawHeaders: string[];
+    readonly trailers: { [name: string]: string | undefined };
+    readonly trailersDistinct: { [name: string]: string[] | undefined };
+    readonly rawTrailers: string[];
     resume(): void;
     destroy(): void;
     /* setEncoding('utf8'): 'data' delivers strings (other real encodings
@@ -2382,6 +2386,7 @@ declare module "http" {
   }
   export interface ServerResponse {
     readonly headersSent: boolean;
+    readonly writableCorked: number;
     /* Node's writable head properties: the implicit head reads them. */
     statusCode: number;
     statusMessage: string;
@@ -2394,6 +2399,10 @@ declare module "http" {
     writeHead(statusCode: number, headers?: OutgoingHttpHeaders | string[]): ServerResponse;
     writeHead(statusCode: number, statusMessage: string, headers?: OutgoingHttpHeaders | string[]): ServerResponse;
     write(data: string | Uint8Array): void;
+    flushHeaders(): void;
+    cork(): void;
+    uncork(): void;
+    addTrailers(headers: OutgoingHttpHeaders | ReadonlyArray<[string, string]>): void;
     /* end's callback forms fire once the body went out (the 'finish'
      * emit, deferred past the handler's synchronous tail). */
     end(data?: string | Uint8Array, callback?: () => void): void;
@@ -2469,6 +2478,11 @@ declare module "http" {
   export const globalAgent: Agent;
   export interface ClientRequest {
     readonly destroyed: boolean;
+    readonly writableCorked: number;
+    flushHeaders(): void;
+    addTrailers(headers: OutgoingHttpHeaders | ReadonlyArray<[string, string]>): void;
+    cork(): void;
+    uncork(): void;
     write(data: string | Uint8Array): void;
     end(data?: string | Uint8Array): void;
     destroy(): void;
@@ -2686,6 +2700,7 @@ declare module "http2" {
   }
   export interface Http2ServerResponse {
     readonly headersSent: boolean;
+    readonly writableCorked: number;
     /* The same lowered surface as http.ServerResponse — the allowHTTP1
      * lowering serves every connection as HTTP/1.1, where the compat
      * response IS this parser's response handle. */
@@ -2698,6 +2713,10 @@ declare module "http2" {
     writeHead(statusCode: number, headers?: import("http").OutgoingHttpHeaders | string[]): Http2ServerResponse;
     writeHead(statusCode: number, statusMessage: string, headers?: import("http").OutgoingHttpHeaders | string[]): Http2ServerResponse;
     write(data: string | Uint8Array): void;
+    flushHeaders(): void;
+    cork(): void;
+    uncork(): void;
+    addTrailers(headers: import("http").OutgoingHttpHeaders | ReadonlyArray<[string, string]>): void;
     end(data?: string | Uint8Array, callback?: () => void): void;
     end(callback: () => void): void;
     destroy(): void;
