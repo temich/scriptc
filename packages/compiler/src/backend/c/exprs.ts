@@ -4450,22 +4450,27 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             return finish(`scr_fs_rmdir(${arg(0)})`);
           case "fs.readdirSync":
             return finish(`scr_fs_readdir(${arg(0)})`);
-          case "fs.readdirTypesSync": {
+          case "fs.readdirTypesSync":
+          case "fsp.readdirTypes": {
             // Dirent rows assembled inline from one scandir snapshot
             // (scr_lib.c) — the os.networkInterfaces pattern, flat. The
             // frontend/validator pinned the shape ({%dtype, name,
-            // parentPath}); lookups here only guard emitter bugs. The
-            // snapshot call throws Node's scandir error (may-throw seed
-            // set) and answers NULL then, so the pending check runs
-            // before any allocation.
-            if (e.type.kind !== "array" || e.type.elem.kind !== "record") {
-              throw new InternalCompilerError("emitter bug: readdirTypesSync result is not a record array");
+            // parentPath}); lookups here only guard emitter bugs. The sync
+            // form checks the snapshot's scandir error immediately. The
+            // promise form lets NULL flow through the null-tolerant count/
+            // free accessors, builds an empty dummy array, and moves it to
+            // settled_ref: the pending exception becomes the rejection and
+            // settled_ref releases that dummy.
+            const promiseForm = e.fn === "fsp.readdirTypes";
+            const arrayT = promiseForm && e.type.kind === "promise" ? e.type.inner : e.type;
+            if (arrayT.kind !== "array" || arrayT.elem.kind !== "record") {
+              throw new InternalCompilerError(`emitter bug: ${e.fn} result is not a Dirent record array`);
             }
-            const recT = e.type.elem;
+            const recT = arrayT.elem;
             const snap = `sc_t${emitter.tempCounter++}`;
             emitter.line(`ScrScandir *${snap} = scr_fs_scandir(${arg(0)});${emitter.srcComment(e.loc)}`);
-            emitter.emitPendingCheck();
-            const out = emitter.newTemp(e.type, emitter.arrNewC(recT, `scr_fs_scandir_count(${snap})`));
+            if (!promiseForm) emitter.emitPendingCheck();
+            const out = emitter.newTemp(arrayT, emitter.arrNewC(recT, `scr_fs_scandir_count(${snap})`));
             const i = `sc_t${emitter.tempCounter++}`;
             const n = `sc_t${emitter.tempCounter++}`;
             emitter.line(`for (size_t ${i} = 0, ${n} = scr_fs_scandir_count(${snap}); ${i} < ${n}; ${i}++) {`);
@@ -4479,6 +4484,13 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             emitter.indent--;
             emitter.line(`}`);
             emitter.line(`scr_fs_scandir_free(${snap});`);
+            if (promiseForm) {
+              const rc = vAdapters(arrayT);
+              emitter.moveTemp(out); // promise fulfillment owns the result array
+              return finish(
+                `scr_promise_settled_ref(${out.name}, &${rc.retain}, &${rc.release}, ${emitter.traceArgC(arrayT)})`,
+              );
+            }
             return out;
           }
           // Stats (scr_lib.c): statSync throws like the other sync fs

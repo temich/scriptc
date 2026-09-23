@@ -1229,6 +1229,15 @@ declare module "fs/promises" {
   export function writeFile(path: string, data: string, encoding: "utf8" | "utf-8"): Promise<void>;
   export function mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<void>;
   export function readdir(path: string): Promise<string[]>;
+  export function readdir(
+    path: string,
+    options: {
+      encoding?: "utf8" | "utf-8";
+      withFileTypes: true;
+      recursive?: boolean;
+      [option: string]: unknown;
+    },
+  ): Promise<import("node:fs").Dirent[]>;
   export function rm(path: string): Promise<void>;
   export function stat(path: string): Promise<import("node:fs").Stats>;
   export function realpath(path: string): Promise<string>;

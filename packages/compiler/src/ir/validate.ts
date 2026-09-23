@@ -877,6 +877,9 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "fsp.chmod": { argTypes: [STRING, F64], result: { kind: "promise", inner: VOID } },
   "fsp.rename": { argTypes: [STRING, STRING], result: { kind: "promise", inner: VOID } },
   "fsp.readdir": { argTypes: [STRING], result: { kind: "promise", inner: arrayOf(STRING) } },
+  // Result is promise<call-site Dirent record array>; the libCall case
+  // validates the program-dependent record shape below.
+  "fsp.readdirTypes": { argTypes: [STRING], result: { kind: "promise", inner: VOID } },
   "fsp.rm": { argTypes: [STRING], result: { kind: "promise", inner: VOID } },
   "fsp.stat": { argTypes: [STRING], result: { kind: "promise", inner: STATS_T } },
   "fsp.realpath": { argTypes: [STRING], result: { kind: "promise", inner: STRING } },
@@ -4363,13 +4366,16 @@ function validateFunction(
           }
           break;
         }
-        if (e.fn === "fs.readdirTypesSync") {
+        if (e.fn === "fs.readdirTypesSync" || e.fn === "fsp.readdirTypes") {
           // Result: the interned Dirent record array — {%dtype: f64,
           // name: string, parentPath: string} rows (canonical field
           // order; the structure lowerFsReaddirTypesCall pinned).
+          const result = e.fn === "fsp.readdirTypes"
+            ? e.type.kind === "promise" ? e.type.inner : undefined
+            : e.type;
           const shape =
-            e.type.kind === "array" && e.type.elem.kind === "record"
-              ? records.get(e.type.elem.shapeId)
+            result?.kind === "array" && result.elem.kind === "record"
+              ? records.get(result.elem.shapeId)
               : undefined;
           const ok =
             shape !== undefined &&
@@ -4380,7 +4386,7 @@ function validateFunction(
             shape.fields[1]!.name === "name" && shape.fields[1]!.type.kind === "string" &&
             shape.fields[2]!.name === "parentPath" && shape.fields[2]!.type.kind === "string";
           if (!ok) {
-            err(`libCall fs.readdirTypesSync must return the Dirent record array`, e.loc);
+            err(`libCall ${e.fn} must return ${e.fn === "fsp.readdirTypes" ? "a promise of " : ""}the Dirent record array`, e.loc);
           }
           break;
         }

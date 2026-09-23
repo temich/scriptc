@@ -3310,6 +3310,11 @@ export type IrLibFn =
   | "fsp.chmod"
   | "fsp.rename"
   | "fsp.readdir"
+  /** `fs.promises.readdir(path, { withFileTypes: true })` — the settled-
+   * promise twin of fs.readdirTypesSync. The backends assemble the same
+   * call-site-shaped Dirent rows, then move the array into a promise;
+   * scandir failure becomes its rejection. */
+  | "fsp.readdirTypes"
   | "fsp.rm"
   | "fsp.stat"
   | "fsp.realpath"

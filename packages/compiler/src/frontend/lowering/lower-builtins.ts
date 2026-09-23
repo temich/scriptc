@@ -1776,14 +1776,17 @@ function lowerFsSyncBufferWindow(
     if (bi.module === "os" && bi.member === "networkInterfaces") {
       return lowerOsNetworkInterfacesCall(lowerer, expr, loc);
     }
-    // fs.readdirSync(path, { withFileTypes: true }) — the Dirent form:
-    // routed BEFORE the 1-arg table completion. The options must be an
-    // object literal with withFileTypes: true (encoding "utf8"/"utf-8" is
-    // accepted as the default it is; recursive and encoding:'buffer'
-    // fence), and the call site's mapped type must be the interned Dirent
-    // record array (type-mapper.ts) — the userInfo verification stance.
-    if (bi.module === "fs" && bi.member === "readdirSync" && expr.arguments.length === 2) {
-      return lowerFsReaddirTypesCall(lowerer, expr, loc);
+    // fs.readdirSync/fs.promises.readdir(path, { withFileTypes: true }) —
+    // the Dirent forms, routed BEFORE the 1-arg table completion. The
+    // options must be an object literal with withFileTypes: true (encoding
+    // "utf8"/"utf-8" is accepted as the default it is; recursive and
+    // encoding:'buffer' fence), and the call site's mapped type must carry
+    // the interned Dirent record array (type-mapper.ts) — the userInfo
+    // verification stance.
+    const syncReaddirTypes = bi.module === "fs" && bi.member === "readdirSync";
+    const promiseReaddirTypes = bi.module === "fs/promises" && bi.member === "readdir";
+    if ((syncReaddirTypes || promiseReaddirTypes) && expr.arguments.length === 2) {
+      return lowerFsReaddirTypesCall(lowerer, expr, loc, promiseReaddirTypes);
     }
     if (bi.module === "os" && bi.member === "userInfo") {
       return lowerOsUserInfoCall(lowerer, expr, loc);
@@ -6735,20 +6738,27 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
    * @types/node, a user alias reshaping the result) fences honestly. Key
    * and row order follow getifaddrs enumeration — Node itself guarantees
    * no order (compare structurally). */
-/** `fs.readdirSync(path, { withFileTypes: true })` — Dirent rows: name +
-   * parentPath (the path argument as given, Node's own rule) + the hidden
-   * %dtype entry kind (libuv's UV_DIRENT encoding; DT_UNKNOWN falls back
-   * to lstat, Node's getDirents rule). The options literal is checked
-   * member-by-member; the result type must be the interned Dirent record
-   * array from type-mapper.ts — anything else (encoding: 'buffer', a user alias
-   * reshaping Dirent) fences honestly. */
-  function lowerFsReaddirTypesCall(lowerer: Lowerer, call: ts.CallExpression, loc: SrcLoc): IrExpr {
+/** `fs.readdirSync` / `fs.promises.readdir` with `{ withFileTypes: true }`
+   * — Dirent rows: name + parentPath (the path argument as given, Node's
+   * own rule) + the hidden %dtype entry kind (libuv's UV_DIRENT encoding;
+   * DT_UNKNOWN falls back to lstat, Node's getDirents rule). The options
+   * literal is checked member-by-member; the result type must carry the
+   * interned Dirent record array from type-mapper.ts — anything else
+   * (encoding: 'buffer', a user alias reshaping Dirent) fences honestly. */
+  function lowerFsReaddirTypesCall(
+    lowerer: Lowerer,
+    call: ts.CallExpression,
+    loc: SrcLoc,
+    promiseForm: boolean,
+  ): IrExpr {
+    const operation = promiseForm ? "fs.promises.readdir" : "readdirSync";
+    const spelling = promiseForm ? "readdir" : "readdirSync";
     const optsNode = call.arguments[1]!;
     if (!ts.isObjectLiteralExpression(optsNode)) {
       lowerer.noLowering(
-        "readdirSync with a non-literal options argument",
+        `${operation} with a non-literal options argument`,
         optsNode,
-        "pass the options inline so each member can be checked: readdirSync(path, { withFileTypes: true })",
+        `pass the options inline so each member can be checked: ${spelling}(path, { withFileTypes: true })`,
       );
     }
     let sawWithFileTypes = false;
@@ -6756,7 +6766,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
       const m = optionMember(p);
       if (!m) {
         lowerer.noLowering(
-          "readdirSync with this options shape",
+          `${operation} with this options shape`,
           p,
           "spreads and computed keys have no lowering — write each member inline",
         );
@@ -6765,7 +6775,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
         const t = lowerer.typeOf(m.value);
         if (!(t.flags & ts.TypeFlags.BooleanLiteral) || lowerer.checker.typeToString(t) !== "true") {
           lowerer.noLowering(
-            "readdirSync with a non-literal-true withFileTypes",
+            `${operation} with a non-literal-true withFileTypes`,
             m.value,
             "withFileTypes: true is the Dirent form; omit the options for plain names",
           );
@@ -6775,7 +6785,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
         const t = lowerer.typeOf(m.value);
         if (!t.isStringLiteralType() || (t.value !== "utf8" && t.value !== "utf-8")) {
           lowerer.noLowering(
-            "readdirSync with a non-utf8 encoding",
+            `${operation} with a non-utf8 encoding`,
             m.value,
             "names decode as utf8 (the default); encoding: 'buffer' has no lowering",
           );
@@ -6784,25 +6794,29 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
         // The options-record stance: recursive (a documented knob with
         // no lowering) fences by name; undocumented keys drop like Node.
         fenceOrDropOptionKey(
-          lowerer, p, m.name, "readdirSync", FS_READDIR_DOCUMENTED_OPTIONS,
+          lowerer, p, m.name, operation, FS_READDIR_DOCUMENTED_OPTIONS,
           "withFileTypes: true (and the default encoding) is the supported options surface — recursive listings want an explicit walk",
         );
       }
     }
     if (!sawWithFileTypes) {
       lowerer.noLowering(
-        "readdirSync with 2 arguments",
+        `${operation} with 2 arguments`,
         call,
-        "readdirSync(path) lists names; readdirSync(path, { withFileTypes: true }) lists Dirents",
+        `${spelling}(path) lists names; ${spelling}(path, { withFileTypes: true }) lists Dirents`,
       );
     }
     const fence: () => never = () =>
       lowerer.noLowering(
-        "readdirSync(path, { withFileTypes: true }) where the result is not the Dirent array",
+        `${operation}(path, { withFileTypes: true }) where the result is not the Dirent array`,
         call,
         "{ name, parentPath, isFile(), isDirectory(), isSymbolicLink() } rows are the supported result shape",
       );
-    const result = lowerer.mapTypeOf(lowerer.typeOf(call));
+    const callType = lowerer.mapTypeOf(lowerer.typeOf(call));
+    if (!callType) fence();
+    const result = promiseForm
+      ? callType.kind === "promise" ? callType.inner : fence()
+      : callType;
     if (result?.kind !== "array" || result.elem.kind !== "record") fence();
     const shape = lowerer.shapes.get(result.elem.shapeId);
     if (
@@ -6815,7 +6829,13 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
       fence();
     }
     const path = lowerer.lowerExprExpecting(call.arguments[0]!, STRING);
-    return { kind: "libCall", fn: "fs.readdirTypesSync", args: [path], type: result, loc };
+    return {
+      kind: "libCall",
+      fn: promiseForm ? "fsp.readdirTypes" : "fs.readdirTypesSync",
+      args: [path],
+      type: callType,
+      loc,
+    };
   }
 
 /** `d.isFile()` / `d.isDirectory()` / `d.isSymbolicLink()` on a Dirent-

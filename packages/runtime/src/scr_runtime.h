@@ -3071,14 +3071,15 @@ ScrStr *scr_os_user_homedir(void);
  * UV_DIRENT encoding (1 file, 2 dir, 3 link, 4 fifo, 5 socket, 6 char,
  * 7 block, 0 unknown); a DT_UNKNOWN d_type falls back to lstat(2) —
  * Node's own getDirents rule. OS order, no "."/"..". scr_fs_scandir
- * throws Node's scandir errno error and answers NULL then; the name
- * accessor returns +1. */
+ * throws Node's scandir errno error and answers NULL then; count/free are
+ * NULL-tolerant so the promise emitter can turn that pending error into a
+ * rejection, while the name accessor returns +1. */
 typedef struct ScrScandir ScrScandir;
 ScrScandir *scr_fs_scandir(ScrStr *path); /* or throws (NULL) */
-size_t scr_fs_scandir_count(const ScrScandir *s);
+size_t scr_fs_scandir_count(const ScrScandir *s); /* NULL -> 0 */
 ScrStr *scr_fs_scandir_name(const ScrScandir *s, size_t i); /* +1 */
 double scr_fs_scandir_type(const ScrScandir *s, size_t i);
-void scr_fs_scandir_free(ScrScandir *s);
+void scr_fs_scandir_free(ScrScandir *s); /* NULL-tolerant */
 
 /* os.networkInterfaces(): a getifaddrs(3) snapshot (scr_lib.c) the emitter
  * walks to build the typed Dict<NetworkInterfaceInfo[]> record inline. Row

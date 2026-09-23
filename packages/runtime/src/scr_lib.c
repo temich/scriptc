@@ -3668,7 +3668,7 @@ ScrScandir *scr_fs_scandir(ScrStr *path) {
   return s;
 }
 
-size_t scr_fs_scandir_count(const ScrScandir *s) { return s->len; }
+size_t scr_fs_scandir_count(const ScrScandir *s) { return s ? s->len : 0; }
 
 ScrStr *scr_fs_scandir_name(const ScrScandir *s, size_t i) {
   return scr_str_retain(s->names[i]);
@@ -3677,6 +3677,7 @@ ScrStr *scr_fs_scandir_name(const ScrScandir *s, size_t i) {
 double scr_fs_scandir_type(const ScrScandir *s, size_t i) { return (double)s->kinds[i]; }
 
 void scr_fs_scandir_free(ScrScandir *s) {
+  if (!s) return;
   for (size_t i = 0; i < s->len; i++) scr_str_release(s->names[i]);
   free(s->names);
   free(s->kinds);

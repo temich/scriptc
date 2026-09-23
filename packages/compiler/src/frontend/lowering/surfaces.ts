@@ -971,6 +971,8 @@ export const BUILTIN_MODULE_FN_ALIASES: Record<string, Record<string, readonly I
     readFile: ["fsp.readFileBytes"],
     // The string-data { mode } options form.
     writeFile: ["fsp.writeFileMode"],
+    // The { withFileTypes: true } Dirent form.
+    readdir: ["fsp.readdirTypes"],
   },
   crypto: {
     // The composed randomBytes(n).toString(enc) chain keeps its one-libCall
