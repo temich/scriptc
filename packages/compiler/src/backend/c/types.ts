@@ -4,7 +4,7 @@ import { InternalCompilerError } from "../../errors.js";
  * array element kinds, map key/value kinds), plus C literal spelling. Pure
  * functions of IrType/values — every emission module leans on these, so they
  * live in ONE place with no emitter state. */
-import type { IrType } from "../../ir/ir.js";
+import type { IrBytesElem, IrType } from "../../ir/ir.js";
 import { POINTER_KINDS, type PointerKind, runtimeRcStem, RUNTIME_EMITTER_CLASS, RUNTIME_ERROR_CLASSES, RUNTIME_STREAM_CLASSES } from "../../ir/ir.js";
 import {
   mangleClassRelease,
@@ -329,8 +329,16 @@ export function elemKindC(elem: IrType): string {
 }
 
 /** The runtime's element-kind tag for a bytes (typed array) type. */
-export function bytesElemKindC(elem: "u8" | "u32" | "i32" | "f32"): string {
-  return elem === "u8" ? "SCR_BYTES_U8" : elem === "u32" ? "SCR_BYTES_U32" : elem === "i32" ? "SCR_BYTES_I32" : "SCR_BYTES_F32";
+const BYTES_ELEM_KIND_C: Record<IrBytesElem, string> = {
+  u8: "SCR_BYTES_U8",
+  u32: "SCR_BYTES_U32",
+  i32: "SCR_BYTES_I32",
+  f32: "SCR_BYTES_F32",
+  f64: "SCR_BYTES_F64",
+};
+
+export function bytesElemKindC(elem: IrBytesElem): string {
+  return BYTES_ELEM_KIND_C[elem];
 }
 
 /** The runtime's ScrBytesNumKind tag + littleEndian flag per readNum/

@@ -5088,7 +5088,7 @@ double scr_bit_ushr(double a, double b);
 double scr_bit_not(double a);
 
 /* ── typed arrays / Buffer (scr_bytes.c) ──────────────────────────────
- * ONE runtime representation for Uint8Array/Uint32Array/Float32Array,
+ * ONE runtime representation for Uint8Array/Uint32Array/Float32Array/Float64Array,
  * Node's Buffer (a Uint8Array subclass), and DataView: a refcounted,
  * MUTABLE, fixed-length element buffer. An ScrBytes either OWNS its
  * storage (backing == NULL, byteOffset 0) or is a VIEW: its `data` points
@@ -5114,6 +5114,7 @@ typedef enum ScrBytesElem {
   SCR_BYTES_U32, /* Uint32Array */
   SCR_BYTES_F32, /* Float32Array */
   SCR_BYTES_I32, /* Int32Array (reads sign-extend; writes ToInt32-wrap) */
+  SCR_BYTES_F64, /* Float64Array */
 } ScrBytesElem;
 
 typedef struct ScrBytes {
@@ -5128,7 +5129,7 @@ typedef struct ScrBytes {
   struct ScrBytes *backing;
 } ScrBytes;
 
-size_t scr_bytes_elem_size(ScrBytesElem elem); /* 1, 4, 4 */
+size_t scr_bytes_elem_size(ScrBytesElem elem); /* 1, 4, or 8 */
 
 /* node:string_decoder's StringDecoder (scr_bytes.c, beside the decoders
  * it shares): the decoder value is a record holding the CANONICAL

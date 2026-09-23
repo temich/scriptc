@@ -145,7 +145,7 @@ export function emitBytesLength(host: LlvmEmitterContext, elem: IrBytesElem, rec
     B.line(`${p} = getelementptr inbounds %ScrBytes, ptr ${receiver}, i64 0, i32 1`);
     B.line(`${len} = load ${host.sizeType}, ptr ${p}`);
     const count = bytes && elem !== "u8" ? B.tmp() : len;
-    if (count !== len) B.line(`${count} = shl ${host.sizeType} ${len}, 2`);
+    if (count !== len) B.line(`${count} = shl ${host.sizeType} ${len}, ${elem === "f64" ? 3 : 2}`);
     const out = B.tmp();
     B.line(`${out} = uitofp ${host.sizeType} ${count} to double`);
     return { name: out, type: F64 };
@@ -172,6 +172,12 @@ export function emitBytesGet(host: LlvmEmitterContext, elem: IrBytesElem, receiv
       B.line(`${p} = getelementptr inbounds float, ptr ${data}, ${host.sizeType} ${idx}`);
       B.line(`${raw} = load float, ptr ${p}, align 1`);
       B.line(`${out} = fpext float ${raw} to double`);
+      return { name: out, type: F64 };
+    }
+    if (elem === "f64") {
+      const out = B.tmp();
+      B.line(`${p} = getelementptr inbounds double, ptr ${data}, ${host.sizeType} ${idx}`);
+      B.line(`${out} = load double, ptr ${p}, align 1`);
       return { name: out, type: F64 };
     }
     const raw = B.tmp();
@@ -252,7 +258,7 @@ export function emitToUint32(host: LlvmEmitterContext, value: string): string {
 export function emitBytesSet(host: LlvmEmitterContext, elem: IrBytesElem, receiver: string, index: string, value: string, integerIndex = false): void {
     const B = host.B;
     const idx = host.emitBytesIndex(receiver, index, integerIndex);
-    const stored = elem === "f32" ? null : host.emitToUint32(value);
+    const stored = elem === "f32" || elem === "f64" ? null : host.emitToUint32(value);
     const data = host.emitBytesData(receiver);
     const p = B.tmp();
     if (elem === "u8") {
@@ -267,6 +273,11 @@ export function emitBytesSet(host: LlvmEmitterContext, elem: IrBytesElem, receiv
       B.line(`${narrowed} = fptrunc double ${value} to float`);
       B.line(`${p} = getelementptr inbounds float, ptr ${data}, ${host.sizeType} ${idx}`);
       B.line(`store float ${narrowed}, ptr ${p}, align 1`);
+      return;
+    }
+    if (elem === "f64") {
+      B.line(`${p} = getelementptr inbounds double, ptr ${data}, ${host.sizeType} ${idx}`);
+      B.line(`store double ${value}, ptr ${p}, align 1`);
       return;
     }
     B.line(`${p} = getelementptr inbounds i32, ptr ${data}, ${host.sizeType} ${idx}`);

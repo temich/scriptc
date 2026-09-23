@@ -1498,7 +1498,7 @@ export class CEmitter {
         `}`,
       );
     }
-    if ([...this.bytesElementHelpers].some((key) => key.startsWith("set:") && key.split(":")[1] !== "f32")) {
+    if ([...this.bytesElementHelpers].some((key) => key.startsWith("set:") && !key.startsWith("set:f32:") && !key.startsWith("set:f64:"))) {
       out.push(
         `static inline uint32_t sc_bytes_coerce_u32(double v) {`,
         `  if (v >= -9007199254740992.0 && v <= 9007199254740992.0) return (uint32_t)(int64_t)v;`,
@@ -1509,7 +1509,7 @@ export class CEmitter {
         `}`,
       );
     }
-    for (const elem of ["u8", "u32", "i32", "f32"] as const) {
+    for (const elem of ["u8", "u32", "i32", "f32", "f64"] as const) {
       for (const mode of ["f64", "u64"] as const) {
         const suffix = mode === "u64" ? "_u64" : "";
         const indexType = mode === "u64" ? "uint64_t" : "double";
@@ -1522,11 +1522,12 @@ export class CEmitter {
               `}`,
             );
           } else {
-            const valueType = elem === "f32" ? "float" : elem === "i32" ? "int32_t" : "uint32_t";
+            const valueType = elem === "f32" ? "float" : elem === "f64" ? "double" : elem === "i32" ? "int32_t" : "uint32_t";
+            const size = elem === "f64" ? 8 : 4;
             out.push(
               `static inline double sc_bytes_get_${elem}${suffix}(const ScrBytes *b, ${indexType} i) {`,
               `  ${valueType} v;`,
-              `  memcpy(&v, b->data + ${checked}(b, i) * 4, 4);`,
+              `  memcpy(&v, b->data + ${checked}(b, i) * ${size}, ${size});`,
               `  return (double)v;`,
               `}`,
             );
@@ -1540,13 +1541,14 @@ export class CEmitter {
               `}`,
             );
           } else {
-            const valueType = elem === "f32" ? "float" : "uint32_t";
-            const init = elem === "f32" ? `(float)v` : `sc_bytes_coerce_u32(v)`;
+            const valueType = elem === "f32" ? "float" : elem === "f64" ? "double" : "uint32_t";
+            const init = elem === "f32" ? `(float)v` : elem === "f64" ? "v" : `sc_bytes_coerce_u32(v)`;
+            const size = elem === "f64" ? 8 : 4;
             out.push(
               `static inline void sc_bytes_set_${elem}${suffix}(ScrBytes *b, ${indexType} i, double v) {`,
               `  size_t idx = ${checked}(b, i);`,
               `  ${valueType} stored = ${init};`,
-              `  memcpy(b->data + idx * 4, &stored, 4);`,
+              `  memcpy(b->data + idx * ${size}, &stored, ${size});`,
               `}`,
             );
           }

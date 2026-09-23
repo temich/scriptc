@@ -96,16 +96,17 @@ function lowerBytesToSortedCall(
 /* ── typed arrays / Buffer ─────────────────────────────────────────────── */
 
 /** The typed-array constructors with a runtime representation, by lib
- * interface name. The other TypedArray flavors (Int8Array, Float64Array,
- * DataView, ...) fall through to the generic stdlib-constructor fence. */
+ * interface name. Other flavors (Int8Array, Float16Array, ...) fall through
+ * to the generic stdlib-constructor fence. DataView is handled separately. */
 const BYTES_CTORS: Record<string, IrBytesElem | undefined> = {
   Uint8Array: "u8",
   Uint32Array: "u32",
   Int32Array: "i32",
   Float32Array: "f32",
+  Float64Array: "f64",
 };
 
-/** `new Uint8Array(...)` / `new Uint32Array(...)` / `new Float32Array(...)`
+/** `new Uint8Array(...)` / `new Uint32Array(...)` / `new Float32Array(...)` / `new Float64Array(...)`
    * (stdlib provenance — a user's own class with the name resolves through
    * classBySymbol). Lowered argument shapes: none (empty), a length
    * (zero-filled; ToIndex at runtime — invalid lengths throw Node's
@@ -163,7 +164,7 @@ export function lowerBytesNew(lowerer: Lowerer, expr: ts.NewExpression, symbol: 
             "erases into the view): drop the options bag",
         );
       }
-      const elemSize = elem === "u8" ? 1 : 4;
+      const elemSize = elem === "u8" ? 1 : elem === "f64" ? 8 : 4;
       const lenArg = argNode.arguments?.length === 1 ? argNode.arguments[0] : undefined;
       const lenT = lenArg ? lowerer.typeOf(lenArg) : null;
       const byteLen = lenT?.isNumberLiteralType() ? lenT.value : null;
@@ -284,7 +285,7 @@ function lowerDataViewNew(lowerer: Lowerer, expr: ts.NewExpression): IrExpr {
   }
   const hint =
     "views compile over a typed array's own storage — new DataView(x.buffer, byteOffset?, byteLength?) " +
-    "where x is a Uint8Array/Uint32Array/Float32Array/Buffer value — or a fresh buffer erased into " +
+    "where x is a Uint8Array/Uint32Array/Float32Array/Float64Array/Buffer value — or a fresh buffer erased into " +
     "the view: new DataView(new ArrayBuffer(n), ...); free-standing ArrayBuffers have no representation";
   if (!ts.isPropertyAccessExpression(bufNode) || bufNode.name.text !== "buffer" || bufNode.questionDotToken) {
     lowerer.noLowering("new DataView over this buffer expression", bufNode, hint);

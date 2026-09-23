@@ -1,18 +1,19 @@
 /* Focused LLVM expression emission extracted from emitter.ts. */
 import { InternalCompilerError } from "../../errors.js";
 import { matchStringSelfConcat, undefinedArmTag } from "../../ir/analysis.js";
-import { isRefCounted } from "../../ir/ir.js";
+import { isRefCounted, type IrBytesElem } from "../../ir/ir.js";
 import { mangleRecordClone, mangleRecordNew } from "../mangle.js";
 import { arrNewCall, elemAccess } from "./shapes.js";
 import { LlvmUnsupportedError } from "./unsupported.js";
 import type { LlvmEmitterContext, ExprOf, LlValue } from "./expr-context.js";
 
-/** ScrBytesElem (scr_runtime.h): U8, U32, F32, I32. */
-const BYTES_ELEM_NUM: Record<"u8" | "u32" | "f32" | "i32", number> = {
+/** ScrBytesElem (scr_runtime.h): U8, U32, F32, I32, F64. */
+const BYTES_ELEM_NUM: Record<IrBytesElem, number> = {
   u8: 0,
   u32: 1,
   f32: 2,
   i32: 3,
+  f64: 4,
 };
 import { f64Lit } from "./common.js";
 

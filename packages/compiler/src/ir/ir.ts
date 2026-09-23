@@ -24,11 +24,10 @@ export interface SrcLoc {
 
 /* ── types ─────────────────────────────────────────────────────────────── */
 
-/** The typed-array element kinds with a runtime representation: exactly
- * the constructors real CLI code reaches (Uint8Array/Buffer, Uint32Array,
- * Int32Array — the Atomics.wait sleep idiom's array — Float32Array). The
- * other TypedArray flavors stay frontend-fenced. */
-export type IrBytesElem = "u8" | "u32" | "i32" | "f32";
+/** Typed-array element kinds with a runtime representation: Uint8Array/Buffer,
+ * Uint32Array, Int32Array, Float32Array, and Float64Array. Other flavors stay
+ * frontend-fenced. */
+export type IrBytesElem = "u8" | "u32" | "i32" | "f32" | "f64";
 
 export type IrType =
   | { kind: "f64" }
@@ -72,14 +71,14 @@ export type IrType =
    * elements, no map keys/values, no union arms (a regex arm would have no
    * narrowing test), not JSON-safe. */
   | { kind: "regex" }
-  /** A typed array / Node Buffer (Uint8Array, Uint32Array, Float32Array;
+  /** A typed array / Node Buffer (Uint8Array, Uint32Array, Float32Array,
+   * Float64Array;
    * Buffer IS a Uint8Array subclass and shares the u8 kind) — heap,
    * refcounted, MUTABLE, fixed-length, with ONE runtime representation
-   * (ScrBytes) that OWNS its storage: no views exist — subarray()/slice()
-   * both COPY (documented divergence for subarray), `.buffer`/
-   * `.byteOffset`/DataView are frontend-fenced. Element reads widen to
-   * f64; writes coerce JS-exactly (ToUint8/ToUint32 modular truncation,
-   * double→float rounding). OOB element access traps like arrays. Allowed
+   * (ScrBytes) that owns storage or borrows it for subarray and DataView
+   * views. Typed-array slice copies. Element reads widen to f64; writes
+   * coerce JS-exactly (ToUint8/ToUint32 modular truncation and f32
+   * rounding). OOB element access traps like arrays. Allowed
    * as array elements and union arms (tag-based narrowing, like url);
    * fenced out of map keys/values, set elements, and JSON. Holds only raw
    * bytes — never part of a cycle, no trace. */

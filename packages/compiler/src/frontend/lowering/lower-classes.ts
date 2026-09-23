@@ -5180,8 +5180,8 @@ export function lowerNew(lowerer: Lowerer, expr: ts.NewExpression): IrExpr {
         );
       }
       // `new Uint8Array(...)` / `new Uint32Array(...)` / `new
-      // Float32Array(...)`: the typed-array constructors with a runtime
-      // representation (stdlib provenance — see lowerBytesNew for the
+      // Float32Array(...)` / `new Float64Array(...)`: the typed-array
+      // constructors with a runtime representation (stdlib provenance — see lowerBytesNew for the
       // lowered argument shapes; a user's own class with one of the names
       // resolves through classBySymbol below).
       const bytesNew = lowerer.lowerBytesNew(expr, symbol);
