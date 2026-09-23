@@ -12,7 +12,9 @@ import type { NativeArtifactDependency } from "./native-toolchain.js";
 import { loadRuntimePack, type RuntimePackSelection } from "./runtime-pack.js";
 import {
   executableOptimizationLinkerArgs,
+  windowsSubsystemLinkerArgs,
   type NativeTargetSpec,
+  type WindowsSubsystem,
 } from "./targets.js";
 
 export interface NativeLinkPlan {
@@ -36,6 +38,7 @@ export async function createNativeLinkPlan(options: {
   features: NativeLinkFeatures;
   ffi: FfiProfile | null;
   optimization: "release" | "dev";
+  windowsSubsystem?: WindowsSubsystem;
   programObjectDependencies?: readonly NativeArtifactDependency[];
   env?: NodeJS.ProcessEnv;
   resolver?: (specifier: string) => string;
@@ -59,6 +62,7 @@ export async function createNativeLinkPlan(options: {
         index > 0 && args[index - 1] === "-target" ? options.target.linkerTargetTriple : arg
       ),
       ...executableOptimizationLinkerArgs(options.target.platform, options.optimization),
+      ...windowsSubsystemLinkerArgs(options.target.platform, options.windowsSubsystem),
     ],
     dependencyPaths: [
       ...runtimePack.dependencyPaths,

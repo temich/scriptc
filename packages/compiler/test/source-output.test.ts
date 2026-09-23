@@ -28,6 +28,17 @@ test("serialized IR is the primary artifact and round-trips through validation",
   expect(validateModule(module)).toEqual([]);
 });
 
+test("Windows subsystem selection refuses non-executable compiler output", async () => {
+  const { entry, outDir } = await fixture();
+  const outPath = join(outDir, "main.ir.json");
+  const result = await compile(entry, { outDir, outPath, outputKind: "ir", windowsSubsystem: "gui" });
+  expect(result).toMatchObject({
+    ok: false,
+    diagnostics: [{ code: "SC3002", message: expect.stringContaining("only supported for executable output") }],
+  });
+  await expect(readFile(outPath)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
 test("C and LLVM are exact primary artifacts and never create an executable", async () => {
   const { entry, outDir } = await fixture();
   const cPath = join(outDir, "exact.output");

@@ -21,6 +21,7 @@ import { emitLlvmModule, LlvmUnsupportedError } from "./backend/llvm/emitter.js"
 import { emitNativeArtifact, NativeCodegenError } from "./backend/native-codegen.js";
 import { privateSiblingPath } from "./backend/build-cache.js";
 import { nativeCodegenTarget, nativeCodegenTargetRefusal } from "./backend/targets.js";
+import { windowsSubsystemLinkerArgs, type WindowsSubsystem } from "./backend/targets.js";
 import { createNativeLinkInfo, type NativeLinkInfo } from "./backend/native-link-info.js";
 import { RuntimePackError } from "./backend/runtime-pack.js";
 import { createNativeLinkPlan } from "./backend/link-plan.js";
@@ -80,6 +81,7 @@ export {
   RUNTIME_ABI_VERSION,
 } from "./backend/runtime-abi.js";
 export type { NativeLinkInfo, NativeLinkFeatures } from "./backend/native-link-info.js";
+export type { WindowsSubsystem } from "./backend/targets.js";
 
 export { InternalCompilerError } from "./errors.js";
 export {
@@ -223,6 +225,9 @@ export interface CompileBaseOptions {
   /** Native optimization posture. Release is the shipped -O2 default; dev
    * uses -O0 and stable multi-TU object caching for large LLVM programs. */
   optimization?: "release" | "dev";
+  /** Windows PE executable subsystem. Console is the default; GUI suppresses
+   * automatic console-window creation. Only valid for Windows executables. */
+  windowsSubsystem?: WindowsSubsystem;
   /** --npm-static: package names whose shipped, unminified JS compiles
    * STATICALLY as program modules (inference types the bodies; statements
    * the lowering cannot prove become runtime fences). "auto" opts in every
@@ -1073,6 +1078,7 @@ async function compileExecutableNative(
   outPath: string,
   sanitize: boolean,
   ffi: FfiProfile | null,
+  windowsSubsystem?: WindowsSubsystem,
   programSplit: ReturnType<typeof splitLlvmProgram> = null,
   programObjectDependencies: readonly NativeArtifactDependency[] = [],
   onArtifactReady?: NonNullable<Parameters<typeof compileExternalC>[0]["onArtifactReady"]>,
@@ -1089,6 +1095,7 @@ async function compileExecutableNative(
       features,
       ffi,
       optimization: features.optimization ?? "release",
+      ...(windowsSubsystem === undefined ? {} : { windowsSubsystem }),
       programObjectDependencies,
     });
     const cacheableLinker =
@@ -1125,6 +1132,7 @@ async function compileExecutableNative(
       outPath,
       cacheIdentity: "scriptc-generated-v1",
       ...(features.optimization === "dev" ? { optimization: "dev" as const } : {}),
+      ...(windowsSubsystem === undefined ? {} : { windowsSubsystem }),
       ...(effectiveProgramSplit === null
         ? {}
         : {
@@ -1230,6 +1238,13 @@ async function compileTracked(
 ): Promise<CompileRequestResult> {
   entryPath = resolve(entryPath);
   const outputKind = opts.outputKind ?? "exe";
+  if (opts.windowsSubsystem !== undefined && outputKind !== "exe") {
+    return {
+      ok: false,
+      diagnostics: [nativeCodegenDiag("SC3002", "--windows-subsystem is only supported for executable output", entryPath)],
+      sourceTexts: new Map(),
+    };
+  }
   if (opts.nativeLinkInfo === true && outputKind !== "obj") {
     return {
       ok: false,
@@ -1318,6 +1333,15 @@ async function compileTracked(
       }
     }
   }
+  try {
+    windowsSubsystemLinkerArgs(buildPlatform, opts.windowsSubsystem);
+  } catch (err) {
+    return {
+      ok: false,
+      diagnostics: [nativeCodegenDiag("SC3002", err instanceof Error ? err.message : String(err), entryPath)],
+      sourceTexts: new Map(),
+    };
+  }
   // Mobile triples are library-mode targets: the archive an embedding app
   // links is the artifact, and only the library-admissible runtime surface
   // is verified on those device classes. The executable lane refuses before
@@ -1365,6 +1389,7 @@ async function compileTracked(
       dynamic: opts.dynamic ?? false,
       backend: opts.backend ?? "auto",
       ...(opts.optimization === "dev" ? { optimization: "dev" as const } : {}),
+      ...(opts.windowsSubsystem === "gui" ? { windowsSubsystem: "gui" as const } : {}),
       npmStatic: opts.npmStatic ?? null,
       ffiProfile:
         opts.ffiProfilePath === undefined || ffiProfileBytes === null
@@ -1466,6 +1491,7 @@ async function compileTracked(
         opts.outPath,
         opts.sanitize ?? false,
         ffi,
+        opts.windowsSubsystem,
         null,
         nativeProgramObject?.dependencies,
         opts.nativeProgramObject === true ? undefined : async ({ dependencies }) => {
@@ -1788,6 +1814,7 @@ async function compileTracked(
       opts.outPath,
       opts.sanitize ?? false,
       ffi,
+      opts.windowsSubsystem,
       programSplit,
       nativeProgramObject?.dependencies,
       opts.nativeProgramObject === true ? undefined : async ({ dependencies }) => {

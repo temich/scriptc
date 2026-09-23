@@ -11,6 +11,7 @@ import {
   executableOptimizationLinkerArgs,
   nativeCodegenTarget,
   nativeCodegenTargetRefusal,
+  windowsSubsystemLinkerArgs,
 } from "./targets.js";
 
 describe("native code-generation targets", () => {
@@ -65,5 +66,13 @@ describe("native code-generation targets", () => {
     expect(executableOptimizationLinkerArgs("wasi", "release")).toEqual(["-Wl,--strip-debug"]);
     expect(executableOptimizationLinkerArgs("wasi", "dev")).toEqual([]);
     expect(executableOptimizationLinkerArgs("linux", "release")).toEqual([]);
+  });
+
+  test("selects the PE GUI subsystem without changing default console links", () => {
+    expect(windowsSubsystemLinkerArgs("win32", undefined)).toEqual([]);
+    expect(windowsSubsystemLinkerArgs("win32", "console")).toEqual([]);
+    expect(windowsSubsystemLinkerArgs("win32", "gui")).toEqual(["-Wl,--subsystem,windows"]);
+    expect(() => windowsSubsystemLinkerArgs("linux", "gui")).toThrow("Windows executable target");
+    expect(() => windowsSubsystemLinkerArgs("win32", "other" as "gui")).toThrow("unknown Windows subsystem");
   });
 });

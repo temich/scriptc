@@ -23,6 +23,24 @@ export type NativeTargetName =
 export type NativeObjectFormat = "macho" | "elf" | "coff" | "wasm";
 export type NativeTargetPlatform = "darwin" | "linux" | "win32" | "wasi";
 
+export type WindowsSubsystem = "console" | "gui";
+
+/** Select the PE subsystem through either supported compiler-driver route.
+ * An omitted or explicit console selection retains the driver's default. */
+export function windowsSubsystemLinkerArgs(
+  platform: string,
+  subsystem: WindowsSubsystem | undefined,
+): string[] {
+  if (subsystem === undefined) return [];
+  if (subsystem !== "console" && subsystem !== "gui") {
+    throw new Error(`unknown Windows subsystem '${String(subsystem)}' (supported: console, gui)`);
+  }
+  if (platform !== "win32") {
+    throw new Error("--windows-subsystem requires a Windows executable target");
+  }
+  return subsystem === "gui" ? ["-Wl,--subsystem,windows"] : [];
+}
+
 /** Linker flags that belong to an optimization posture rather than the
  * target ABI. Zig's WASI runtime objects carry DWARF custom sections even
  * when compiled with -O2; release executables discard that non-runtime
