@@ -55,6 +55,12 @@
 #include <string.h>
 #include <time.h>
 
+/* The HTTP/1 parser has no configurable maxHeaderSize surface yet. Keep its
+ * head and trailer block within the existing 64 KiB parser bound, and cap
+ * fields too: each stored field owns three strings and three growing arrays. */
+#define SCR_HTTP_MAX_HEADER_BYTES 65536u
+#define SCR_HTTP_MAX_HEADER_FIELDS 1000u
+
 static void scr_http_oom(void) {
   fputs("scriptc: out of memory\n", stderr);
   abort();
@@ -1595,6 +1601,8 @@ typedef struct ScrHttpConn {
   size_t len, cap;
   ScrHttpParseState state;
   size_t body_remaining;
+  size_t head_bytes, head_fields;
+  size_t trailer_bytes, trailer_fields;
   ScrHttpReq *req; /* the in-flight request (server) or response (client),
                     * +1; NULL between requests / before the head */
   ScrHttpRes *res; /* +1; server mode only */
@@ -1610,6 +1618,21 @@ typedef struct ScrHttpConn {
  * below the server parser). */
 static bool scr_http_client_parse_head(ScrHttpConn *conn, size_t head_len);
 static void scr_http_client_head_overflow(ScrHttpConn *conn);
+
+/* The trailer budget includes the request/response head and every trailer
+ * line on the wire, including the terminating blank line. Counters live on
+ * the connection because an early response can release conn->req while the
+ * parser must continue consuming and validating its incoming chunk stream. */
+static bool scr_http_conn_trailer_fits(const ScrHttpConn *conn, size_t bytes, bool field) {
+  if (conn->head_bytes > SCR_HTTP_MAX_HEADER_BYTES ||
+      conn->trailer_bytes > SCR_HTTP_MAX_HEADER_BYTES - conn->head_bytes) return false;
+  size_t remaining = SCR_HTTP_MAX_HEADER_BYTES - conn->head_bytes - conn->trailer_bytes;
+  if (bytes > remaining) return false;
+  if (!field) return true;
+  if (conn->head_fields > SCR_HTTP_MAX_HEADER_FIELDS ||
+      conn->trailer_fields >= SCR_HTTP_MAX_HEADER_FIELDS - conn->head_fields) return false;
+  return true;
+}
 
 /* The server-side ctx: the 'request' listener list, shared by every
  * connection. REFCOUNTED: the server's native-conn chain holds one ref
@@ -1920,10 +1943,14 @@ static bool scr_http_conn_parse_head(ScrHttpConn *conn, size_t head_len) {
     scr_http_req_add_header(req, p, (size_t)(colon - p), v, (size_t)(ve - v));
     p = eol + 2;
   }
-  if (!ok) {
+  if (!ok || req->nheaders > SCR_HTTP_MAX_HEADER_FIELDS) {
     scr_http_req_release(req);
     return false;
   }
+  conn->head_bytes = head_len;
+  conn->head_fields = req->nheaders;
+  conn->trailer_bytes = 0;
+  conn->trailer_fields = 0;
 
   if (!http10 && conn->srv->require_host_header) {
     bool has_host = false;
@@ -2115,13 +2142,18 @@ static void scr_http_conn_pump(ScrHttpConn *conn) {
         }
       }
       if (!hit) {
-        if (conn->len > 65536) {
+        if (conn->len > SCR_HTTP_MAX_HEADER_BYTES) {
           if (conn->client_mode) scr_http_client_head_overflow(conn);
           else scr_http_conn_bad_request(conn); /* header cap */
         }
         return;
       }
       size_t head_len = (size_t)(hit - conn->buf) + 4;
+      if (head_len > SCR_HTTP_MAX_HEADER_BYTES) {
+        if (conn->client_mode) scr_http_client_head_overflow(conn);
+        else scr_http_conn_bad_request(conn);
+        return;
+      }
       if (conn->client_mode) {
         if (!scr_http_client_parse_head(conn, head_len)) {
           scr_http_client_head_overflow(conn); /* malformed: hang up */
@@ -2225,8 +2257,14 @@ static void scr_http_conn_pump(ScrHttpConn *conn) {
        * trailers separate from the head until 'end' fires. */
       if (conn->len < 2) return;
       if (conn->buf[0] == '\r' && conn->buf[1] == '\n') {
+        if (!scr_http_conn_trailer_fits(conn, 2, false)) {
+          if (conn->client_mode) scr_http_client_head_overflow(conn);
+          else scr_http_conn_bad_request(conn);
+          return;
+        }
         memmove(conn->buf, conn->buf + 2, conn->len - 2);
         conn->len -= 2;
+        conn->trailer_bytes += 2;
         scr_http_conn_body_done(conn);
         continue;
       }
@@ -2238,7 +2276,7 @@ static void scr_http_conn_pump(ScrHttpConn *conn) {
         }
       }
       if (!eol) {
-        if (conn->len > 65536) {
+        if (!scr_http_conn_trailer_fits(conn, conn->len, false)) {
           if (conn->client_mode) scr_http_client_head_overflow(conn);
           else scr_http_conn_bad_request(conn);
         }
@@ -2265,11 +2303,22 @@ static void scr_http_conn_pump(ScrHttpConn *conn) {
         else scr_http_conn_bad_request(conn);
         return;
       }
-      scr_http_req_add_trailer(conn->req, conn->buf, (size_t)(colon - conn->buf),
-                               value, (size_t)(end - value));
       size_t consumed = (size_t)(eol - conn->buf) + 2;
+      if (!scr_http_conn_trailer_fits(conn, consumed, true)) {
+        if (conn->client_mode) scr_http_client_head_overflow(conn);
+        else scr_http_conn_bad_request(conn);
+        return;
+      }
+      /* An early server response releases the request but deliberately leaves
+       * this parser in its chunk states so the wire remains validated. */
+      if (conn->req) {
+        scr_http_req_add_trailer(conn->req, conn->buf, (size_t)(colon - conn->buf),
+                                 value, (size_t)(end - value));
+      }
       memmove(conn->buf, conn->buf + consumed, conn->len - consumed);
       conn->len -= consumed;
+      conn->trailer_bytes += consumed;
+      conn->trailer_fields++;
       continue;
     }
     return;
@@ -3066,10 +3115,14 @@ static bool scr_http_client_parse_head(ScrHttpConn *conn, size_t head_len) {
     scr_http_req_add_header(res, p, (size_t)(colon - p), v, (size_t)(ve - v));
     p = eol + 2;
   }
-  if (!ok) {
+  if (!ok || res->nheaders > SCR_HTTP_MAX_HEADER_FIELDS) {
     scr_http_req_release(res);
     return false;
   }
+  conn->head_bytes = head_len;
+  conn->head_fields = res->nheaders;
+  conn->trailer_bytes = 0;
+  conn->trailer_fields = 0;
 
   /*
    * Informational responses do not settle the request. Node emits an

@@ -7,6 +7,10 @@ const server = createServer((req, res) => {
     return;
   }
   console.log(`start ${req.url} raw=${req.rawTrailers.length} note=${req.trailers["x-note"] === undefined ? "absent" : "present"}`);
+  if (req.url === "/early") {
+    res.end("early");
+    return;
+  }
   let body = "";
   req.on("data", (chunk: Buffer) => { body += chunk.toString("utf8"); });
   req.on("end", () => {
