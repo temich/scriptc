@@ -137,6 +137,7 @@ const hostLaneContractPattern = [
   "udp-loopback-pair",
   "1564-fs-watch.ts",
   "1470-child-lifecycle.ts",
+  "2963-child-fork-dispatch/main.ts",
   "read-all: chunked writes with delays, then EOF",
 ].join("|");
 const hostInvariantContractFiles = [

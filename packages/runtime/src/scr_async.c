@@ -53,6 +53,7 @@
  * their empty implementation makes the absence explicit at link time
  * without weakening async/timer support. */
 bool scr_children_pending(void) { return false; }
+bool scr_children_ready(void) { return false; }
 bool scr_children_reffed_pending(void) { return false; }
 bool scr_children_failed_pending(void) { return false; }
 void scr_children_poll(void) {}
@@ -2614,6 +2615,11 @@ bool scr_loop_run(ScrPromise *top_level) {
     /* Pending immediates are always-ready work: no sleep — run due timers
      * (Node's timers phase precedes check), then the check phase below. */
     if (scr_pending_immediates > 0) due = now;
+    /* Child polling can drain a pipe into the IPC queue after its dispatch
+     * station has run. Completed sends and disconnects can also become ready
+     * during that turn. No fd will wake us for this userspace work: return to
+     * dispatch without sleeping, still allowing due timers and immediates. */
+    if (scr_children_ready()) due = now;
     bool evw = scr_events_watching_fn != NULL && scr_events_watching_fn();
     if (io) {
       if (kids && due > now + SCR_CHILD_POLL_MS) due = now + SCR_CHILD_POLL_MS;

@@ -6,6 +6,32 @@ All notable changes to scriptc will be documented in this file.
 
 <!-- release:start -->
 
+## 0.1.4
+
+### Features
+
+- **Static module interoperability expands.** `node:module` coverage, CommonJS factory exports, and statically analyzable literal dynamic imports compile through the native module graph.
+- **Node built-in functions work as values.** Supported `node:path`, `node:fs`, and other built-in functions can be stored and passed around while preserving static calls.
+- **Static call lowering handles more JavaScript shapes.** Overloaded callable specialization, fixed-tuple argument spreads, union receiver calls, and loose equality now compile natively.
+- **Compression APIs expand.** One-shot and callback-based zlib codecs compile statically.
+- **Child-process APIs gain IPC and callback coverage.** `fork` supports parent-child messaging, `execFile` supports inline UTF-8 callback options, and shell output can be captured.
+- **Static HTTP servers enforce Node's Host rules and support trailers.** HTTP/1.1 requests require `Host` by default and return Node-compatible 400 responses, with opt-out and HTTP/1.0 handling preserved; incoming chunk trailers expose raw and distinct values, while outgoing trailers support framing and streaming.
+- **Filesystem and URL support expands.** Static filesystem support adds synchronous buffer overloads, async `realpath`, `lstat` metadata, `readdir` with `Dirent`, and descriptor operations; URLs add credential, origin, port, and hash behavior.
+- **Date, process, and event APIs gain static behavior.** `Date.parse`, writable `process.exitCode`, and scoped computed `EventEmitter` names compile with Node behavior.
+- **Static Set construction accepts readonly tuple seeds.** Supported readonly tuples initialize native Sets while preserving single evaluation and insertion order.
+
+### Performance
+
+- **LLVM bitwise operations use native integer instructions.** Numeric JavaScript bitwise operators now lower to `i32` operations on the LLVM backend.
+
+### Fixes
+
+- **Windows and Linux runtime builds cover more host details.** Windows executables support GUI subsystem selection and installed CMake generators, Windows runtimes include native clock and sleep shims, and GNU runtime packs preserve glibc 2.36 compatibility.
+- **Static npm resolution follows package import maps.** Package-scoped imports use edge-specific conditions, and fallback Node declarations include `RequestInfo` without widening supported fetch inputs.
+- **HTTP request parsing bounds and validates trailers.** Header and trailer parsing enforce byte and field-count limits, and trailer data is safely discarded when handlers respond before the request body finishes.
+
+<!-- release:end -->
+
 ## 0.1.3
 
 ### Features
@@ -26,8 +52,6 @@ All notable changes to scriptc will be documented in this file.
 - **Windows console output preserves UTF-8.** Attached consoles use UTF-8 without changing redirected byte output.
 - **Nested recursion and discarded conditionals lower correctly.** Mutual nested function references are initialized before capture, and discarded conditional expressions retain lazy control flow.
 - **Library archives retain section granularity.** Per-function and per-data sections now allow consumers to garbage-collect unreferenced archive members.
-
-<!-- release:end -->
 
 ## 0.1.2
 
