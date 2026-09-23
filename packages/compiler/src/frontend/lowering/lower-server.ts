@@ -2348,6 +2348,7 @@ function lowerRequestHandlerArg(lowerer: Lowerer, node: ts.Expression): IrExpr {
  * them. */
 function lowerHttpServerOptions(lowerer: Lowerer, node: ts.Expression, what: string): {
   joinDup: boolean;
+  allowMissingHost: boolean;
   keepAliveTimeoutBuffer: IrExpr | null;
 } {
   if (!ts.isObjectLiteralExpression(node)) {
@@ -2358,6 +2359,7 @@ function lowerHttpServerOptions(lowerer: Lowerer, node: ts.Expression, what: str
     );
   }
   let joinDup = false;
+  let allowMissingHost = false;
   let keepAliveTimeoutBuffer: IrExpr | null = null;
   for (const prop of node.properties) {
     let initializer: ts.Expression | null;
@@ -2375,17 +2377,19 @@ function lowerHttpServerOptions(lowerer: Lowerer, node: ts.Expression, what: str
     }
     const key = (prop.name as ts.Identifier | ts.StringLiteral).text;
     if (key === "requireHostHeader") {
-      // The literal `false` only: it asks for exactly this parser's
-      // behavior (requests without Host are served). Node's default
-      // (true: answer 400) is the behavior this slice does not have, so
-      // `true`/dynamic values fence instead of silently not enforcing.
-      if (initializer === null || initializer.kind !== ts.SyntaxKind.FalseKeyword) {
-        lowerer.noLowering(
-          `${what} with a non-\`false\` requireHostHeader option`,
-          prop,
-          "this parser never answers 400 for a missing Host header — requireHostHeader: false is the honest (and only) lowered value",
-        );
+      if (initializer !== null && initializer.kind === ts.SyntaxKind.FalseKeyword) {
+        allowMissingHost = true;
+        continue;
       }
+      if (initializer !== null && initializer.kind === ts.SyntaxKind.TrueKeyword) {
+        allowMissingHost = false;
+        continue;
+      }
+      lowerer.noLowering(
+        `${what} with a non-literal requireHostHeader option`,
+        prop,
+        "the lowered forms are the literals requireHostHeader: true and false",
+      );
       continue;
     }
     if (key === "joinDuplicateHeaders") {
@@ -2396,7 +2400,8 @@ function lowerHttpServerOptions(lowerer: Lowerer, node: ts.Expression, what: str
         continue;
       }
       if (initializer !== null && initializer.kind === ts.SyntaxKind.FalseKeyword) {
-        continue; /* Node's default: repeats keep the first value */
+        joinDup = false; /* Node's default: repeats keep the first value */
+        continue;
       }
       lowerer.noLowering(
         `${what} with a non-literal joinDuplicateHeaders option`,
@@ -2433,11 +2438,11 @@ function lowerHttpServerOptions(lowerer: Lowerer, node: ts.Expression, what: str
     }
     fenceOrDropOptionKey(
       lowerer, prop, key, what, HTTP_SERVER_DOCUMENTED_OPTIONS,
-      "requireHostHeader: false, joinDuplicateHeaders, and keepAliveTimeoutBuffer are the supported options",
+      "requireHostHeader, joinDuplicateHeaders, and keepAliveTimeoutBuffer are the supported options",
     );
     // An undocumented key, dropped like Node drops it.
   }
-  return { joinDup, keepAliveTimeoutBuffer };
+  return { joinDup, allowMissingHost, keepAliveTimeoutBuffer };
 }
 
 /** The shared createServer([options][, handler]) shapes behind
@@ -2466,17 +2471,17 @@ function lowerHttpCreateServerForms(lowerer: Lowerer, expr: ts.CallExpression | 
   }
   const opts = optsNode !== null
     ? lowerHttpServerOptions(lowerer, optsNode, what)
-    : { joinDup: false, keepAliveTimeoutBuffer: null };
+    : { joinDup: false, allowMissingHost: false, keepAliveTimeoutBuffer: null };
   const server: IrExpr = handlerNode !== null
     ? { kind: "libCall", fn: "http.createServer", args: [lowerRequestHandlerArg(lowerer, handlerNode)], type: NETSERVER_T, loc }
     : { kind: "libCall", fn: "http.createServerEmpty", args: [], type: NETSERVER_T, loc };
-  if (!opts.joinDup && opts.keepAliveTimeoutBuffer === null) return server;
+  if (!opts.joinDup && !opts.allowMissingHost && opts.keepAliveTimeoutBuffer === null) return server;
   // The option-setting composition: an interned helper takes the option
   // values first (preserving Node's options-before-handler evaluation
   // order), then the fresh server, applies the modeled fields, and answers
   // the server as the constructor/factory result.
   const hasBuffer = opts.keepAliveTimeoutBuffer !== null;
-  const key = `server.opts:${opts.joinDup ? 1 : 0}:${hasBuffer ? 1 : 0}`;
+  const key = `server.opts:${opts.joinDup ? 1 : 0}:${opts.allowMissingHost ? 1 : 0}:${hasBuffer ? 1 : 0}`;
   const existing = lowerer.arrHofHelpers.get(key);
   const name = existing ?? `%server.opts.${lowerer.arrHofHelpers.size}`;
   if (!existing) {
@@ -2500,6 +2505,13 @@ function lowerHttpCreateServerForms(lowerer: Lowerer, expr: ts.CallExpression | 
       body.push({
         kind: "exprStmt",
         expr: { kind: "libCall", fn: "http.serverJoinDupHeaders", args: [ref], type: VOID, loc },
+        loc,
+      });
+    }
+    if (opts.allowMissingHost) {
+      body.push({
+        kind: "exprStmt",
+        expr: { kind: "libCall", fn: "http.serverAllowMissingHostHeader", args: [ref], type: VOID, loc },
         loc,
       });
     }

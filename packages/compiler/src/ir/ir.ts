@@ -2717,12 +2717,11 @@ export type IrLibFn =
    * for end-before-head, chunked after an explicit writeHead/write). */
   | "http.createServer"
   /** http.createServer() / http.Server() with no handler — the
-   * on("request") route; createServerOpts is the (options[, listener])
-   * overload's twin carrying the two lowered parser flags
-   * (requireHostHeader: false is already this parser's behavior;
-   * joinDuplicateHeaders joins repeated request-header reads ", "). */
+   * on("request") route; option helpers set parser behavior on a fresh
+   * server before the constructor/factory result is returned. */
   | "http.createServerEmpty"
   | "http.serverJoinDupHeaders"
+  | "http.serverAllowMissingHostHeader"
   /** The five writable numeric http.Server timeout fields use one
    * selector ABI: 0 timeout, 1 keepAliveTimeout, 2 headersTimeout,
    * 3 requestTimeout, 4 keepAliveTimeoutBuffer. These calls store/read

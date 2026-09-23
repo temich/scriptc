@@ -6577,6 +6577,9 @@ function emitHttpLibCall(state: LibCallState): Temp {
           case "http.serverJoinDupHeaders":
             emitter.line(`scr_http_server_join_duplicate_headers(${arg(0)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
+          case "http.serverAllowMissingHostHeader":
+            emitter.line(`scr_http_server_allow_missing_host_header(${arg(0)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
           case "http.serverTimeoutGet":
             return finish(`scr_net_server_timeout_get(${arg(0)}, ${arg(1)})`);
           case "http.serverTimeoutSet":

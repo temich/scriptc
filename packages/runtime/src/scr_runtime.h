@@ -6106,6 +6106,8 @@ void scr_http_res_on_finish(ScrHttpRes *r, ScrClosure *cb /*moves*/);
 /* createServer({ joinDuplicateHeaders: true }): repeated request-header
  * names read back joined ", " (Node's option; the default keeps first). */
 void scr_http_server_join_duplicate_headers(ScrNetServer *s);
+/* createServer({ requireHostHeader: false }): allow HTTP/1.1 without Host. */
+void scr_http_server_allow_missing_host_header(ScrNetServer *s);
 void scr_http_handler_thunk0(ScrClosure *cb, ScrHttpReq *req, ScrHttpRes *res);
 void scr_http_handler_thunk1(ScrClosure *cb, ScrHttpReq *req, ScrHttpRes *res);
 void scr_http_handler_thunk2(ScrClosure *cb, ScrHttpReq *req, ScrHttpRes *res);

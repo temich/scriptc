@@ -619,6 +619,7 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "http.resWriteHeadPairs": "scr_http_res_write_head_pairs",
   "http.resWriteHeadDyn": "scr_http_res_write_head_dyn",
   "http.serverJoinDupHeaders": "scr_http_server_join_duplicate_headers",
+  "http.serverAllowMissingHostHeader": "scr_http_server_allow_missing_host_header",
   "http.serverTimeoutGet": "scr_net_server_timeout_get",
   "http.serverTimeoutSet": "scr_net_server_timeout_set",
   "http.serverTimeoutOptionSet": "scr_net_server_timeout_option_set",

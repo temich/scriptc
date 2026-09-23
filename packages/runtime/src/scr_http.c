@@ -773,6 +773,20 @@ static void scr_http_buf_append(ScrHttpBuf *b, const char *s, size_t n) {
 
 static void scr_http_buf_str(ScrHttpBuf *b, const char *s) { scr_http_buf_append(b, s, strlen(s)); }
 
+static void scr_http_buf_date(ScrHttpBuf *b) {
+  time_t now = time(NULL);
+  struct tm tm;
+  gmtime_r(&now, &tm);
+  static const char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+  static const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  char date[64];
+  snprintf(date, sizeof date, "Date: %s, %02d %s %04d %02d:%02d:%02d GMT\r\n",
+           days[tm.tm_wday], tm.tm_mday, months[tm.tm_mon], tm.tm_year + 1900,
+           tm.tm_hour, tm.tm_min, tm.tm_sec);
+  scr_http_buf_str(b, date);
+}
+
 static bool scr_http_header_has_token(const ScrStr *value, const char *token) {
   size_t token_len = strlen(token);
   for (size_t off = 0; off < value->len;) {
@@ -834,18 +848,7 @@ static void scr_http_res_send_head(ScrHttpRes *r, long long body_len) {
   }
   r->chunked = user_chunked;
   if (!r->no_date && !scr_http_res_has_header(r, "date")) {
-    /* Node's utcDate: "Date: Wed, 16 Jul 2026 04:20:00 GMT" */
-    time_t now = time(NULL);
-    struct tm tm;
-    gmtime_r(&now, &tm);
-    static const char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-    static const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-    char date[64];
-    snprintf(date, sizeof date, "Date: %s, %02d %s %04d %02d:%02d:%02d GMT\r\n",
-             days[tm.tm_wday], tm.tm_mday, months[tm.tm_mon], tm.tm_year + 1900,
-             tm.tm_hour, tm.tm_min, tm.tm_sec);
-    scr_http_buf_str(&b, date);
+    scr_http_buf_date(&b);
   }
   bool user_close = false;
   if (scr_http_res_has_header(r, "connection")) {
@@ -1416,6 +1419,7 @@ typedef struct ScrHttpSrvCtx {
   ScrNetLs upgrade_ls;
   ScrNetLs connect_ls; /* HTTP CONNECT — the upgrade machinery's twin */
   bool join_dup; /* createServer({ joinDuplicateHeaders: true }) */
+  bool require_host_header; /* HTTP/1.1 Host is required by default */
 } ScrHttpSrvCtx;
 
 static ScrHttpSrvCtx *scr_http_srv_ctx_retain(ScrHttpSrvCtx *ctx) {
@@ -1535,13 +1539,27 @@ static void scr_http_req_add_header(ScrHttpReq *r, const char *name, size_t nlen
   free(lower);
 }
 
-/* Malformed input: this slice answers 400 and closes — Node's lenient
- * spots (bare LF line endings, obsolete folding) are NOT accepted;
- * SEMANTICS.md states the bound. */
+/* Malformed input: answer 400 and close. Node's lenient spots (bare LF
+ * line endings, obsolete folding) are NOT accepted; SEMANTICS.md states
+ * the bound. */
 static void scr_http_conn_bad_request(ScrHttpConn *conn) {
   static const char bad[] =
       "HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
   scr_net_sock_write_native(conn->sock, bad, sizeof bad - 1);
+  scr_net_sock_end(conn->sock);
+  conn->len = 0;
+  scr_http_conn_drop_request(conn, false);
+}
+
+/* Node answers a missing HTTP/1.1 Host through ServerResponse rather than
+ * the parser-error path: the 400 is chunked and includes Date. */
+static void scr_http_conn_missing_host(ScrHttpConn *conn) {
+  ScrHttpBuf b = {NULL, 0, 0};
+  scr_http_buf_str(&b, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n");
+  scr_http_buf_date(&b);
+  scr_http_buf_str(&b, "Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n");
+  scr_net_sock_write_native(conn->sock, b.data, b.len);
+  free(b.data);
   scr_net_sock_end(conn->sock);
   conn->len = 0;
   scr_http_conn_drop_request(conn, false);
@@ -1680,6 +1698,22 @@ static bool scr_http_conn_parse_head(ScrHttpConn *conn, size_t head_len) {
   if (!ok) {
     scr_http_req_release(req);
     return false;
+  }
+
+  if (!http10 && conn->srv->require_host_header) {
+    bool has_host = false;
+    for (size_t i = 0; i < req->nheaders; i++) {
+      const ScrStr *name = req->hnames[i];
+      if (name->len == 4 && memcmp(name->data, "host", 4) == 0) {
+        has_host = true;
+        break;
+      }
+    }
+    if (!has_host) {
+      scr_http_req_release(req);
+      scr_http_conn_missing_host(conn);
+      return true;
+    }
   }
 
   /* framing: chunked wins over Content-Length (RFC 9112) */
@@ -2096,6 +2130,7 @@ ScrNetServer *scr_http_create_server(ScrClosure *handler /*moves, nullable*/, Sc
   if (!ctx) scr_http_oom();
   ctx->proto = SCR_NET_PROTO_HTTP1;
   ctx->rc = 1;
+  ctx->require_host_header = true;
   if (handler != NULL) scr_net_ls_add(&ctx->request_ls, handler, (void *)fn, false);
   scr_net_server_set_native_conn(s, &scr_http_on_connection, ctx, &scr_http_srv_ctx_free);
   scr_net_server_set_http_ctx(s, ctx);
@@ -2109,6 +2144,11 @@ ScrNetServer *scr_http_create_server(ScrClosure *handler /*moves, nullable*/, Sc
 void scr_http_server_join_duplicate_headers(ScrNetServer *s) {
   ScrHttpSrvCtx *ctx = (ScrHttpSrvCtx *)scr_net_server_get_http_ctx(s);
   if (ctx != NULL && ctx->proto == SCR_NET_PROTO_HTTP1) ctx->join_dup = true;
+}
+
+void scr_http_server_allow_missing_host_header(ScrNetServer *s) {
+  ScrHttpSrvCtx *ctx = (ScrHttpSrvCtx *)scr_net_server_get_http_ctx(s);
+  if (ctx != NULL && ctx->proto == SCR_NET_PROTO_HTTP1) ctx->require_host_header = false;
 }
 
 /* Late 'request' listener installs (server.on/once("request", ...)): the
