@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, expect, test } from "vitest";
 
@@ -10,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const repoRoot = join(import.meta.dirname, "../../..");
 const cliEntry = join(repoRoot, "packages/cli/src/main.ts");
-const tsxLoader = join(dirname(require.resolve("tsx/package.json")), "dist/loader.mjs");
+const tsxLoader = pathToFileURL(join(dirname(require.resolve("tsx/package.json")), "dist/loader.mjs")).href;
 const dirs: string[] = [];
 
 afterEach(async () => {

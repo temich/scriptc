@@ -6444,6 +6444,18 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2939-child-shell-text.ts": {
+   "order": [
+    "<repo>/tests/corpus/2939-child-shell-text.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2940-fsp-realpath.ts": {
+   "order": [
+    "<repo>/tests/corpus/2940-fsp-realpath.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
