@@ -294,6 +294,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "url.username": { argTypes: [URL_T], result: STRING },
   "url.host": { argTypes: [URL_T], result: STRING },
   "url.hostname": { argTypes: [URL_T], result: STRING },
+  "url.port": { argTypes: [URL_T], result: STRING },
   "url.pathname": { argTypes: [URL_T], result: STRING },
   "url.href": { argTypes: [URL_T], result: STRING },
   "url.fileURLToPathUrl": { argTypes: [URL_T], result: STRING },
@@ -309,6 +310,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "sp.with": { argTypes: [SEARCH_PARAMS_T, STRING, STRING], result: SEARCH_PARAMS_T },
   "url.searchParams": { argTypes: [URL_T], result: SEARCH_PARAMS_T },
   "url.search": { argTypes: [URL_T], result: STRING },
+  "url.hash": { argTypes: [URL_T], result: STRING },
   // Result is the interned `string | null` union — the libCall case
   // checks the arms (the spawnRes.signal pattern).
   "sp.get": { argTypes: [SEARCH_PARAMS_T, STRING], result: VOID },

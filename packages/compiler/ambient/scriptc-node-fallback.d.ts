@@ -1370,7 +1370,7 @@ declare module "node:os" {
 /* The WHATWG URL class (a Node global; the es2023 lib doesn't declare it),
  * typed as exactly the supported surface: construction from ONE absolute-
  * URL string (invalid input throws a catchable TypeError, like Node), the
- * protocol/origin/username/pathname/href/host/hostname/search getters, searchParams (the
+ * protocol/origin/username/pathname/href/host/hostname/port/search/hash getters, searchParams (the
  * LIVE query view — mutations through it re-serialize into the URL, so
  * href reflects immediately; every read answers the same object, Node's
  * caching), and toString() (the href serialization).
@@ -1388,7 +1388,9 @@ interface URL {
   readonly href: string;
   readonly host: string;
   readonly hostname: string;
+  readonly port: string;
   readonly search: string;
+  readonly hash: string;
   readonly searchParams: URLSearchParams;
   toString(): string;
 }

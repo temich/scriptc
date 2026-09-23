@@ -4958,6 +4958,8 @@ function emitPathUrlLibCall(state: LibCallState): Temp {
             return finish(`scr_url_host(${arg(0)})`);
           case "url.hostname":
             return finish(`scr_url_hostname(${arg(0)})`);
+          case "url.port":
+            return finish(`scr_url_port(${arg(0)})`);
           case "url.pathname":
             return finish(`scr_url_pathname(${arg(0)})`);
           case "url.href":
@@ -4991,6 +4993,8 @@ function emitPathUrlLibCall(state: LibCallState): Temp {
             return finish(`scr_url_search_params(${arg(0)})`);
           case "url.search":
             return finish(`scr_url_search(${arg(0)})`);
+          case "url.hash":
+            return finish(`scr_url_hash(${arg(0)})`);
           case "sp.get": {
             // `string | null` — the sym.desc pattern with a null arm: the
             // runtime answers a +1 string or NULL.

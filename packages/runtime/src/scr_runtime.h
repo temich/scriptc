@@ -2932,6 +2932,7 @@ ScrStr *scr_url_origin(ScrUrl *u);   /* +1 "https://host" or "null" */
 ScrStr *scr_url_username(ScrUrl *u); /* +1 encoded username, possibly empty */
 ScrStr *scr_url_host(ScrUrl *u);     /* +1 "host[:port]" (defaults stripped) */
 ScrStr *scr_url_hostname(ScrUrl *u); /* +1 port-less host ("" when none) */
+ScrStr *scr_url_port(ScrUrl *u);     /* +1 "" or normalized non-default port */
 ScrStr *scr_url_pathname(ScrUrl *u); /* +1 */
 ScrStr *scr_url_href(ScrUrl *u);     /* +1; also toString() */
 ScrStr *scr_url_to_path(ScrUrl *u);      /* +1, or throws */
@@ -2971,6 +2972,7 @@ void *scr_sp_retain_v(void *p);
 void scr_sp_release_v(void *p);
 ScrSearchParams *scr_url_search_params(ScrUrl *u); /* +1 live cached view */
 ScrStr *scr_url_search(ScrUrl *u);                 /* +1 "?..." or "" */
+ScrStr *scr_url_hash(ScrUrl *u);                   /* +1 "#..." or "" */
 void scr_sp_append(ScrSearchParams *sp, ScrStr *name, ScrStr *value);
 void scr_sp_set(ScrSearchParams *sp, ScrStr *name, ScrStr *value);
 void scr_sp_delete(ScrSearchParams *sp, ScrStr *name);

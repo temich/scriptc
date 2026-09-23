@@ -88,6 +88,24 @@ test("node-types: the supported process surface lowers statically under @types/n
   expect(stdout).toBe("2\nalpha\nbeta\nhi from env\nwritten without newline <- flushed in order\n");
 });
 
+test("node-types: URL port and hash getters lower statically under @types/node", async () => {
+  const outDir = outDirFor("node-url-getters");
+  const entry = join(nodeTypesDir, "url-getters.ts");
+  const result = await compile(entry, {
+    outPath: join(outDir, "url-getters"),
+    outDir,
+    sanitize,
+  });
+  expect(result.ok, !result.ok ? JSON.stringify(result.diagnostics, null, 2) : "").toBe(true);
+  if (!result.ok) return;
+  const [native, node] = await Promise.all([
+    execFileAsync(result.binaryPath),
+    execFileAsync(process.execPath, [entry]),
+  ]);
+  expect(native.stdout).toBe(node.stdout);
+  expect(native.stderr).toBe(node.stderr);
+});
+
 test("node-types: captured NodeJS.WritableStream values write through the procStream scalar", async () => {
   const outDir = outDirFor("node-stream-capture");
   const result = await compile(join(nodeTypesDir, "stream-capture.ts"), {

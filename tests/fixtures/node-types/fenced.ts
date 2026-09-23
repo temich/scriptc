@@ -39,12 +39,12 @@ import { win32 } from "path";
 watchFile("x", () => {});
 console.log(cpus().length);
 console.log(win32.sep);
-/* URL members beyond the supported getters (protocol/pathname/href/
- * host/hostname/search/searchParams) fence member-qualified, with the
- * supported list; searchParams and its method surface LOWER under
+/* URL getters including port/hash lower under @types/node, but
+ * unimplemented members still fence by member name with the
+ * supported list; searchParams and its method surface lower under
  * @types/node's declarations (provenance-mapped like URL itself). */
 const u = new URL("https://example.com/x?a=1");
-console.log(u.hash);
+console.log(u.password);
 u.searchParams.get("a");
 /* The one-shot zlib/raw/gzip codecs lower for strings and Buffers;
  * explicit options remain fenced, while Brotli remains a member-qualified

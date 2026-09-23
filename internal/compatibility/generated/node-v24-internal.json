@@ -1299,9 +1299,9 @@
       "apiEntries": 62,
       "static": {
         "supported": 0,
-        "partial": 3,
+        "partial": 5,
         "refused": 0,
-        "not-implemented": 59,
+        "not-implemented": 57,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -107770,7 +107770,8 @@
         "status": "partial",
         "evidence": "derived:descendants",
         "tests": [
-          "tests/corpus/1794-searchparams-url-live.ts"
+          "tests/corpus/1794-searchparams-url-live.ts",
+          "tests/corpus/2946-url-port-hash.ts"
         ]
       },
       "dynamic": {
@@ -108091,8 +108092,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:url"
+        "status": "partial",
+        "evidence": "compiler-feature:url.hash",
+        "tests": [
+          "tests/corpus/2946-url-port-hash.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -108280,8 +108284,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:url"
+        "status": "partial",
+        "evidence": "compiler-feature:url.port",
+        "tests": [
+          "tests/corpus/2946-url-port-hash.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",

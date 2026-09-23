@@ -653,6 +653,8 @@ ScrStr *scr_url_host(ScrUrl *u) {
  * authority-less URLs); IPv6 literals retain their brackets. */
 ScrStr *scr_url_hostname(ScrUrl *u) { return scr_str_retain(u->host); }
 
+ScrStr *scr_url_port(ScrUrl *u) { return scr_str_retain(u->port); }
+
 /* WHATWG origin is opaque for file and non-special schemes. A blob URL
  * inherits the origin of an embedded http(s) URL when its path parses. */
 ScrStr *scr_url_origin(ScrUrl *u) {
@@ -1031,4 +1033,10 @@ ScrUrl *scr_url_from_path_w32(ScrStr *path) { return scr_url_from_path_impl(path
 ScrStr *scr_url_search(ScrUrl *u) {
   if (u->query->len <= 1) return scr_str_new("", 0);
   return scr_str_retain(u->query);
+}
+
+/* A bare '#' remains in href but its hash getter is empty, like Node. */
+ScrStr *scr_url_hash(ScrUrl *u) {
+  if (u->fragment->len <= 1) return scr_str_new("", 0);
+  return scr_str_retain(u->fragment);
 }

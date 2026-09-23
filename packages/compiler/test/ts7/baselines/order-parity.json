@@ -6504,6 +6504,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2946-url-port-hash.ts": {
+   "order": [
+    "<repo>/tests/corpus/2946-url-port-hash.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
@@ -9309,6 +9315,12 @@
   "<repo>/tests/fixtures/node-types/stream-capture.ts": {
    "order": [
     "<repo>/tests/fixtures/node-types/stream-capture.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/fixtures/node-types/url-getters.ts": {
+   "order": [
+    "<repo>/tests/fixtures/node-types/url-getters.ts"
    ],
    "diags": []
   }
