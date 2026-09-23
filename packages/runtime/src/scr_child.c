@@ -27,6 +27,7 @@ static ScrIpc *scr_ipc_retain(ScrIpc *ipc);
 static void scr_ipc_release(ScrIpc *ipc);
 static void scr_ipc_service(void);
 static bool scr_ipc_pending(void);
+static bool scr_ipc_close_ready(const ScrIpc *ipc);
 
 static ScrArr *scr_fork_argv(double target, uintptr_t read_handle,
                              uintptr_t write_handle, ScrArr *args) {
@@ -2472,7 +2473,8 @@ bool scr_children_failed_pending(void) {
 
 static bool scr_child_close_ready(const ScrChild *c) {
   return (c->out_stream == NULL || c->out_stream->eof) &&
-         (c->err_stream == NULL || c->err_stream->eof);
+         (c->err_stream == NULL || c->err_stream->eof) &&
+         scr_ipc_close_ready(c->ipc);
 }
 
 static void scr_child_fire_close(ScrChild *c) {
@@ -5085,7 +5087,8 @@ bool scr_children_failed_pending(void) {
 
 static bool scr_child_close_ready(const ScrChild *c) {
   return (c->out_stream == NULL || c->out_stream->eof) &&
-         (c->err_stream == NULL || c->err_stream->eof);
+         (c->err_stream == NULL || c->err_stream->eof) &&
+         scr_ipc_close_ready(c->ipc);
 }
 
 static void scr_child_fire_close(ScrChild *c) {
@@ -5412,7 +5415,8 @@ static void scr_ipc_mark_disconnected(ScrIpc *ipc, bool write_failed,
         ? scr_str_retain(message)
         : scr_str_new("Channel closed", sizeof("Channel closed") - 1);
   }
-  ipc->writer_error_cb = NULL; /* destroy drops the writer's listeners */
+  /* A finished writer ignores destroy, but still owns its error listener. */
+  scr_ipc_drop_writer_error(ipc);
   scr_child_writer_destroy(ipc->writer);
   ipc->disconnect_pending = true;
 }
@@ -5658,6 +5662,10 @@ static bool scr_ipc_pending(void) {
     }
   }
   return false;
+}
+
+static bool scr_ipc_close_ready(const ScrIpc *ipc) {
+  return ipc == NULL || !ipc->armed || ipc->disconnect_emitted;
 }
 
 bool scr_children_ready(void) {
