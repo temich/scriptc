@@ -65,7 +65,7 @@ describe("shardSelect", () => {
     expect([...union].sort()).toEqual([...keys].sort()); // complete: none dropped
   });
 
-  test("the real corpus partitions completely under 3 shards", () => {
+  test.for([3, 6])("the real corpus partitions completely under %i shards", (count) => {
     // The exact list differential.test.ts globs, keyed the same way.
     const files = ["ts", "js", "mjs", "cjs"]
       .flatMap((ext) => [
@@ -75,8 +75,8 @@ describe("shardSelect", () => {
       .sort()
       .map((f) => f.slice(corpusDir.length + 1));
     expect(files.length).toBeGreaterThan(0);
-    const union = Array.from({ length: 3 }, (_, i) =>
-      shardSelect(files, (k) => k, { index: i + 1, count: 3 }),
+    const union = Array.from({ length: count }, (_, i) =>
+      shardSelect(files, (k) => k, { index: i + 1, count }),
     ).flat();
     expect(union.length).toBe(files.length);
     expect([...union].sort()).toEqual(files);

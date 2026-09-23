@@ -7,7 +7,7 @@ on:
 
 jobs:
   tests:
-    name: test (${{ matrix.flavor }}, ${{ matrix.shard }}/3)
+    name: test (${{ matrix.flavor }}, ${{ matrix.shard }}/6)
     # arm64 macOS: same clang/libc the differential + number-formatting
     # oracles were verified against.
     runs-on: macos-15
@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         flavor: [plain, san]
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     env:
       # Capped workers: the shared runner's cores oversubscribe under the
       # corpus compile fan-out, and vitest's worker RPC times out ("Timeout
@@ -26,12 +26,12 @@ jobs:
       SCRIPTC_SAN: ${{ matrix.flavor == 'san' && '1' || '' }}
       # Within-file partition for the large case-driven harnesses
       # (differential, llvm-differential, npm, server, coverage, and Vercel
-      # E2E): they hash stable case names into slice i of 3
-      # (tests/harness/shard.ts), so the three shards' unions run every case
+      # E2E): they hash stable case names into slice i of 6
+      # (tests/harness/shard.ts), so the six shards' unions run every case
       # exactly once. vitest's own --shard is FILE-granular and cannot split
       # these monster files (differential.test.ts alone is ~9 min
       # sequential), hence the case-sharded steps below.
-      SCRIPTC_TEST_SHARD: ${{ matrix.shard }}/3
+      SCRIPTC_TEST_SHARD: ${{ matrix.shard }}/6
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -52,7 +52,7 @@ jobs:
       # drop the rest. Files split by --shard here; cases split by env below.
       - name: Tests (file-sharded, case-sharded files excluded)
         run: >-
-          pnpm test --shard=${{ matrix.shard }}/3
+          pnpm test --shard=${{ matrix.shard }}/6
           --exclude=tests/harness/differential.test.ts
           --exclude=tests/harness/llvm-differential.test.ts
           --exclude=tests/harness/npm.test.ts
@@ -62,15 +62,15 @@ jobs:
           --exclude=packages/compiler/src/backend/native-toolchain.test.ts
       # Cache invalidation tests mutate compiler inputs process-wide and must
       # stay serial within a worker. They do not consume SCRIPTC_SAN, so divide
-      # them across the three plain jobs instead of running the 6+ minute file
+      # them across the six plain jobs instead of running the 6+ minute file
       # in full in one shard of both flavors.
-      - name: Tests (native-cache correctness, slice ${{ matrix.shard }}/3)
+      - name: Tests (native-cache correctness, slice ${{ matrix.shard }}/6)
         if: matrix.flavor == 'plain'
         env:
-          SCRIPTC_CACHE_TEST_SHARD: ${{ matrix.shard }}/3
+          SCRIPTC_CACHE_TEST_SHARD: ${{ matrix.shard }}/6
           SCRIPTC_TEST_STABLE_TOOLCHAIN: "0"
         run: pnpm test packages/compiler/src/backend/native-toolchain.test.ts
-      - name: Tests (case-sharded, slice ${{ matrix.shard }}/3)
+      - name: Tests (case-sharded, slice ${{ matrix.shard }}/6)
         run: >-
           pnpm test
           tests/harness/differential.test.ts
@@ -79,8 +79,8 @@ jobs:
           tests/harness/server.test.ts
           tests/harness/vercel-e2e.test.ts
       # Coverage analysis is frontend-only: SCRIPTC_SAN cannot change its
-      # result, so the three plain slices cover the full corpus once.
-      - name: Tests (coverage sweep, slice ${{ matrix.shard }}/3)
+      # result, so the six plain slices cover the full corpus once.
+      - name: Tests (coverage sweep, slice ${{ matrix.shard }}/6)
         if: matrix.flavor == 'plain'
         run: pnpm test tests/harness/coverage.test.ts
 
