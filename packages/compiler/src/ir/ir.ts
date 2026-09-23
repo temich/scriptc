@@ -2440,6 +2440,23 @@ export type IrLibFn =
    * with the code (f64 arm) or null (signal death); "error" fires only
    * for spawn failure, exactly Node's split. */
   | "cp.spawn"
+  /** Static-native fork startup and IPC. process.forkTarget initializes a
+   * re-executed child's inherited channel and returns its embedded target id
+   * (-1 in the parent). The remaining entries mirror Node's JSON channel. */
+  | "process.forkTarget"
+  | "cp.fork"
+  | "child.connected"
+  | "child.send"
+  | "child.sendCb"
+  | "child.disconnect"
+  | "child.onMessage"
+  | "child.onDisconnect"
+  | "process.connected"
+  | "process.send"
+  | "process.sendCb"
+  | "process.disconnect"
+  | "process.onMessage"
+  | "process.onDisconnect"
   /** child_process.execFile's callback slice: starts an all-piped child,
    * captures stdout/stderr, and moves the error-first callback into the
    * child registry. The callback shape is program-dependent and checked
@@ -6599,7 +6616,10 @@ export function moduleUsesChildProcess(mod: IrModule): boolean {
     if (
       node.kind === "libCall" &&
       typeof node.fn === "string" &&
-      (node.fn.startsWith("cp.") || node.fn.startsWith("child.") || node.fn.startsWith("writer.") || node.fn.startsWith("spawnRes."))
+      (node.fn.startsWith("cp.") || node.fn.startsWith("child.") || node.fn.startsWith("writer.") || node.fn.startsWith("spawnRes.") ||
+        node.fn === "process.forkTarget" || node.fn === "process.connected" || node.fn === "process.send" ||
+        node.fn === "process.sendCb" || node.fn === "process.disconnect" || node.fn === "process.onMessage" ||
+        node.fn === "process.onDisconnect")
     ) {
       found = true;
       return;

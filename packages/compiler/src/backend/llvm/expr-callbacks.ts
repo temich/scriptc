@@ -500,6 +500,107 @@ export function execFileThunkFor(host: LlvmEmitterContext, cbT: IrType & { kind:
     return sym;
   }
 
+export function ipcMessageThunkFor(host: LlvmEmitterContext, cbT: IrType & { kind: "func" }): string {
+    const key = `ipcmsg:${typeKey(cbT)}`;
+    let sym = host.resolveThunks.get(key);
+    if (sym) return sym;
+    sym = `sc_ipc_msg_${host.resolveThunks.size}`;
+    host.resolveThunks.set(key, sym);
+    const param = cbT.params[0];
+    const d: string[] = [
+      `define internal void @${sym}(ptr %cb, ptr %message) ${FN_ATTRS} { ; IPC message ${typeKey(cbT)}`,
+      `entry:`,
+    ];
+    let passed = "";
+    if (param !== undefined) {
+      const ty = host.llType(param);
+      if (param.kind === "dyn") {
+        host.declare(`declare ptr @scr_dyn_retain_v(ptr)`);
+        d.push(`  %value = call ptr @scr_dyn_retain_v(ptr %message)`);
+      } else {
+        const helper = host.dyn.dynCheckHelper(param);
+        d.push(`  %value = call ${ty} @${helper}(ptr %message, ptr null)`);
+        host.declare(`declare zeroext i1 @scr_exc_pending()`);
+        d.push(
+          `  %bad = call zeroext i1 @scr_exc_pending()`,
+          `  br i1 %bad, label %fail, label %invoke`,
+          `fail:`,
+          ...(isRefCounted(param) ? [`  call void ${releaseSym(host, param)}(ptr %value)`] : []),
+          `  ret void`,
+          `invoke:`,
+        );
+      }
+      passed = `, ${ty} %value`;
+    }
+    d.push(
+      `  %fnp = getelementptr inbounds %ScrClosure, ptr %cb, i64 0, i32 1`,
+      `  %fn = load ptr, ptr %fnp`,
+    );
+    const retTy = host.llType(cbT.ret);
+    if (retTy === "void") d.push(`  call void %fn(ptr %cb${passed})`);
+    else {
+      d.push(`  %result = call ${retTy} %fn(ptr %cb${passed})`);
+      if (isRefCounted(cbT.ret)) d.push(`  call void ${releaseSym(host, cbT.ret)}(ptr %result)`);
+    }
+    d.push(`  ret void`, `}`, ``);
+    host.resolveThunkDefs.push(...d);
+    return sym;
+  }
+
+export function ipcSendThunkFor(host: LlvmEmitterContext, cbT: IrType & { kind: "func" }): string {
+    const key = `ipcsend:${typeKey(cbT)}`;
+    let sym = host.resolveThunks.get(key);
+    if (sym) return sym;
+    sym = `sc_ipc_send_${host.resolveThunks.size}`;
+    host.resolveThunks.set(key, sym);
+    const param = cbT.params[0];
+    const d: string[] = [
+      `define internal void @${sym}(ptr %cb, ptr %error) ${FN_ATTRS} { ; IPC send callback ${typeKey(cbT)}`,
+      `entry:`,
+    ];
+    if (param === undefined) {
+      host.declare(`declare void @scr_error_release(ptr)`);
+      d.push(
+        `  call void @scr_error_release(ptr %error)`,
+        `  %fnp = getelementptr inbounds %ScrClosure, ptr %cb, i64 0, i32 1`,
+        `  %fn = load ptr, ptr %fnp`,
+        `  call void %fn(ptr %cb)`,
+      );
+    } else {
+      if (param.kind !== "union") throw new InternalCompilerError("llvm emitter bug: IPC send callback param not a union");
+      const def = host.unionsById.get(param.unionId);
+      const errorTag = def ? def.arms.findIndex((arm) => arm.kind === "object" && arm.className === "%Error") : -1;
+      const nullTag = def ? def.arms.findIndex((arm) => arm.kind === "nullT") : -1;
+      const errorArm = errorTag >= 0 ? def?.arms[errorTag] : undefined;
+      if (errorTag < 0 || nullTag < 0 || !errorArm) {
+        throw new InternalCompilerError("llvm emitter bug: IPC send callback union lacks Error|null");
+      }
+      host.declare(`declare ptr @scr_union_new_ref(i32, ptr, ptr, ptr, ptr)`);
+      host.declare(`declare ptr @scr_error_retain_v(ptr)`);
+      host.declare(`declare void @scr_error_release_v(ptr)`);
+      d.push(
+        `  %slot = alloca ptr`,
+        `  %has = icmp ne ptr %error, null`,
+        `  br i1 %has, label %some, label %none`,
+        `some:`,
+        `  %wrapped = call ptr @scr_union_new_ref(i32 ${errorTag}, ptr %error, ptr @scr_error_retain_v, ptr @scr_error_release_v, ptr ${traceArg(host, errorArm)})`,
+        `  store ptr %wrapped, ptr %slot`,
+        `  br label %invoke`,
+        `none:`,
+        `  store ptr ${host.unitInstanceRef(param.unionId, nullTag)}, ptr %slot`,
+        `  br label %invoke`,
+        `invoke:`,
+        `  %value = load ptr, ptr %slot`,
+        `  %fnp = getelementptr inbounds %ScrClosure, ptr %cb, i64 0, i32 1`,
+        `  %fn = load ptr, ptr %fnp`,
+        `  call void %fn(ptr %cb, ptr %value)`,
+      );
+    }
+    d.push(`  ret void`, `}`, ``);
+    host.resolveThunkDefs.push(...d);
+    return sym;
+  }
+
 export function childDataThunkFor(host: LlvmEmitterContext, param: IrType): string {
     if (param.kind !== "union") throw new InternalCompilerError("llvm emitter bug: stream data listener param not a union");
     const key = `cd:${param.unionId}`;

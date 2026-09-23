@@ -106,6 +106,11 @@ extern char **environ; /* env snapshot (scr_env_pairs) */
 
 static SCR_TL int scr_lib_argc = 0;
 static SCR_TL char **scr_lib_argv = NULL;
+static SCR_TL char **scr_lib_argv_owned = NULL;
+static SCR_TL bool scr_lib_has_fork = false;
+static SCR_TL double scr_lib_fork_target_id = -1;
+static SCR_TL uintptr_t scr_lib_fork_read_handle = 0;
+static SCR_TL uintptr_t scr_lib_fork_write_handle = 0;
 static SCR_TL ScrArr *scr_argv_arr = NULL;    /* interned process.argv */
 static SCR_TL ScrStr *scr_platform_str = NULL; /* interned process.platform */
 static SCR_TL ScrStr *scr_exec_path_str = NULL; /* interned process.execPath */
@@ -156,6 +161,14 @@ static void scr_lib_cleanup(void) {
   scr_module_registry_cleanup();
   scr_arr_release(scr_argv_arr);
   scr_argv_arr = NULL;
+  free(scr_lib_argv_owned);
+  scr_lib_argv_owned = NULL;
+  scr_lib_argc = 0;
+  scr_lib_argv = NULL;
+  scr_lib_has_fork = false;
+  scr_lib_fork_target_id = -1;
+  scr_lib_fork_read_handle = 0;
+  scr_lib_fork_write_handle = 0;
 }
 
 static void scr_process_platform_cleanup(void) {
@@ -220,6 +233,24 @@ bool scr_lib_should_collapse_reexec_arg(ScrStr *cmd, ScrArr *args) {
 void scr_lib_init(int argc, char **argv) {
   scr_lib_argc = argc;
   scr_lib_argv = argv;
+  if (argc >= 2 && strncmp(argv[1], "--scriptc-fork=", 15) == 0) {
+    unsigned long long target = 0, read_handle = 0, write_handle = 0;
+    char tail = '\0';
+    if (sscanf(argv[1] + 15, "%llu,%llu,%llu%c", &target, &read_handle,
+               &write_handle, &tail) == 3) {
+      scr_lib_has_fork = true;
+      scr_lib_fork_target_id = (double)target;
+      scr_lib_fork_read_handle = (uintptr_t)read_handle;
+      scr_lib_fork_write_handle = (uintptr_t)write_handle;
+      scr_lib_argv_owned = malloc((size_t)argc * sizeof(char *));
+      if (!scr_lib_argv_owned) scr_trap("out of memory");
+      scr_lib_argv_owned[0] = argv[0];
+      for (int i = 2; i < argc; i++) scr_lib_argv_owned[i - 1] = argv[i];
+      scr_lib_argv_owned[argc - 1] = NULL;
+      scr_lib_argc = argc - 1;
+      scr_lib_argv = scr_lib_argv_owned;
+    }
+  }
   atexit(scr_lib_cleanup);
 }
 #endif /* !SCR_LIB */
@@ -389,6 +420,15 @@ ScrArr *scr_module_cache_keys(void) {
  * argv[0], ...] shape exactly, so both build from the same stash. */
 int scr_lib_arg_count(void) { return scr_lib_argc; }
 const char *scr_lib_arg(int i) { return scr_lib_argv[i]; }
+
+bool scr_lib_fork_info(double *target, uintptr_t *read_handle,
+                       uintptr_t *write_handle) {
+  if (!scr_lib_has_fork) return false;
+  *target = scr_lib_fork_target_id;
+  *read_handle = scr_lib_fork_read_handle;
+  *write_handle = scr_lib_fork_write_handle;
+  return true;
+}
 
 ScrArr *scr_process_argv(void) {
   if (!scr_argv_arr) {

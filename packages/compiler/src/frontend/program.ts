@@ -85,6 +85,7 @@ import {
   JS_RELAXED_TSC_CODES,
 } from "./tsc-codes.js";
 import { trackedFileExists, trackedReadFile, trackedRealpath } from "./input-tracker.js";
+import { forkTargetPaths } from "./fork-target.js";
 
 const BASE_OPTIONS: ts.Ts7CompilerOptions = {
   strict: true,
@@ -518,12 +519,18 @@ function loadProgram7(
   const programRoots = [...coreRoots];
   let program = ts.createProgram([...programRoots, overridesDtsPath()], options, host);
   for (let pass = 0; pass < 32; pass++) {
-    const extraRoots = createRequireProgramRoots7(program).filter((root) => !programRoots.includes(root));
+    const candidates = [
+      ...createRequireProgramRoots7(program),
+      ...forkTargetPaths(program, program.getSourceFiles()),
+    ];
+    const extraRoots = candidates.filter(
+      (root, index) => !programRoots.includes(root) && candidates.indexOf(root) === index,
+    );
     if (extraRoots.length === 0) break;
     program.dispose();
     programRoots.push(...extraRoots);
     program = ts.createProgram([...programRoots, overridesDtsPath()], options, host);
-    if (pass === 31) throw new Error("createRequire program-root discovery did not converge");
+    if (pass === 31) throw new Error("static program-root discovery did not converge");
   }
   const entry = program.getSourceFile(entryPath);
   if (!entry) throw new Error(`could not load ${entryPath}`);

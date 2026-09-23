@@ -281,6 +281,14 @@ declare var process: {
   /* emitWarning — Node's full grammar (string or Error warning; type/
    * ctor/options second; code/ctor third). */
   emitWarning(warning: string | Error, ...args: any[]): void;
+  /** Present in a child created by child_process.fork(). */
+  readonly connected: boolean;
+  send?(message: object, callback?: (error: Error | null) => void): boolean;
+  disconnect(): void;
+  on(event: "message", listener: (message: any) => void): void;
+  on(event: "disconnect", listener: () => void): void;
+  once(event: "message", listener: (message: any) => void): void;
+  once(event: "disconnect", listener: () => void): void;
 };
 
 /* Node's process module default export is the global process object. These
@@ -1408,7 +1416,7 @@ interface URL {
   toString(): string;
 }
 declare var URL: {
-  new (input: string): URL;
+  new (input: string, base?: string | URL): URL;
 };
 
 /* URLSearchParams — the WHATWG application/x-www-form-urlencoded list.
@@ -1637,6 +1645,10 @@ declare module "child_process" {
     once(event: "exit", listener: (code: number | null, signal: string | null) => void): void;
     once(event: "close", listener: (code: number | null, signal: string | null) => void): void;
     once(event: "error", listener: (err: Error) => void): void;
+    on(event: "message", listener: (message: any) => void): void;
+    on(event: "disconnect", listener: () => void): void;
+    once(event: "message", listener: (message: any) => void): void;
+    once(event: "disconnect", listener: () => void): void;
     /* The lifecycle members, Node's exact shapes: pid is undefined exactly
      * when the spawn failed; exitCode is null while running, the code
      * after a normal exit, null for a signal death, and -errno once a
@@ -1652,6 +1664,9 @@ declare module "child_process" {
     readonly killed: boolean;
     kill(signal?: string | number): boolean;
     unref(): void;
+    readonly connected: boolean;
+    send(message: object, callback?: (error: Error | null) => void): boolean;
+    disconnect(): void;
     [Symbol.dispose](): void;
     /* The piped streams — non-null exactly when the matching stdio slot
      * was "pipe" (Node's shape). */
@@ -1678,6 +1693,20 @@ declare module "child_process" {
       cwd?: string;
       windowsHide?: boolean;
       shell?: boolean;
+    },
+  ): ChildProcess;
+
+  export function fork(
+    modulePath: string | URL,
+    args?: string[],
+    options?: {
+      cwd?: string;
+      env?: { [k: string]: string | undefined };
+      execArgv?: string[];
+      silent?: boolean;
+      stdio?: "pipe" | "ignore" | "inherit" | ("pipe" | "ignore" | "inherit" | "ipc")[];
+      serialization?: "json" | "advanced";
+      windowsHide?: boolean;
     },
   ): ChildProcess;
 

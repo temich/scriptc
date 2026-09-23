@@ -195,9 +195,9 @@
       "apiEntries": 39,
       "static": {
         "supported": 0,
-        "partial": 11,
+        "partial": 17,
         "refused": 0,
-        "not-implemented": 28,
+        "not-implemented": 22,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -915,9 +915,9 @@
       "apiEntries": 119,
       "static": {
         "supported": 0,
-        "partial": 20,
+        "partial": 25,
         "refused": 0,
-        "not-implemented": 99,
+        "not-implemented": 94,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -14061,7 +14061,8 @@
           "tests/corpus/2897-child-stdin-destroy.ts",
           "tests/corpus/2898-child-stdin-spawn-failure.ts",
           "tests/corpus/2911-execfile-callback.ts",
-          "tests/corpus/2939-child-shell-text.ts"
+          "tests/corpus/2939-child-shell-text.ts",
+          "tests/corpus/2946-child-fork-ipc/main.ts"
         ]
       },
       "dynamic": {
@@ -14199,8 +14200,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:child_process"
+        "status": "partial",
+        "evidence": "compiler-feature:child_process.child_process.fork",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "refused",
@@ -14232,7 +14236,8 @@
           "tests/corpus/1361-spawn-events.ts",
           "tests/corpus/1565-spawn-pipe-streams.ts",
           "tests/corpus/2911-execfile-callback.ts",
-          "tests/corpus/2939-child-shell-text.ts"
+          "tests/corpus/2939-child-shell-text.ts",
+          "tests/corpus/2946-child-fork-ipc/main.ts"
         ]
       },
       "dynamic": {
@@ -14346,7 +14351,8 @@
           "tests/corpus/1361-spawn-events.ts",
           "tests/corpus/1565-spawn-pipe-streams.ts",
           "tests/corpus/2911-execfile-callback.ts",
-          "tests/corpus/2939-child-shell-text.ts"
+          "tests/corpus/2939-child-shell-text.ts",
+          "tests/corpus/2946-child-fork-ipc/main.ts"
         ]
       },
       "dynamic": {
@@ -14379,7 +14385,8 @@
           "tests/corpus/1361-spawn-events.ts",
           "tests/corpus/1565-spawn-pipe-streams.ts",
           "tests/corpus/2911-execfile-callback.ts",
-          "tests/corpus/2939-child-shell-text.ts"
+          "tests/corpus/2939-child-shell-text.ts",
+          "tests/corpus/2946-child-fork-ipc/main.ts"
         ]
       },
       "dynamic": {
@@ -14412,7 +14419,8 @@
           "tests/corpus/1361-spawn-events.ts",
           "tests/corpus/1565-spawn-pipe-streams.ts",
           "tests/corpus/2911-execfile-callback.ts",
-          "tests/corpus/2939-child-shell-text.ts"
+          "tests/corpus/2939-child-shell-text.ts",
+          "tests/corpus/2946-child-fork-ipc/main.ts"
         ]
       },
       "dynamic": {
@@ -14574,8 +14582,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:child_process"
+        "status": "partial",
+        "evidence": "compiler-feature:child_process.subprocess.disconnect",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -14685,8 +14696,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:child_process"
+        "status": "partial",
+        "evidence": "compiler-feature:child_process.subprocess.send",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -14820,8 +14834,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:child_process"
+        "status": "partial",
+        "evidence": "compiler-feature:child_process.connected",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -15163,8 +15180,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:child_process"
+        "status": "partial",
+        "evidence": "compiler-feature:child_process.'disconnect'",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -15244,8 +15264,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:child_process"
+        "status": "partial",
+        "evidence": "compiler-feature:child_process.'message'",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -86356,6 +86379,7 @@
           "tests/corpus/2942-process-exit-code-override.ts",
           "tests/corpus/2943-process-exit-code-invalid.ts",
           "tests/corpus/2944-process-exit-code-wrap.ts",
+          "tests/corpus/2946-child-fork-ipc/main.ts",
           "tests/corpus/990-process-basics.ts"
         ]
       },
@@ -86425,8 +86449,11 @@
       "anchor": "event-disconnect",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:process"
+        "status": "partial",
+        "evidence": "compiler-feature:process.'disconnect'",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -86469,8 +86496,11 @@
       "anchor": "event-message",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:process"
+        "status": "partial",
+        "evidence": "compiler-feature:process.'message'",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -86937,8 +86967,11 @@
       "anchor": "processdisconnect",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:process"
+        "status": "partial",
+        "evidence": "compiler-feature:process.process.disconnect",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -87675,8 +87708,11 @@
       "anchor": "processsendmessage-sendhandle-options-callback",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:process"
+        "status": "partial",
+        "evidence": "compiler-feature:process.process.send",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -88193,8 +88229,11 @@
       "anchor": "",
       "nodeStability": null,
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:process"
+        "status": "partial",
+        "evidence": "compiler-feature:process.connected",
+        "tests": [
+          "tests/corpus/2946-child-fork-ipc/main.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",

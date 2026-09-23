@@ -94,7 +94,7 @@ import { emitDynamicExpr } from "./expr-dynamic.js";
 import { emitIntrinsicExpr, emitSerializationExpr, emitAsyncExpr } from "./expr-async.js";
 import { emitJsInteropExpr, emitExpr } from "./expr-dispatch.js";
 import { emitJsMarshal, emitJsOp, emitJsExit, islandAdapter, islandTypedAdapter } from "./expr-island.js";
-import { dynKind, raceAdapterFor, genResultThunkFor, childExitThunkFor, childExitSignalThunkFor, childDataThunkFor, execFileThunkFor, emitterFixedAdapter, wrapEmitterListener, unwrapNullableClosure, closeBindThunkFor, closeOverrideWrapFor } from "./expr-callbacks.js";
+import { dynKind, raceAdapterFor, genResultThunkFor, childExitThunkFor, childExitSignalThunkFor, childDataThunkFor, execFileThunkFor, ipcMessageThunkFor, ipcSendThunkFor, emitterFixedAdapter, wrapEmitterListener, unwrapNullableClosure, closeBindThunkFor, closeOverrideWrapFor } from "./expr-callbacks.js";
 import { streamDataAdapter, streamDoneFnFor, cryptoBytesThunkFor, fsRenameThunkFor, streamCbThunkFor, zlibBytesThunkFor } from "./expr-stream-callbacks.js";
 import { resolveThunkFor, tagInSet, arrPush, emitArrayCopyLoop, emitStrIntrinsic, emitArrIntrinsic, wrapNullable, emitMapNew, mapSet, emitMapLikeIntrinsic, emitSetNew } from "./expr-containers.js";
 import { emitBytesReceiver, emitIntegerLoopIndex, emitBytesIndex, emitBytesData, emitBytesLength, emitBytesGet, emitToUint32, emitBytesSet, emitBytesIntrinsic } from "./expr-bytes.js";
@@ -4190,6 +4190,14 @@ class LlEmitter {
 
   private execFileThunkFor(cbT: IrType & { kind: "func" }): string {
     return execFileThunkFor(this.expressionContext(), cbT);
+  }
+
+  private ipcMessageThunkFor(cbT: IrType & { kind: "func" }): string {
+    return ipcMessageThunkFor(this.expressionContext(), cbT);
+  }
+
+  private ipcSendThunkFor(cbT: IrType & { kind: "func" }): string {
+    return ipcSendThunkFor(this.expressionContext(), cbT);
   }
 
   private childExitSignalThunkFor(codeParam: IrType, sigParam: IrType): string {

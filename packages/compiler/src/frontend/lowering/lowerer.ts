@@ -92,7 +92,7 @@ import {
   withUndefinedArm as withUndefinedArmCanonical,
 } from "../type-mapper.js";
 import { CompoundOp, IslandFnEntry, boundaryIntoIslandMsg, boundaryOutOfIslandMsg, BuiltinModuleFn, builtinConstLit, builtinModuleConstOf, builtinModulesArrayLit, builtinFenceHintOf, builtinModuleFnOf, stdlibMemberFence, isStdlibMember, isStdlibSymbol, isStdlibGlobal, stdlibGlobalMember, nodeTypesOnlySymbol } from "./surfaces.js";
-import { FileParts, splitFiles, collectProgram, collectNpmImports, collectJsonImports, moduleArtifacts, collectGlobals, declSymbolOf, defaultExportSymbolOf, lowerFileInit, lowerDefaultExport, buildMain, appendDynamicImportModules } from "./lower-modules.js";
+import { FileParts, splitFiles, collectProgram, collectNpmImports, collectJsonImports, moduleArtifacts, collectGlobals, declSymbolOf, defaultExportSymbolOf, lowerFileInit, lowerDefaultExport, buildMain, appendDynamicImportModules, appendForkModules } from "./lower-modules.js";
 import { prepareCjsModuleGraph } from "./lower-node-module.js";
 import { ClassInfo, ClassIteratorInfo, GenericClassInfo, registerBuiltinErrorClasses, registerBuiltinEmitterClass, registerBuiltinStreamClasses, builtinErrorInfoOf, builtinEmitterInfoOf, builtinStreamInfoOf, analyzeClassDecoration, classIteratorDrainCall, classIteratorNextCall, classIteratorOf, classIteratorOpenCall, classIteratorRestDrainCall, classMemberNameOf, classValueRef, collectClassShape, exactClassOfReceiver, collectClassShapeInner, ctorAbiEquals, findMethodOn, findStaticOn, findGenericMethodOn, findGenericStaticOn, genericClassInstanceType, isSubclassOf, inHierarchy, overrideBelow, staticShadowBelow, upcastTo, lowerClassMembers, lowerClassCtor, lowerClassExpression, lowerClassExpressionInfo, lowerClassMethodMember, lowerClassValueProperty, lowerStaticMethod, throwingSetterFn, fieldInitStmts, lowerStaticFieldInits, lowerStaticFieldRead, lowerDerivedCtorBody, superCallStmt, lowerSuperMethodCall, superThisRef, lowerSuperAccessorRead, lowerSuperAccessorWrite, inheritsBuiltinErrorCtor, inheritsBuiltinEmitterCtor, errorMessageArg, lowerNew, accessorCall } from "./lower-classes.js";
 import { MixinFnShape, mixinCallClassInfoOf, mixinIntersectionInstanceType } from "./lower-mixins.js";
@@ -451,6 +451,8 @@ export interface LowererMode {
   ffiImports?: readonly IrFfiImport[];
   /** LowerOptions.libraryCallbacks (see there). */
   libraryCallbacks?: boolean;
+  /** Statically resolved child_process.fork program roots, in stable target-id order. */
+  forkTargets?: readonly ts.SourceFile[];
   /** Program-validated ambient declaration symbols for each FFI name.
    * Undefined in discovery's legacy call-local validation path. */
   ffiBindingSymbols?: ReadonlyMap<string, ReadonlySet<ts.Symbol>>;
@@ -522,12 +524,24 @@ export function lowerToIr(
   // evaluation point for them). Inadmissible static cycles inside the
   // added subgraph are minted here and handed to reachable emit after this
   // extension of the shared array; no later pass re-walks the subgraph.
-  const dynamicCycleDiags: ScrDiagnostic[] = [];
-  appendDynamicImportModules(program, moduleOrder, (cycle, reason) => {
-    dynamicCycleDiags.push(
+  const extraModuleCycleDiags: ScrDiagnostic[] = [];
+  const cycleKeys = new Set<string>();
+  const forkTargets: ts.SourceFile[] = [];
+  const onExtraCycle = (cycle: string, reason: string): void => {
+    const key = `${cycle}\0${reason}`;
+    if (cycleKeys.has(key)) return;
+    cycleKeys.add(key);
+    extraModuleCycleDiags.push(
       unsupportedDiag("SC1016", { file: entry.fileName, start: 0, end: 0 }, `circular imports (${cycle}; ${reason})`),
     );
-  });
+  };
+  for (let pass = 0; pass < 32; pass++) {
+    const before = moduleOrder.length;
+    appendDynamicImportModules(program, moduleOrder, onExtraCycle);
+    appendForkModules(program, moduleOrder, forkTargets, onExtraCycle);
+    if (moduleOrder.length === before) break;
+    if (pass === 31) throw new Error("dynamic import and fork module discovery did not converge");
+  }
   const ffiImports = options.ffiImports ?? [];
   const libraryCallbacks = options.libraryCallbacks ?? false;
   const externalTypes = options.externalTypes ?? new Map<string, string>();
@@ -538,6 +552,7 @@ export function lowerToIr(
     startupCrash,
     ffiImports,
     libraryCallbacks,
+    forkTargets,
     externalTypes,
     externalTypeSpecifiersByFile,
   });
@@ -555,11 +570,12 @@ export function lowerToIr(
         startupCrash,
         ffiImports,
         libraryCallbacks,
+        forkTargets,
         externalTypes,
         externalTypeSpecifiersByFile,
         ffiBindingSymbols: ffiValidation.symbolsByName,
       });
-  for (const d of dynamicCycleDiags) reachableEmit.pushDiag(d);
+  for (const d of extraModuleCycleDiags) reachableEmit.pushDiag(d);
   for (const d of ffiValidation.diagnostics) reachableEmit.pushDiag(d);
   const emitted = reachableEmit.emitReachable(options.libRoots);
   const { reachable } = emitted;
@@ -580,11 +596,12 @@ export function lowerToIr(
       startupCrash,
       ffiImports,
       libraryCallbacks,
+      forkTargets,
       ffiBindingSymbols: ffiValidation.symbolsByName,
       externalTypes,
       externalTypeSpecifiersByFile,
     });
-    for (const d of dynamicCycleDiags) emit.pushDiag(d);
+    for (const d of extraModuleCycleDiags) emit.pushDiag(d);
     for (const d of ffiValidation.diagnostics) emit.pushDiag(d);
     result = emit.run();
     resultLowerer = emit;
@@ -598,6 +615,7 @@ export function lowerToIr(
     targetPlatform,
     ffiImports,
     libraryCallbacks,
+    forkTargets,
     ffiBindingSymbols: ffiValidation.symbolsByName,
     externalTypes,
     externalTypeSpecifiersByFile,
@@ -1696,6 +1714,9 @@ export class Lowerer {
   readonly moduleNsParamOverrides = new Map<ts.ParameterDeclaration, IrType & { kind: "moduleNs" }>();
   /** File → qualifier prefix: "" for the entry, "%mI." otherwise. */
   readonly fileTag = new Map<ts.SourceFile, string>();
+  /** Embedded fork roots and their private startup ids. */
+  readonly forkTargets: readonly ts.SourceFile[];
+  readonly forkTargetIdByPath = new Map<string, number>();
   /** Namespace ModuleBlocks this program lowers, filled by splitFiles:
    * "flattened" — an instantiated namespace whose body joined the file's
    * parts (members resolve statically); "typeOnly" — a skipped
@@ -1913,6 +1934,10 @@ export class Lowerer {
     this.startupCrash = mode.startupCrash ?? null;
     this.ffiImports = mode.ffiImports ?? [];
     this.libraryCallbacks = mode.libraryCallbacks ?? false;
+    this.forkTargets = mode.forkTargets ?? [];
+    this.forkTargets.forEach((sf, id) => {
+      this.forkTargetIdByPath.set(tsgoPath(resolve(sf.fileName)), id);
+    });
     this.ffiImportsByName = new Map(this.ffiImports.map((entry) => [entry.name, entry]));
     this.ffiBindingSymbols = mode.ffiBindingSymbols ?? null;
     this.externalTypes = mode.externalTypes ?? new Map();

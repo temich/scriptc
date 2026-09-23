@@ -3,7 +3,7 @@
 // exactly, so most misuse is a type error before lowering; these are the
 // forms that TYPECHECK and fence per site.
 
-import { execFile, spawn } from "node:child_process";
+import { execFile, fork, spawn } from "node:child_process";
 
 // The default and explicit "pipe" forms use piped streams.
 // Keep both adjacent to the remaining rejection cases.
@@ -31,4 +31,10 @@ const f = c.on;
 // options/optional-callback overload family.
 execFile("true");
 execFile("true", [], { encoding: "utf8" }, () => {});
+// Fork targets are part of the compiled graph and therefore must resolve at
+// build time. The remaining channel is JSON-only and occupies stdio slot 3.
+fork(process.argv[1]!);
+const staticWorker = new URL("./child-process.ts", import.meta.url);
+fork(staticWorker, [], { serialization: "advanced" });
+fork(staticWorker, [], { stdio: ["ignore", "ignore", "ignore", "ignore"] });
 // Keep each fence on its own statement so diagnostics remain site-specific.

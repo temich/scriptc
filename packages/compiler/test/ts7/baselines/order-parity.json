@@ -6504,6 +6504,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2946-child-fork-ipc/main.ts": {
+   "order": [
+    "<repo>/tests/corpus/2946-child-fork-ipc/main.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2946-url-port-hash.ts": {
    "order": [
     "<repo>/tests/corpus/2946-url-port-hash.ts"

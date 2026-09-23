@@ -1163,6 +1163,91 @@ export function execFileThunkFor(emitter: CEmitter, cbT: IrType & { kind: "func"
   return sym;
 }
 
+/** Fork IPC message adapter: parse results arrive as a borrowed dyn tree,
+ * then validate into the listener's static JSON shape. Async listener
+ * promises are deliberately released without attaching a handler, matching
+ * EventEmitter's ignored return value. */
+export function ipcMessageThunkFor(emitter: CEmitter, cbT: IrType & { kind: "func" }): string {
+  const key = `ipcmsg:${typeKey(cbT)}`;
+  let sym = emitter.childExitThunks.get(key);
+  if (sym) return sym;
+  sym = mangleChildExitThunk(emitter.childExitThunks.size);
+  emitter.childExitThunks.set(key, sym);
+  const param = cbT.params[0];
+  const body: string[] = [];
+  const callbackTypes = ["ScrClosure *"];
+  const callbackArgs = ["sc_cb"];
+  if (param !== undefined) {
+    const value = param.kind === "dyn"
+      ? "scr_dyn_retain(sc_message)"
+      : `${emitter.dynCheckHelper(param)}(sc_message, NULL)`;
+    body.push(`  ${cDecl(param, "sc_value")} = ${value};`);
+    if (param.kind !== "dyn") {
+      body.push(
+        `  if (scr_exc_pending()) {`,
+        ...(isRefCounted(param) ? [`    ${releaseCallC(param, "sc_value")};`] : []),
+        `    return;`,
+        `  }`,
+      );
+    }
+    callbackTypes.push(cType(param).trim());
+    callbackArgs.push("sc_value");
+  } else {
+    body.push(`  (void)sc_message;`);
+  }
+  const invoke = `((` + cType(cbT.ret).trim() + ` (*)(${callbackTypes.join(", ")}))sc_cb->fn)(${callbackArgs.join(", ")})`;
+  if (cbT.ret.kind === "void") body.push(`  ${invoke};`);
+  else body.push(`  ${cDecl(cbT.ret, "sc_result")} = ${invoke};`, `  ${releaseCallC(cbT.ret, "sc_result")};`);
+  emitter.walkerProtos.push(`static void ${sym}(ScrClosure *sc_cb, ScrDyn *sc_message);`);
+  emitter.walkerDefs.push(
+    `static void ${sym}(ScrClosure *sc_cb, ScrDyn *sc_message) {`,
+    ...body,
+    `}`,
+  );
+  return sym;
+}
+
+/** Fork IPC send completion adapter. The nullable +1 runtime Error moves
+ * into the callback's Error|null union, or is released for a zero-argument
+ * callback. */
+export function ipcSendThunkFor(emitter: CEmitter, cbT: IrType & { kind: "func" }): string {
+  const key = `ipcsend:${typeKey(cbT)}`;
+  let sym = emitter.childExitThunks.get(key);
+  if (sym) return sym;
+  sym = mangleChildExitThunk(emitter.childExitThunks.size);
+  emitter.childExitThunks.set(key, sym);
+  const param = cbT.params[0];
+  const body: string[] = [];
+  if (param === undefined) {
+    body.push(
+      `  scr_error_release(sc_error);`,
+      `  ((void (*)(ScrClosure *))sc_cb->fn)(sc_cb);`,
+    );
+  } else {
+    if (param.kind !== "union") throw new InternalCompilerError("emitter bug: IPC send callback param not a union");
+    const def = emitter.unionsById.get(param.unionId);
+    const errorTag = def ? def.arms.findIndex((arm) => arm.kind === "object" && arm.className === "%Error") : -1;
+    const nullTag = def ? def.arms.findIndex((arm) => arm.kind === "nullT") : -1;
+    const errorArm = errorTag >= 0 ? def?.arms[errorTag] : undefined;
+    if (errorTag < 0 || nullTag < 0 || !errorArm) {
+      throw new InternalCompilerError("emitter bug: IPC send callback union lacks Error|null");
+    }
+    body.push(
+      `  ScrUnion *sc_value = sc_error`,
+      `      ? scr_union_new_ref(${errorTag}, sc_error, &scr_error_retain_v, &scr_error_release_v, ${emitter.traceArgC(errorArm)})`,
+      `      : ${emitter.unitInstanceRef(param.unionId, nullTag)};`,
+      `  ((void (*)(ScrClosure *, ScrUnion *))sc_cb->fn)(sc_cb, sc_value);`,
+    );
+  }
+  emitter.walkerProtos.push(`static void ${sym}(ScrClosure *sc_cb, ScrError *sc_error);`);
+  emitter.walkerDefs.push(
+    `static void ${sym}(ScrClosure *sc_cb, ScrError *sc_error) {`,
+    ...body,
+    `}`,
+  );
+  return sym;
+}
+
 /** The stream completion-callback closure fn for one done func type: the
  * `callback` a user's write/final/destroy/transform/flush receives. The
  * closure's one capture box holds the stream (+1); calling it unwraps the

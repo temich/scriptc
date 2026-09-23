@@ -18,6 +18,33 @@
  *   this function returns, unconditionally.
  */
 #include "scr_runtime.h"
+#include <math.h>
+#include <stdio.h>
+
+typedef struct ScrIpc ScrIpc;
+static ScrIpc *scr_ipc_new(ScrChildStream *reader, ScrChildWriter *writer);
+static ScrIpc *scr_ipc_retain(ScrIpc *ipc);
+static void scr_ipc_release(ScrIpc *ipc);
+static void scr_ipc_service(void);
+static bool scr_ipc_pending(void);
+
+static ScrArr *scr_fork_argv(double target, uintptr_t read_handle,
+                             uintptr_t write_handle, ScrArr *args) {
+  char marker[160];
+  int marker_len = snprintf(
+      marker, sizeof marker, "--scriptc-fork=%.0f,%llu,%llu", target,
+      (unsigned long long)read_handle, (unsigned long long)write_handle);
+  if (marker_len < 0 || (size_t)marker_len >= sizeof marker) {
+    scr_trap("invalid fork startup marker");
+  }
+  size_t count = (size_t)scr_arr_len(args);
+  ScrArr *out = scr_arr_new(SCR_ELEM_STR, count + 1);
+  scr_arr_push_ref(out, scr_str_new(marker, (size_t)marker_len));
+  for (size_t i = 0; i < count; i++) {
+    scr_arr_push_ref(out, scr_arr_get_ref(args, (double)i));
+  }
+  return out;
+}
 
 static size_t scr_child_arg_start(ScrStr *cmd, ScrArr *args) {
   return scr_lib_should_collapse_reexec_arg(cmd, args) ? 1 : 0;
@@ -649,6 +676,40 @@ static bool scr_win_stdin_pipe(HANDLE *parent_end, HANDLE *child_end) {
   return true;
 }
 
+/* The reverse direction used by fork IPC: a non-inheritable synchronous
+ * reader in the parent and an inheritable OVERLAPPED writer in the child. */
+static bool scr_win_ipc_child_writer_pipe(HANDLE *parent_end,
+                                          HANDLE *child_end) {
+  WCHAR name[128];
+  LONG seq = InterlockedIncrement(&scr_win_stdin_pipe_seq);
+  _snwprintf(name, sizeof name / sizeof name[0],
+             L"\\\\.\\pipe\\scriptc-ipc-%lu-%ld",
+             (unsigned long)GetCurrentProcessId(), (long)seq);
+  name[sizeof name / sizeof name[0] - 1] = L'\0';
+
+  HANDLE rd = CreateNamedPipeW(
+      name, PIPE_ACCESS_INBOUND,
+      PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+      1, 65536, 65536, 0, NULL);
+  if (rd == INVALID_HANDLE_VALUE) return false;
+  SECURITY_ATTRIBUTES child_sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+  HANDLE wr = CreateFileW(name, GENERIC_WRITE, 0, &child_sa, OPEN_EXISTING,
+                          FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
+  if (wr == INVALID_HANDLE_VALUE) {
+    CloseHandle(rd);
+    return false;
+  }
+  if (!ConnectNamedPipe(rd, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
+    CloseHandle(wr);
+    CloseHandle(rd);
+    return false;
+  }
+  (void)SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
+  *parent_end = rd;
+  *child_end = wr;
+  return true;
+}
+
 /* ── capture buffers (the POSIX arm's shape) ─────────────────────────── */
 
 typedef struct {
@@ -1232,6 +1293,7 @@ struct ScrChild {
   ScrChildStream *out_stream;
   ScrChildStream *err_stream;
   ScrChildWriter *in_stream;
+  ScrIpc *ipc;
   struct ScrChild *next; /* the pending registry */
 };
 
@@ -1283,6 +1345,7 @@ void scr_child_release(ScrChild *c) {
     scr_child_stream_release(c->out_stream);
     scr_child_stream_release(c->err_stream);
     scr_child_writer_release(c->in_stream);
+    scr_ipc_release(c->ipc);
     if (c->proc != NULL) CloseHandle(c->proc);
     free(c);
   }
@@ -2112,6 +2175,39 @@ ScrChild *scr_spawn_opts(ScrStr *cmd, ScrArr *args, double in_mode,
   return c;
 }
 
+ScrChild *scr_fork(double target, ScrArr *args, double in_mode,
+                   double out_mode, double err_mode, bool has_env,
+                   ScrArr *env_pairs, ScrStr *cwd) {
+  HANDLE parent_write = NULL, child_read = NULL;
+  HANDLE parent_read = NULL, child_write = NULL;
+  if (!scr_win_stdin_pipe(&parent_write, &child_read) ||
+      !scr_win_ipc_child_writer_pipe(&parent_read, &child_write)) {
+    if (parent_write != NULL) CloseHandle(parent_write);
+    if (child_read != NULL) CloseHandle(child_read);
+    if (parent_read != NULL) CloseHandle(parent_read);
+    if (child_write != NULL) CloseHandle(child_write);
+    scr_trap("could not create fork IPC channel");
+  }
+  ScrArr *spawn_args = scr_fork_argv(
+      target, (uintptr_t)child_read, (uintptr_t)child_write, args);
+  ScrStr *command = scr_process_exec_path();
+  ScrChild *child = scr_spawn_opts(
+      command, spawn_args, in_mode, out_mode, err_mode, 0, 0, false,
+      false, has_env, env_pairs, cwd);
+  scr_str_release(command);
+  scr_arr_release(spawn_args);
+  CloseHandle(child_read);
+  CloseHandle(child_write);
+  if (child->state == SCR_CHILD_RUNNING) {
+    child->ipc = scr_ipc_new(scr_child_stream_new(parent_read),
+                             scr_child_writer_new(parent_write));
+  } else {
+    CloseHandle(parent_read);
+    CloseHandle(parent_write);
+  }
+  return child;
+}
+
 static ScrError *scr_exec_file_error(ScrChild *c, ScrStr *stderr_value) {
   if (c->state == SCR_CHILD_SPAWN_FAILED) {
     ScrError *error = scr_error_new(0, c->err_msg);
@@ -2223,7 +2319,7 @@ void scr_child_unref(ScrChild *c) {
 
 bool scr_children_reffed_pending(void) {
   return scr_children_reffed_n > 0 || scr_child_streams_watching > 0 ||
-         scr_child_writers_pending();
+         scr_child_writers_pending() || scr_ipc_pending();
 }
 
 void scr_children_teardown(void) {
@@ -2364,7 +2460,7 @@ void scr_child_err_thunk_error(ScrClosure *cb, ScrStr *msg) {
 bool scr_children_pending(void) {
   return scr_children != NULL || scr_children_closing != NULL ||
          scr_child_streams_watching > 0 ||
-         scr_child_writers_pending();
+         scr_child_writers_pending() || scr_ipc_pending();
 }
 
 bool scr_children_failed_pending(void) {
@@ -2494,6 +2590,8 @@ static void scr_child_settle(ScrChild *c) {
  * ordering), then every running child answers WaitForSingleObject(h, 0)
  * — the WNOHANG analogue; spawn failures settle on their first pass. */
 void scr_children_poll(void) {
+  scr_ipc_service();
+  if (scr_exc_pending()) return;
   scr_child_writers_service();
   if (scr_exc_pending()) return;
   scr_child_streams_service();
@@ -3465,6 +3563,7 @@ struct ScrChild {
   ScrChildStream *out_stream;
   ScrChildStream *err_stream;
   ScrChildWriter *in_stream;
+  ScrIpc *ipc;
   struct ScrChild *next; /* the pending registry */
 };
 
@@ -3653,6 +3752,7 @@ void scr_child_release(ScrChild *c) {
     scr_child_stream_release(c->out_stream);
     scr_child_stream_release(c->err_stream);
     scr_child_writer_release(c->in_stream);
+    scr_ipc_release(c->ipc);
     free(c);
   }
 }
@@ -4637,6 +4737,44 @@ ScrChild *scr_spawn_opts(ScrStr *cmd, ScrArr *args, double in_mode,
   return c;
 }
 
+ScrChild *scr_fork(double target, ScrArr *args, double in_mode,
+                   double out_mode, double err_mode, bool has_env,
+                   ScrArr *env_pairs, ScrStr *cwd) {
+  int parent_to_child[2] = {-1, -1};
+  int child_to_parent[2] = {-1, -1};
+  if (pipe(parent_to_child) != 0 || pipe(child_to_parent) != 0) {
+    if (parent_to_child[0] >= 0) close(parent_to_child[0]);
+    if (parent_to_child[1] >= 0) close(parent_to_child[1]);
+    if (child_to_parent[0] >= 0) close(child_to_parent[0]);
+    if (child_to_parent[1] >= 0) close(child_to_parent[1]);
+    scr_trap("could not create fork IPC channel");
+  }
+  fcntl(parent_to_child[1], F_SETFD, FD_CLOEXEC);
+  fcntl(child_to_parent[0], F_SETFD, FD_CLOEXEC);
+  fcntl(parent_to_child[0], F_SETFD, 0);
+  fcntl(child_to_parent[1], F_SETFD, 0);
+
+  ScrArr *spawn_args = scr_fork_argv(
+      target, (uintptr_t)parent_to_child[0],
+      (uintptr_t)child_to_parent[1], args);
+  ScrStr *command = scr_process_exec_path();
+  ScrChild *child = scr_spawn_opts(
+      command, spawn_args, in_mode, out_mode, err_mode, 0, 0, false,
+      false, has_env, env_pairs, cwd);
+  scr_str_release(command);
+  scr_arr_release(spawn_args);
+  close(parent_to_child[0]);
+  close(child_to_parent[1]);
+  if (child->state == SCR_CHILD_RUNNING) {
+    child->ipc = scr_ipc_new(scr_child_stream_new(child_to_parent[0]),
+                             scr_child_writer_new(parent_to_child[1]));
+  } else {
+    close(child_to_parent[0]);
+    close(parent_to_child[1]);
+  }
+  return child;
+}
+
 static ScrError *scr_exec_file_error(ScrChild *c, ScrStr *stderr_value) {
   if (c->state == SCR_CHILD_SPAWN_FAILED) {
     ScrError *error = scr_error_new(0, c->err_msg);
@@ -4758,7 +4896,7 @@ void scr_child_unref(ScrChild *c) {
  * write end). */
 bool scr_children_reffed_pending(void) {
   return scr_children_reffed_n > 0 || scr_child_streams_watching > 0 ||
-         scr_child_writers_pending();
+         scr_child_writers_pending() || scr_ipc_pending();
 }
 
 /* Loop-exhaustion teardown (the scr_timers_teardown twin): the loop may
@@ -4931,7 +5069,7 @@ void scr_child_err_thunk_error(ScrClosure *cb, ScrStr *msg) {
 bool scr_children_pending(void) {
   return scr_children != NULL || scr_children_closing != NULL ||
          scr_child_streams_watching > 0 ||
-         scr_child_writers_pending();
+         scr_child_writers_pending() || scr_ipc_pending();
 }
 
 /* True while an UNSETTLED spawn failure sits in the registry: its 'error'
@@ -5059,6 +5197,8 @@ static void scr_child_settle(ScrChild *c) {
  * callbacks — a throw stops the pass and leaves the exception pending
  * for the loop. */
 void scr_children_poll(void) {
+  scr_ipc_service();
+  if (scr_exc_pending()) return;
   scr_child_writers_service();
   if (scr_exc_pending()) return;
   scr_child_streams_service();
@@ -5108,6 +5248,479 @@ void scr_children_poll(void) {
 }
 
 #endif /* !_WIN32 */
+
+/* ── fork JSON IPC (shared by Windows and POSIX) ────────────────────── */
+
+typedef struct {
+  ScrClosure *cb;
+  ScrIpcMessageFn fn;
+  bool once;
+} ScrIpcMessageEntry;
+
+typedef struct {
+  ScrClosure *cb;
+  bool once;
+} ScrIpcDisconnectEntry;
+
+typedef struct {
+  ScrClosure *cb;
+  ScrIpcSendFn fn;
+} ScrIpcSendEntry;
+
+struct ScrIpc {
+  size_t rc;
+  bool connected;
+  bool armed;
+  bool local_closing;
+  bool disconnect_pending;
+  bool disconnect_emitted;
+  bool registered;
+  ScrChildStream *reader;
+  ScrChildWriter *writer;
+  ScrClosure *writer_error_cb; /* borrowed from writer->err_ls */
+  uint8_t *buffer;
+  size_t buffer_len, buffer_cap;
+  ScrDyn **pending;
+  size_t n_pending, cap_pending;
+  ScrIpcMessageEntry *message_ls;
+  size_t n_message, cap_message;
+  ScrIpcDisconnectEntry *disconnect_ls;
+  size_t n_disconnect, cap_disconnect;
+  ScrIpcSendEntry *send_cbs;
+  size_t n_send, cap_send;
+  ScrStr *send_error;
+  struct ScrIpc *next;
+};
+
+static ScrIpc *scr_ipcs = NULL;
+static ScrIpc *scr_process_ipc = NULL;
+static double scr_process_fork_id = -2;
+static bool scr_ipc_cleanup_registered = false;
+
+static ScrIpc *scr_ipc_retain(ScrIpc *ipc) {
+  if (ipc && ipc->rc != SIZE_MAX) ipc->rc++;
+  return ipc;
+}
+
+static void scr_ipc_drop_writer_error(ScrIpc *ipc) {
+  if (!ipc->writer_error_cb) return;
+  for (size_t i = 0; i < ipc->writer->n_write_err; i++) {
+    if (ipc->writer->err_ls[i].cb != ipc->writer_error_cb) continue;
+    scr_closure_release(ipc->writer->err_ls[i].cb);
+    memmove(ipc->writer->err_ls + i, ipc->writer->err_ls + i + 1,
+            (ipc->writer->n_write_err - i - 1) * sizeof(*ipc->writer->err_ls));
+    ipc->writer->n_write_err--;
+    break;
+  }
+  ipc->writer_error_cb = NULL;
+}
+
+static void scr_ipc_release(ScrIpc *ipc) {
+  if (!ipc || ipc->rc == SIZE_MAX) return;
+  if (--ipc->rc != 0) return;
+  scr_ipc_drop_writer_error(ipc);
+  scr_child_stream_release(ipc->reader);
+  scr_child_writer_release(ipc->writer);
+  for (size_t i = 0; i < ipc->n_pending; i++) scr_dyn_release(ipc->pending[i]);
+  for (size_t i = 0; i < ipc->n_message; i++) scr_closure_release(ipc->message_ls[i].cb);
+  for (size_t i = 0; i < ipc->n_disconnect; i++) scr_closure_release(ipc->disconnect_ls[i].cb);
+  for (size_t i = 0; i < ipc->n_send; i++) scr_closure_release(ipc->send_cbs[i].cb);
+  scr_str_release(ipc->send_error);
+  free(ipc->buffer);
+  free(ipc->pending);
+  free(ipc->message_ls);
+  free(ipc->disconnect_ls);
+  free(ipc->send_cbs);
+  free(ipc);
+}
+
+static void *scr_ipc_retain_v(void *p) { return scr_ipc_retain((ScrIpc *)p); }
+static void scr_ipc_release_v(void *p) { scr_ipc_release((ScrIpc *)p); }
+
+static ScrIpc *scr_ipc_from_closure(ScrClosure *cb) {
+  return (ScrIpc *)scr_box_get_ref(cb->caps[0]);
+}
+
+static ScrClosure *scr_ipc_closure(ScrIpc *ipc, void *fn) {
+  ScrClosure *cb = scr_closure_new(fn, 1);
+  ScrBox *box = scr_box_new_obj(&scr_ipc_retain_v, &scr_ipc_release_v, NULL);
+  scr_box_set_ref(box, scr_ipc_retain(ipc));
+  cb->caps[0] = box;
+  return cb;
+}
+
+static void scr_ipc_global_cleanup(void) {
+  while (scr_ipcs != NULL) {
+    ScrIpc *ipc = scr_ipcs;
+    scr_ipcs = ipc->next;
+    ipc->next = NULL;
+    ipc->registered = false;
+    scr_ipc_drop_writer_error(ipc);
+    scr_child_stream_finish(ipc->reader, false);
+    scr_child_writer_destroy(ipc->writer);
+    scr_ipc_release(ipc);
+  }
+  scr_ipc_release(scr_process_ipc);
+  scr_process_ipc = NULL;
+  scr_process_fork_id = -2;
+}
+
+static void scr_ipc_queue_message(ScrIpc *ipc, ScrDyn *message /*moves*/) {
+  if (ipc->n_pending == ipc->cap_pending) {
+    ipc->cap_pending = ipc->cap_pending ? ipc->cap_pending * 2 : 4;
+    ipc->pending = realloc(ipc->pending, ipc->cap_pending * sizeof(*ipc->pending));
+    if (!ipc->pending) scr_trap("out of memory");
+  }
+  ipc->pending[ipc->n_pending++] = message;
+}
+
+static void scr_ipc_stream_data(ScrClosure *closure, ScrBytes *chunk) {
+  ScrIpc *ipc = scr_ipc_from_closure(closure);
+  size_t need = ipc->buffer_len + chunk->len;
+  if (need > ipc->buffer_cap) {
+    size_t cap = ipc->buffer_cap ? ipc->buffer_cap : 256;
+    while (cap < need) cap *= 2;
+    ipc->buffer = realloc(ipc->buffer, cap);
+    if (!ipc->buffer) scr_trap("out of memory");
+    ipc->buffer_cap = cap;
+  }
+  memcpy(ipc->buffer + ipc->buffer_len, chunk->data, chunk->len);
+  ipc->buffer_len = need;
+  size_t consumed = 0;
+  for (size_t i = 0; i < ipc->buffer_len; i++) {
+    if (ipc->buffer[i] != '\n') continue;
+    ScrStr *line = scr_str_new((const char *)ipc->buffer + consumed, i - consumed);
+    ScrDyn *message = scr_json_parse(line);
+    scr_str_release(line);
+    if (scr_exc_pending()) break;
+    scr_ipc_queue_message(ipc, message);
+    consumed = i + 1;
+  }
+  if (consumed > 0) {
+    memmove(ipc->buffer, ipc->buffer + consumed, ipc->buffer_len - consumed);
+    ipc->buffer_len -= consumed;
+  }
+  scr_ipc_release(ipc);
+}
+
+static void scr_ipc_mark_disconnected(ScrIpc *ipc, bool write_failed,
+                                      ScrStr *message) {
+  ipc->connected = false;
+  ipc->local_closing = false;
+  if (write_failed && ipc->send_error == NULL) {
+    ipc->send_error = message
+        ? scr_str_retain(message)
+        : scr_str_new("Channel closed", sizeof("Channel closed") - 1);
+  }
+  ipc->writer_error_cb = NULL; /* destroy drops the writer's listeners */
+  scr_child_writer_destroy(ipc->writer);
+  ipc->disconnect_pending = true;
+}
+
+static void scr_ipc_stream_end(ScrClosure *closure) {
+  ScrIpc *ipc = scr_ipc_from_closure(closure);
+  scr_ipc_mark_disconnected(ipc, ipc->n_send > 0, NULL);
+  scr_ipc_release(ipc);
+}
+
+static void scr_ipc_writer_error(ScrClosure *closure, ScrStr *message) {
+  ScrIpc *ipc = scr_ipc_from_closure(closure);
+  ipc->writer_error_cb = NULL; /* writer fire drops its listener registry */
+  scr_ipc_mark_disconnected(ipc, true, message);
+  scr_ipc_release(ipc);
+}
+
+static void scr_ipc_arm(ScrIpc *ipc) {
+  if (ipc->armed || ipc->disconnect_emitted) return;
+  ipc->armed = true;
+  scr_child_stream_on_data(
+      ipc->reader, scr_ipc_closure(ipc, (void *)&scr_ipc_stream_data),
+      &scr_ipc_stream_data, false);
+  scr_child_stream_on_end(
+      ipc->reader, scr_ipc_closure(ipc, (void *)&scr_ipc_stream_end), false);
+}
+
+static ScrIpc *scr_ipc_new(ScrChildStream *reader, ScrChildWriter *writer) {
+  ScrIpc *ipc = calloc(1, sizeof(*ipc));
+  if (!ipc) scr_trap("out of memory");
+  ipc->rc = 1;
+  ipc->connected = true;
+  ipc->reader = reader;
+  ipc->writer = writer;
+  ipc->registered = true;
+  ipc->next = scr_ipcs;
+  scr_ipcs = scr_ipc_retain(ipc); /* service-registry reference */
+  ipc->writer_error_cb = scr_ipc_closure(ipc, (void *)&scr_ipc_writer_error);
+  scr_child_writer_on_error(writer, ipc->writer_error_cb,
+                            &scr_ipc_writer_error, false);
+  if (!scr_ipc_cleanup_registered) {
+    scr_ipc_cleanup_registered = true;
+    atexit(scr_ipc_global_cleanup);
+  }
+  return ipc;
+}
+
+static void scr_ipc_register(ScrIpc *ipc) {
+  if (ipc->registered) return;
+  ipc->registered = true;
+  ipc->next = scr_ipcs;
+  scr_ipcs = scr_ipc_retain(ipc);
+}
+
+static void scr_ipc_add_send(ScrIpc *ipc, ScrClosure *cb, ScrIpcSendFn fn) {
+  if (ipc->n_send == ipc->cap_send) {
+    ipc->cap_send = ipc->cap_send ? ipc->cap_send * 2 : 2;
+    ipc->send_cbs = realloc(ipc->send_cbs, ipc->cap_send * sizeof(*ipc->send_cbs));
+    if (!ipc->send_cbs) scr_trap("out of memory");
+  }
+  ipc->send_cbs[ipc->n_send++] = (ScrIpcSendEntry){cb, fn};
+}
+
+static bool scr_ipc_send(ScrIpc *ipc, ScrStr *json, ScrClosure *cb,
+                         ScrIpcSendFn fn) {
+  if (!ipc || !ipc->connected) {
+    if (cb) {
+      if (ipc) {
+        scr_ipc_add_send(ipc, cb, fn);
+        if (ipc->send_error == NULL) {
+          ipc->send_error = scr_str_new("Channel closed", sizeof("Channel closed") - 1);
+        }
+        scr_ipc_register(ipc);
+      } else {
+        ScrStr *message = scr_str_new("Channel closed", sizeof("Channel closed") - 1);
+        ScrError *error = scr_error_new(0, message);
+        scr_str_release(message);
+        scr_error_set_code(error, "ERR_IPC_CHANNEL_CLOSED");
+        fn(cb, error);
+        scr_closure_release(cb);
+      }
+    }
+    return false;
+  }
+  char *framed = malloc(json->len + 1);
+  if (!framed) scr_trap("out of memory");
+  memcpy(framed, json->data, json->len);
+  framed[json->len] = '\n';
+  ScrStr *line = scr_str_new(framed, json->len + 1);
+  free(framed);
+  bool ok = scr_child_writer_write_string(ipc->writer, line);
+  scr_str_release(line);
+  if (cb) scr_ipc_add_send(ipc, cb, fn);
+  return ok;
+}
+
+static void scr_ipc_disconnect(ScrIpc *ipc) {
+  if (!ipc || !ipc->connected) return;
+  ipc->connected = false;
+  ipc->local_closing = true;
+  scr_child_writer_end(ipc->writer);
+}
+
+static void scr_ipc_add_message(ScrIpc *ipc, ScrClosure *cb,
+                                ScrIpcMessageFn fn, bool once) {
+  if (!ipc || ipc->disconnect_emitted) {
+    scr_closure_release(cb);
+    return;
+  }
+  if (ipc->n_message == ipc->cap_message) {
+    ipc->cap_message = ipc->cap_message ? ipc->cap_message * 2 : 2;
+    ipc->message_ls = realloc(ipc->message_ls, ipc->cap_message * sizeof(*ipc->message_ls));
+    if (!ipc->message_ls) scr_trap("out of memory");
+  }
+  ipc->message_ls[ipc->n_message++] = (ScrIpcMessageEntry){cb, fn, once};
+  scr_ipc_arm(ipc);
+}
+
+static void scr_ipc_add_disconnect(ScrIpc *ipc, ScrClosure *cb, bool once) {
+  if (!ipc || ipc->disconnect_emitted) {
+    scr_closure_release(cb);
+    return;
+  }
+  if (ipc->n_disconnect == ipc->cap_disconnect) {
+    ipc->cap_disconnect = ipc->cap_disconnect ? ipc->cap_disconnect * 2 : 2;
+    ipc->disconnect_ls = realloc(
+        ipc->disconnect_ls, ipc->cap_disconnect * sizeof(*ipc->disconnect_ls));
+    if (!ipc->disconnect_ls) scr_trap("out of memory");
+  }
+  ipc->disconnect_ls[ipc->n_disconnect++] = (ScrIpcDisconnectEntry){cb, once};
+  scr_ipc_arm(ipc);
+}
+
+static void scr_ipc_remove_message_once(ScrIpc *ipc, ScrClosure *cb) {
+  for (size_t i = 0; i < ipc->n_message; i++) {
+    if (ipc->message_ls[i].cb != cb || !ipc->message_ls[i].once) continue;
+    scr_closure_release(ipc->message_ls[i].cb);
+    memmove(ipc->message_ls + i, ipc->message_ls + i + 1,
+            (ipc->n_message - i - 1) * sizeof(*ipc->message_ls));
+    ipc->n_message--;
+    return;
+  }
+}
+
+static void scr_ipc_fire_messages(ScrIpc *ipc) {
+  while (ipc->n_pending > 0 && ipc->n_message > 0 && !scr_exc_pending()) {
+    ScrDyn *message = ipc->pending[0];
+    memmove(ipc->pending, ipc->pending + 1,
+            (ipc->n_pending - 1) * sizeof(*ipc->pending));
+    ipc->n_pending--;
+    size_t count = ipc->n_message;
+    ScrIpcMessageEntry *snapshot = malloc(count * sizeof(*snapshot));
+    if (!snapshot) scr_trap("out of memory");
+    for (size_t i = 0; i < count; i++) {
+      snapshot[i] = ipc->message_ls[i];
+      scr_closure_retain(snapshot[i].cb);
+    }
+    for (size_t i = 0; i < count; i++) {
+      if (snapshot[i].once) scr_ipc_remove_message_once(ipc, snapshot[i].cb);
+      if (!scr_exc_pending()) snapshot[i].fn(snapshot[i].cb, message);
+      scr_closure_release(snapshot[i].cb);
+    }
+    free(snapshot);
+    scr_dyn_release(message);
+  }
+}
+
+static void scr_ipc_fire_send_callbacks(ScrIpc *ipc) {
+  bool failed = ipc->send_error != NULL;
+  if (!failed && scr_child_writer_pending(ipc->writer)) return;
+  size_t count = ipc->n_send;
+  if (count == 0) return;
+  ScrIpcSendEntry *snapshot = ipc->send_cbs;
+  ipc->send_cbs = NULL;
+  ipc->n_send = ipc->cap_send = 0;
+  for (size_t i = 0; i < count; i++) {
+    ScrError *error = NULL;
+    if (failed) {
+      error = scr_error_new(0, ipc->send_error);
+      scr_error_set_code(error, "ERR_IPC_CHANNEL_CLOSED");
+    }
+    if (!scr_exc_pending()) snapshot[i].fn(snapshot[i].cb, error);
+    else scr_error_release(error);
+    scr_closure_release(snapshot[i].cb);
+  }
+  free(snapshot);
+  scr_str_release(ipc->send_error);
+  ipc->send_error = NULL;
+}
+
+static void scr_ipc_fire_disconnect(ScrIpc *ipc) {
+  if (!ipc->disconnect_pending || ipc->disconnect_emitted) return;
+  ipc->disconnect_pending = false;
+  ipc->disconnect_emitted = true;
+  size_t count = ipc->n_disconnect;
+  ScrIpcDisconnectEntry *snapshot = ipc->disconnect_ls;
+  ipc->disconnect_ls = NULL;
+  ipc->n_disconnect = ipc->cap_disconnect = 0;
+  for (size_t i = 0; i < count; i++) {
+    if (!scr_exc_pending()) ((void (*)(ScrClosure *))snapshot[i].cb->fn)(snapshot[i].cb);
+    scr_closure_release(snapshot[i].cb);
+  }
+  free(snapshot);
+  for (size_t i = 0; i < ipc->n_message; i++) scr_closure_release(ipc->message_ls[i].cb);
+  free(ipc->message_ls);
+  ipc->message_ls = NULL;
+  ipc->n_message = ipc->cap_message = 0;
+  for (size_t i = 0; i < ipc->n_pending; i++) scr_dyn_release(ipc->pending[i]);
+  ipc->n_pending = 0;
+}
+
+static void scr_ipc_service(void) {
+  ScrIpc **link = &scr_ipcs;
+  while (*link) {
+    ScrIpc *ipc = *link;
+    scr_ipc_fire_send_callbacks(ipc);
+    if (!scr_exc_pending()) scr_ipc_fire_messages(ipc);
+    if (!scr_exc_pending() && ipc->local_closing &&
+        !scr_child_writer_pending(ipc->writer)) {
+      ipc->local_closing = false;
+      scr_ipc_drop_writer_error(ipc);
+      scr_child_stream_finish(ipc->reader, false);
+      ipc->disconnect_pending = true;
+    }
+    if (!scr_exc_pending()) scr_ipc_fire_disconnect(ipc);
+    if (ipc->disconnect_emitted && ipc->n_send == 0) {
+      *link = ipc->next;
+      ipc->next = NULL;
+      ipc->registered = false;
+      scr_ipc_release(ipc); /* service-registry reference */
+    } else {
+      link = &ipc->next;
+    }
+    if (scr_exc_pending()) return;
+  }
+}
+
+static bool scr_ipc_pending(void) {
+  for (ScrIpc *ipc = scr_ipcs; ipc != NULL; ipc = ipc->next) {
+    if (ipc->n_send > 0 || ipc->disconnect_pending || ipc->local_closing ||
+        (ipc->n_pending > 0 && ipc->n_message > 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+double scr_process_fork_target(double target_count) {
+  if (scr_process_fork_id != -2) return scr_process_fork_id;
+  double target = -1;
+  uintptr_t read_handle = 0, write_handle = 0;
+  if (!scr_lib_fork_info(&target, &read_handle, &write_handle)) {
+    scr_process_fork_id = -1;
+    return -1;
+  }
+  if (!isfinite(target) || target < 0 || trunc(target) != target ||
+      target >= target_count) {
+    scr_trap("invalid fork target");
+  }
+#ifdef _WIN32
+  ScrChildStream *reader = scr_child_stream_new((HANDLE)read_handle);
+  ScrChildWriter *writer = scr_child_writer_new((HANDLE)write_handle);
+#else
+  ScrChildStream *reader = scr_child_stream_new((int)read_handle);
+  ScrChildWriter *writer = scr_child_writer_new((int)write_handle);
+#endif
+  scr_process_ipc = scr_ipc_new(reader, writer);
+  scr_process_fork_id = target;
+  return target;
+}
+
+bool scr_child_ipc_connected(ScrChild *c) {
+  return c->ipc != NULL && c->ipc->connected;
+}
+bool scr_child_ipc_send(ScrChild *c, ScrStr *json) {
+  return scr_ipc_send(c->ipc, json, NULL, NULL);
+}
+bool scr_child_ipc_send_cb(ScrChild *c, ScrStr *json, ScrClosure *cb,
+                           ScrIpcSendFn fn) {
+  return scr_ipc_send(c->ipc, json, cb, fn);
+}
+void scr_child_ipc_disconnect(ScrChild *c) { scr_ipc_disconnect(c->ipc); }
+void scr_child_ipc_on_message(ScrChild *c, ScrClosure *cb,
+                              ScrIpcMessageFn fn, bool once) {
+  scr_ipc_add_message(c->ipc, cb, fn, once);
+}
+void scr_child_ipc_on_disconnect(ScrChild *c, ScrClosure *cb, bool once) {
+  scr_ipc_add_disconnect(c->ipc, cb, once);
+}
+
+bool scr_process_ipc_connected(void) {
+  return scr_process_ipc != NULL && scr_process_ipc->connected;
+}
+bool scr_process_ipc_send(ScrStr *json) {
+  return scr_ipc_send(scr_process_ipc, json, NULL, NULL);
+}
+bool scr_process_ipc_send_cb(ScrStr *json, ScrClosure *cb,
+                             ScrIpcSendFn fn) {
+  return scr_ipc_send(scr_process_ipc, json, cb, fn);
+}
+void scr_process_ipc_disconnect(void) { scr_ipc_disconnect(scr_process_ipc); }
+void scr_process_ipc_on_message(ScrClosure *cb, ScrIpcMessageFn fn,
+                                bool once) {
+  scr_ipc_add_message(scr_process_ipc, cb, fn, once);
+}
+void scr_process_ipc_on_disconnect(ScrClosure *cb, bool once) {
+  scr_ipc_add_disconnect(scr_process_ipc, cb, once);
+}
 
 /* ── checked-dynamic ChildProcess identity bridge ────────────────────
  * Typed code normally checks the box back to ChildProcess before member

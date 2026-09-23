@@ -736,6 +736,23 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
     result: SPAWNRES_T,
   },
   "cp.spawn": { argTypes: [STRING, arrayOf(STRING)], result: CHILD_T },
+  "process.forkTarget": { argTypes: [F64], result: F64 },
+  "cp.fork": {
+    argTypes: [F64, arrayOf(STRING), F64, F64, F64, BOOL, arrayOf(STRING), STRING],
+    result: CHILD_T,
+  },
+  "child.connected": { argTypes: [CHILD_T], result: BOOL },
+  "child.send": { argTypes: [CHILD_T, STRING], result: BOOL },
+  "child.sendCb": { argTypes: [CHILD_T, STRING, null], result: BOOL },
+  "child.disconnect": { argTypes: [CHILD_T], result: VOID },
+  "child.onMessage": { argTypes: [CHILD_T, null, BOOL], result: VOID },
+  "child.onDisconnect": { argTypes: [CHILD_T, null, BOOL], result: VOID },
+  "process.connected": { argTypes: [], result: BOOL },
+  "process.send": { argTypes: [STRING], result: BOOL },
+  "process.sendCb": { argTypes: [STRING, null], result: BOOL },
+  "process.disconnect": { argTypes: [], result: VOID },
+  "process.onMessage": { argTypes: [null, BOOL], result: VOID },
+  "process.onDisconnect": { argTypes: [null, BOOL], result: VOID },
   "cp.execFile": { argTypes: [STRING, arrayOf(STRING), null], result: CHILD_T },
   // spawn's options form: per-slot stdio modes (0 ignore / 1 inherit /
   // 2 fd) with the out/err fds for mode 2, detached, env replacement

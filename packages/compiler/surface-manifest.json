@@ -460,6 +460,12 @@
       "status": "static"
     },
     {
+      "id": "node-builtin.child_process.fork",
+      "kind": "node-builtin",
+      "name": "child_process.fork",
+      "status": "static"
+    },
+    {
       "id": "node-builtin.child_process.spawn",
       "kind": "node-builtin",
       "name": "child_process.spawn",

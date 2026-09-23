@@ -24,6 +24,7 @@ import { lowerHttpAgentNew, lowerHttpServerNew } from "./lower-server.js";
 import { ambientNsRootOf, ambientUndefReadType, ambientUndefVarRootOf, ambientUndefinedFnSymbolOf, fenceEarlyAliasUse, fenceEarlyNsMemberRef, nsMemberIdentOf, nsUndefRead } from "./lower-namespaces.js";
 import { mixinResultBindingClassOf, type MixinInstanceInfo } from "./lower-mixins.js";
 import { rejectStaticThis } from "./static-this.js";
+import { staticForkString } from "../fork-target.js";
 
 export interface ClassInfo {
   def: IrClassDef;
@@ -5072,11 +5073,29 @@ export function lowerNew(lowerer: Lowerer, expr: ts.NewExpression): IrExpr {
       }
       if (symbol && symbol.name === "URL" && lowerer.isStdlibSymbol(symbol)) {
         const args = expr.arguments ?? [];
+        if (args.length === 2) {
+          const folded = staticForkString(lowerer.program, expr);
+          if (folded === null) {
+            lowerer.noLowering(
+              "new URL with a runtime-valued base",
+              expr,
+              "a relative literal or statically resolvable template against import.meta.url compiles",
+              symbol,
+            );
+          }
+          return {
+            kind: "libCall",
+            fn: "url.new",
+            args: [{ kind: "strLit", value: folded, type: STRING, loc }],
+            type: URL_T,
+            loc,
+          };
+        }
         if (args.length !== 1) {
           lowerer.noLowering(
             `new URL with ${args.length} argument${args.length === 1 ? "" : "s"}`,
             expr,
-            "one absolute-URL string is the supported form (resolve relative inputs against a base yourself)",
+            "one absolute-URL string, or a static relative input against import.meta.url, is supported",
             symbol,
           );
         }

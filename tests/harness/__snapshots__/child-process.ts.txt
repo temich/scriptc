@@ -23,7 +23,7 @@ child-process.ts:27:14 - error SC1090: listeners returning a value (make the cal
      |              ^~~~~~~~~~~~~~~
   28 | // Methods have no bound-value form — call on directly.
 
-child-process.ts:29:7 - error SC2007: values of type '{ (event: "exit", listener: (code: number | null, signal: string | null) => void): void; (event: "close", listener: (code: number | null, signal: string | null) => void): void; (event: "error", listener: (err: Error) => void): void; }' cannot be compiled: the type declares multiple call signatures (overloads), and a compiled function value is always one concrete signature
+child-process.ts:29:7 - error SC2007: values of type '{ (event: "exit", listener: (code: number | null, signal: string | null) => void): void; (event: "close", listener: (code: number | null, signal: string | null) => void): void; (event: "error", listener: (err: Error) => void): void; (event: "message", listener: (message: any) => void): void; (event: "disconnect", li...' cannot be compiled: the type declares multiple call signatures (overloads), and a compiled function value is always one concrete signature
 
   28 | // Methods have no bound-value form — call on directly.
   29 | const f = c.on;
@@ -53,6 +53,33 @@ child-process.ts:33:1 - error SC2020: 'execFile with 4 arguments' is part of the
   32 | execFile("true");
   33 | execFile("true", [], { encoding: "utf8" }, () => {});
      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  34 | // Keep each fence on its own statement so diagnostics remain site-specific.
+  34 | // Fork targets are part of the compiled graph and therefore must resolve at
 
   hint: the supported callback forms are execFile(file, callback) and execFile(file, args, callback)
+
+child-process.ts:36:6 - error SC2020: 'fork with a runtime-valued module path' is part of the standard library types but has no scriptc lowering yet
+
+  35 | // build time. The remaining channel is JSON-only and occupies stdio slot 3.
+  36 | fork(process.argv[1]!);
+     |      ^~~~~~~~~~~~~~~~
+  37 | const staticWorker = new URL("./child-process.ts", import.meta.url);
+
+  hint: resolve a relative worker with new URL("./worker.ts", import.meta.url) or fileURLToPath(...) and bind it to a const if needed
+
+child-process.ts:38:41 - error SC2020: 'fork with non-JSON serialization' is part of the standard library types but has no scriptc lowering yet
+
+  37 | const staticWorker = new URL("./child-process.ts", import.meta.url);
+  38 | fork(staticWorker, [], { serialization: "advanced" });
+     |                                         ^~~~~~~~~~
+  39 | fork(staticWorker, [], { stdio: ["ignore", "ignore", "ignore", "ignore"] });
+
+  hint: the static IPC channel supports Node's default serialization or serialization: "json"
+
+child-process.ts:39:64 - error SC2020: 'fork without a fourth-slot IPC channel' is part of the standard library types but has no scriptc lowering yet
+
+  38 | fork(staticWorker, [], { serialization: "advanced" });
+  39 | fork(staticWorker, [], { stdio: ["ignore", "ignore", "ignore", "ignore"] });
+     |                                                                ^~~~~~~~
+  40 | // Keep each fence on its own statement so diagnostics remain site-specific.
+
+  hint: the fourth stdio entry must be "ipc"

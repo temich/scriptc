@@ -2199,6 +2199,10 @@ ScrArr *scr_module_cache_keys(void);
  * ["scriptc", argv[0], ...] shape from the same stash. */
 int scr_lib_arg_count(void);
 const char *scr_lib_arg(int i);
+/* Private self-reexec marker parsed and removed from process.argv by
+ * scr_lib_init. False in an ordinary parent invocation. */
+bool scr_lib_fork_info(double *target, uintptr_t *read_handle,
+                       uintptr_t *write_handle);
 /* True only for a child_process call whose command and first argument both
  * resolve to this executable — Node's process.execPath/process.argv[1]
  * self-reexec shape. Child argv builders collapse that known script marker;
@@ -2666,8 +2670,15 @@ typedef void (*ScrChildErrFn)(ScrClosure *cb, ScrStr *msg);
  * (or are released there when the callback omits a suffix). */
 typedef void (*ScrExecFileFn)(ScrClosure *cb, ScrError *error,
                               ScrStr *stdout_value, ScrStr *stderr_value);
+/* JSON IPC callback ABIs. Message values are borrowed checked-dynamic
+ * trees; send errors are +1 and move through the adapter (NULL = success). */
+typedef void (*ScrIpcMessageFn)(ScrClosure *cb, ScrDyn *message);
+typedef void (*ScrIpcSendFn)(ScrClosure *cb, ScrError *error);
 
 ScrChild *scr_spawn(ScrStr *cmd, ScrArr *args); /* +1, never throws */
+ScrChild *scr_fork(double target, ScrArr *args, double in_mode,
+                   double out_mode, double err_mode, bool has_env,
+                   ScrArr *env_pairs, ScrStr *cwd); /* +1 */
 /* The options form (cp.spawnOpts): PER-SLOT stdio modes — 0 = ignore
  * (/dev/null), 1 = inherit, 2 = fd (out/err only: out_fd/err_fd dup2
  * into the child's slot, the openSync daemon-log idiom), 3 = pipe
@@ -2693,6 +2704,24 @@ void scr_child_release_v(void *p);
 void scr_child_on_exit(ScrChild *c, ScrClosure *cb /*moves*/, ScrChildExitFn fn);
 void scr_child_on_close(ScrChild *c, ScrClosure *cb /*moves*/, ScrChildExitFn fn);
 void scr_child_on_error(ScrChild *c, ScrClosure *cb /*moves*/, ScrChildErrFn fn);
+bool scr_child_ipc_connected(ScrChild *c);
+bool scr_child_ipc_send(ScrChild *c, ScrStr *json);
+bool scr_child_ipc_send_cb(ScrChild *c, ScrStr *json,
+                           ScrClosure *cb /*moves*/, ScrIpcSendFn fn);
+void scr_child_ipc_disconnect(ScrChild *c);
+void scr_child_ipc_on_message(ScrChild *c, ScrClosure *cb /*moves*/,
+                              ScrIpcMessageFn fn, bool once);
+void scr_child_ipc_on_disconnect(ScrChild *c, ScrClosure *cb /*moves*/,
+                                 bool once);
+double scr_process_fork_target(double target_count);
+bool scr_process_ipc_connected(void);
+bool scr_process_ipc_send(ScrStr *json);
+bool scr_process_ipc_send_cb(ScrStr *json, ScrClosure *cb /*moves*/,
+                             ScrIpcSendFn fn);
+void scr_process_ipc_disconnect(void);
+void scr_process_ipc_on_message(ScrClosure *cb /*moves*/,
+                                ScrIpcMessageFn fn, bool once);
+void scr_process_ipc_on_disconnect(ScrClosure *cb /*moves*/, bool once);
 void scr_child_exit_thunk0(ScrClosure *cb, bool has_code, double code,
                             const char *signal_name);
 void scr_child_err_thunk0(ScrClosure *cb, ScrStr *msg);

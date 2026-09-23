@@ -5700,6 +5700,11 @@ function emitChildProcessLibCall(state: LibCallState): Temp {
           case "cp.spawn":
             emitter.usesTimers = true; // the loop must run to reap the child
             return finish(`scr_spawn(${arg(0)}, ${arg(1)})`);
+          case "cp.fork":
+            emitter.usesTimers = true;
+            return finish(
+              `scr_fork(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)}, ${arg(6)}, ${arg(7)})`,
+            );
           case "cp.spawnOpts":
             // The options form: per-slot stdio (ignore/inherit/fd — the
             // fds dup2 into the child), detached (setsid), env
@@ -5752,6 +5757,40 @@ function emitChildProcessLibCall(state: LibCallState): Temp {
             emitter.line(
               `scr_child_on_error(${arg(0)}, ${cb.name}, &${adapter});${emitter.srcComment(e.loc)}`,
             );
+            return { name: "", type: e.type };
+          }
+          case "child.connected":
+            return finish(`scr_child_ipc_connected(${arg(0)})`);
+          case "child.send":
+            emitter.usesTimers = true;
+            return finish(`scr_child_ipc_send(${arg(0)}, ${arg(1)})`);
+          case "child.sendCb": {
+            const cbT = e.args[2]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: child.send callback not a func");
+            const cb = args[2]!;
+            emitter.moveTemp(cb);
+            emitter.usesTimers = true;
+            return finish(`scr_child_ipc_send_cb(${arg(0)}, ${arg(1)}, ${cb.name}, &${emitter.ipcSendThunkFor(cbT)})`);
+          }
+          case "child.disconnect":
+            emitter.usesTimers = true;
+            return finish(`scr_child_ipc_disconnect(${arg(0)})`);
+          case "child.onMessage": {
+            const cbT = e.args[1]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: child message listener not a func");
+            const cb = args[1]!;
+            emitter.moveTemp(cb);
+            emitter.usesTimers = true;
+            emitter.line(`scr_child_ipc_on_message(${arg(0)}, ${cb.name}, &${emitter.ipcMessageThunkFor(cbT)}, ${arg(2)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
+          case "child.onDisconnect": {
+            const cbT = e.args[1]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: child disconnect listener not a func");
+            const cb = args[1]!;
+            emitter.moveTemp(cb);
+            emitter.usesTimers = true;
+            emitter.line(`scr_child_ipc_on_disconnect(${arg(0)}, ${cb.name}, ${arg(2)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
           }
     default:
@@ -7615,6 +7654,42 @@ function emitProcessLibCall(state: LibCallState): Temp {
             return finish(`scr_process_getgid()`);
           case "process.execPath":
             return finish(`scr_process_exec_path()`);
+          case "process.forkTarget":
+            return finish(`scr_process_fork_target(${arg(0)})`);
+          case "process.connected":
+            return finish(`scr_process_ipc_connected()`);
+          case "process.send":
+            emitter.usesTimers = true;
+            return finish(`scr_process_ipc_send(${arg(0)})`);
+          case "process.sendCb": {
+            const cbT = e.args[1]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: process.send callback not a func");
+            const cb = args[1]!;
+            emitter.moveTemp(cb);
+            emitter.usesTimers = true;
+            return finish(`scr_process_ipc_send_cb(${arg(0)}, ${cb.name}, &${emitter.ipcSendThunkFor(cbT)})`);
+          }
+          case "process.disconnect":
+            emitter.usesTimers = true;
+            return finish(`scr_process_ipc_disconnect()`);
+          case "process.onMessage": {
+            const cbT = e.args[0]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: process message listener not a func");
+            const cb = args[0]!;
+            emitter.moveTemp(cb);
+            emitter.usesTimers = true;
+            emitter.line(`scr_process_ipc_on_message(${cb.name}, &${emitter.ipcMessageThunkFor(cbT)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
+          case "process.onDisconnect": {
+            const cbT = e.args[0]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: process disconnect listener not a func");
+            const cb = args[0]!;
+            emitter.moveTemp(cb);
+            emitter.usesTimers = true;
+            emitter.line(`scr_process_ipc_on_disconnect(${cb.name}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
           case "process.arch":
             return finish(`scr_process_arch()`);
           case "process.versionsNode":

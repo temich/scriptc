@@ -23,12 +23,12 @@ export function emitChildProcessLibCall(host: LlvmEmitterContext, e: LibCallExpr
       B.line(`${out} = call ptr @scr_exec_file(ptr ${cmd.name}, ptr ${argv.name}, ptr ${cb.name}, ptr @${adapter})`);
       return host.own({ name: out, type: e.type });
     }
-    if (e.fn === "cp.spawn" || e.fn === "cp.spawnOpts") {
+    if (e.fn === "cp.spawn" || e.fn === "cp.spawnOpts" || e.fn === "cp.fork") {
       // child_process.spawn: the child starts NOW (posix_spawnp); the
       // loop reaps it and fires its listeners. Never throws — spawn
       // failure defers to "error".
       host.usesTimers = true;
-      const sym = e.fn === "cp.spawn" ? "scr_spawn" : "scr_spawn_opts";
+      const sym = e.fn === "cp.spawn" ? "scr_spawn" : e.fn === "cp.fork" ? "scr_fork" : "scr_spawn_opts";
       const args = e.args.map((a) => host.emitExpr(a));
       const argDecl = args.map((a) => (host.llType(a.type) === "i1" ? "i1 zeroext" : host.llType(a.type))).join(", ");
       host.declare(`declare ptr @${sym}(${argDecl})`);
@@ -72,6 +72,57 @@ export function emitChildProcessLibCall(host: LlvmEmitterContext, e: LibCallExpr
       host.declare(`declare void @${adapter}(ptr, ptr)`);
       host.declare(`declare void @scr_child_on_error(ptr, ptr, ptr)`);
       B.line(`call void @scr_child_on_error(ptr ${child.name}, ptr ${cb.name}, ptr @${adapter})`);
+      return { name: "", type: e.type };
+    }
+    if (e.fn === "child.connected") {
+      const child = host.emitExpr(e.args[0]!);
+      host.declare(`declare zeroext i1 @scr_child_ipc_connected(ptr)`);
+      const out = B.tmp();
+      B.line(`${out} = call i1 @scr_child_ipc_connected(ptr ${child.name})`);
+      return { name: out, type: e.type };
+    }
+    if (e.fn === "child.send" || e.fn === "child.sendCb") {
+      host.usesTimers = true;
+      const child = host.emitExpr(e.args[0]!);
+      const json = host.emitExpr(e.args[1]!);
+      const sym = e.fn === "child.send" ? "scr_child_ipc_send" : "scr_child_ipc_send_cb";
+      let suffix = "";
+      let decl = "ptr, ptr";
+      if (e.fn === "child.sendCb") {
+        const cbT = e.args[2]!.type;
+        if (cbT.kind !== "func") throw new InternalCompilerError("llvm emitter bug: child.send callback not a func");
+        const cb = host.emitExpr(e.args[2]!);
+        host.moveTemp(cb);
+        suffix = `, ptr ${cb.name}, ptr @${host.ipcSendThunkFor(cbT)}`;
+        decl += ", ptr, ptr";
+      }
+      host.declare(`declare zeroext i1 @${sym}(${decl})`);
+      const out = B.tmp();
+      B.line(`${out} = call i1 @${sym}(ptr ${child.name}, ptr ${json.name}${suffix})`);
+      return { name: out, type: e.type };
+    }
+    if (e.fn === "child.disconnect") {
+      host.usesTimers = true;
+      const child = host.emitExpr(e.args[0]!);
+      host.declare(`declare void @scr_child_ipc_disconnect(ptr)`);
+      B.line(`call void @scr_child_ipc_disconnect(ptr ${child.name})`);
+      return { name: "", type: e.type };
+    }
+    if (e.fn === "child.onMessage" || e.fn === "child.onDisconnect") {
+      host.usesTimers = true;
+      const child = host.emitExpr(e.args[0]!);
+      const cbT = e.args[1]!.type;
+      if (cbT.kind !== "func") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} callback not a func`);
+      const cb = host.emitExpr(e.args[1]!);
+      const once = host.emitExpr(e.args[2]!);
+      host.moveTemp(cb);
+      if (e.fn === "child.onMessage") {
+        host.declare(`declare void @scr_child_ipc_on_message(ptr, ptr, ptr, i1 zeroext)`);
+        B.line(`call void @scr_child_ipc_on_message(ptr ${child.name}, ptr ${cb.name}, ptr @${host.ipcMessageThunkFor(cbT)}, i1 ${once.name})`);
+      } else {
+        host.declare(`declare void @scr_child_ipc_on_disconnect(ptr, ptr, i1 zeroext)`);
+        B.line(`call void @scr_child_ipc_on_disconnect(ptr ${child.name}, ptr ${cb.name}, i1 ${once.name})`);
+      }
       return { name: "", type: e.type };
     }
     if (e.fn === "spawnRes.status" || e.fn === "child.pid" || e.fn === "child.exitCode") {
@@ -277,6 +328,60 @@ export function emitAsyncContextLibCall(host: LlvmEmitterContext, e: LibCallExpr
 
 export function emitProcessLibCall(host: LlvmEmitterContext, e: LibCallExpr): LlValue {
     const B = host.B;
+    if (e.fn === "process.forkTarget") {
+      const count = host.emitExpr(e.args[0]!);
+      host.declare(`declare double @scr_process_fork_target(double)`);
+      const out = B.tmp();
+      B.line(`${out} = call double @scr_process_fork_target(double ${count.name})`);
+      return { name: out, type: e.type };
+    }
+    if (e.fn === "process.connected") {
+      host.declare(`declare zeroext i1 @scr_process_ipc_connected()`);
+      const out = B.tmp();
+      B.line(`${out} = call i1 @scr_process_ipc_connected()`);
+      return { name: out, type: e.type };
+    }
+    if (e.fn === "process.send" || e.fn === "process.sendCb") {
+      host.usesTimers = true;
+      const json = host.emitExpr(e.args[0]!);
+      const sym = e.fn === "process.send" ? "scr_process_ipc_send" : "scr_process_ipc_send_cb";
+      let suffix = "";
+      let decl = "ptr";
+      if (e.fn === "process.sendCb") {
+        const cbT = e.args[1]!.type;
+        if (cbT.kind !== "func") throw new InternalCompilerError("llvm emitter bug: process.send callback not a func");
+        const cb = host.emitExpr(e.args[1]!);
+        host.moveTemp(cb);
+        suffix = `, ptr ${cb.name}, ptr @${host.ipcSendThunkFor(cbT)}`;
+        decl += ", ptr, ptr";
+      }
+      host.declare(`declare zeroext i1 @${sym}(${decl})`);
+      const out = B.tmp();
+      B.line(`${out} = call i1 @${sym}(ptr ${json.name}${suffix})`);
+      return { name: out, type: e.type };
+    }
+    if (e.fn === "process.disconnect") {
+      host.usesTimers = true;
+      host.declare(`declare void @scr_process_ipc_disconnect()`);
+      B.line(`call void @scr_process_ipc_disconnect()`);
+      return { name: "", type: e.type };
+    }
+    if (e.fn === "process.onMessage" || e.fn === "process.onDisconnect") {
+      host.usesTimers = true;
+      const cbT = e.args[0]!.type;
+      if (cbT.kind !== "func") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} callback not a func`);
+      const cb = host.emitExpr(e.args[0]!);
+      const once = host.emitExpr(e.args[1]!);
+      host.moveTemp(cb);
+      if (e.fn === "process.onMessage") {
+        host.declare(`declare void @scr_process_ipc_on_message(ptr, ptr, i1 zeroext)`);
+        B.line(`call void @scr_process_ipc_on_message(ptr ${cb.name}, ptr @${host.ipcMessageThunkFor(cbT)}, i1 ${once.name})`);
+      } else {
+        host.declare(`declare void @scr_process_ipc_on_disconnect(ptr, i1 zeroext)`);
+        B.line(`call void @scr_process_ipc_on_disconnect(ptr ${cb.name}, i1 ${once.name})`);
+      }
+      return { name: "", type: e.type };
+    }
     if (e.fn === "process.stdoutWriteBytesCb" || e.fn === "process.stderrWriteBytesCb") {
       // All arguments evaluate before bytes are submitted. The callback
       // then moves into the next-tick entry and its error-first adapter
