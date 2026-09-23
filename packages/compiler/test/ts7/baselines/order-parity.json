@@ -6474,6 +6474,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2942-fsp-readdir-dirent.ts": {
+   "order": [
+    "<repo>/tests/corpus/2942-fsp-readdir-dirent.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2942-process-exit-code-override.ts": {
    "order": [
     "<repo>/tests/corpus/2942-process-exit-code-override.ts"
