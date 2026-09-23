@@ -5660,6 +5660,20 @@ static bool scr_ipc_pending(void) {
   return false;
 }
 
+bool scr_children_ready(void) {
+  for (ScrIpc *ipc = scr_ipcs; ipc != NULL; ipc = ipc->next) {
+    if (ipc->disconnect_pending || (ipc->n_pending > 0 && ipc->n_message > 0)) {
+      return true;
+    }
+    bool writer_pending = scr_child_writer_pending(ipc->writer);
+    if (ipc->n_send > 0 && (ipc->send_error != NULL || !writer_pending)) {
+      return true;
+    }
+    if (ipc->local_closing && !writer_pending) return true;
+  }
+  return false;
+}
+
 double scr_process_fork_target(double target_count) {
   if (scr_process_fork_id != -2) return scr_process_fork_id;
   double target = -1;

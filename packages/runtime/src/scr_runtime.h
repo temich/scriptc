@@ -2806,6 +2806,9 @@ const char *scr_signal_name(int sig);
  * pending child: non-kqueue platforms, spawn failures awaiting their
  * first-pass settle, or a child whose exit filter could not be armed. */
 bool scr_children_pending(void);
+/* Work already queued in userspace: dispatch can progress without another
+ * pipe/exit notification. Connected channels and blocked writes are not ready. */
+bool scr_children_ready(void);
 bool scr_children_failed_pending(void);
 void scr_children_poll(void);
 bool scr_children_wait(double max_wait_ms);
