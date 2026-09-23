@@ -5695,7 +5695,7 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
     lowerer.noLowering(
       `Stats.${name}`,
       call,
-      "isFile(), isDirectory(), isSymbolicLink(), size, blocks, nlink, atimeMs, and mtimeMs are the supported Stats members",
+      "isFile(), isDirectory(), isSymbolicLink(), dev, ino, size, blocks, nlink, atimeMs, mtimeMs, and ctimeMs are the supported Stats members",
       lowerer.checker.getSymbolAtLocation(access.name),
     );
   }
@@ -5907,14 +5907,18 @@ function lowerOptionalStringSearchParams(lowerer: Lowerer, init: IrExpr, loc: Sr
     }
     if (
       kind === "stats" &&
-      (name === "blocks" || name === "nlink" || name === "atimeMs" || name === "mtimeMs")
+      (name === "dev" || name === "ino" || name === "blocks" || name === "nlink" ||
+        name === "atimeMs" || name === "mtimeMs" || name === "ctimeMs")
     ) {
       const receiver = lowerer.lowerExpr(expr.expression);
       const fn = `stats.${name}` as
+        | "stats.dev"
+        | "stats.ino"
         | "stats.blocks"
         | "stats.nlink"
         | "stats.atimeMs"
-        | "stats.mtimeMs";
+        | "stats.mtimeMs"
+        | "stats.ctimeMs";
       return { kind: "libCall", fn, args: [receiver], type: F64, loc };
     }
     if (kind === "spawnRes" && name === "signal") {

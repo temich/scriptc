@@ -3377,7 +3377,7 @@ function lowerPromiseThenPresence(
       lowerer.noLowering(
         `Stats.${name}`,
         expr,
-        "isFile(), isDirectory(), isSymbolicLink(), size, blocks, nlink, atimeMs, and mtimeMs are the supported Stats members",
+        "isFile(), isDirectory(), isSymbolicLink(), dev, ino, size, blocks, nlink, atimeMs, mtimeMs, and ctimeMs are the supported Stats members",
         lowerer.checker.getSymbolAtLocation(expr.name),
       );
     }

@@ -2388,6 +2388,8 @@ export type IrLibFn =
   | "stats.isFile"
   | "stats.isDirectory"
   | "stats.size"
+  | "stats.dev"
+  | "stats.ino"
   /** child_process.spawnSync (scr_child.c): posix_spawn + waitpid + piped
    * utf8 capture — cmd borrowed, args one borrowed string[] (the frontend
    * completes an omitted list to an empty literal), result an owned (+1)
@@ -3309,6 +3311,7 @@ export type IrLibFn =
   | "fsp.rm"
   | "fsp.stat"
   | "fsp.realpath"
+  | "fsp.lstat"
   /** fs/promises.open and the statically represented FileHandle surface.
    * Every operation returns an already-settled promise; syscall failures
    * become rejections rather than escaping synchronously. read/write
@@ -4334,7 +4337,7 @@ export type IrLibFn =
    * uv_fs_copyfile behavior); its errors carry BOTH paths — Node's
    * "copyfile 'src' -> 'dest'". lstatSync is statSync without following
    * a trailing symlink (Node reports lstat); stats.isSymbolicLink /
-   * stats.blocks / nlink / atimeMs / mtimeMs are pure reads on the widened
+   * stats.dev / ino / blocks / nlink / atimeMs / mtimeMs / ctimeMs are pure reads on the widened
    * snapshot (blocks is allocated 512-byte units; the times are milliseconds
    * with their sub-second fractions, Node's arithmetic).
    * writeFileModeSync is writeFileSync(path, data, { mode }): the mode
@@ -4402,6 +4405,7 @@ export type IrLibFn =
   | "stats.nlink"
   | "stats.atimeMs"
   | "stats.mtimeMs"
+  | "stats.ctimeMs"
   | "fs.writeFileModeSync"
   | "fs.mkdirModeSync"
   | "fs.mkdirRecursiveModeSync"

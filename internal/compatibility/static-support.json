@@ -96,6 +96,8 @@
     { "chapter": "child_process", "signatures": ["Event: `'close'`"], "status": "partial", "evidence": ["tests/corpus/2939-child-shell-text.ts"] },
     { "chapter": "child_process", "signatures": ["`stdout` Type: {stream.Readable|null|undefined}", "`stderr` Type: {stream.Readable|null|undefined}"], "status": "partial", "evidence": ["tests/corpus/1565-spawn-pipe-streams.ts", "tests/corpus/2939-child-shell-text.ts"] },
     { "chapter": "child_process", "signatures": ["`stdin` Type: {stream.Writable|null|undefined}"], "status": "partial", "evidence": ["tests/corpus/2893-child-stdin-duplex.ts", "tests/corpus/2894-child-stdin-backpressure.ts", "tests/corpus/2895-child-stdin-write-after-end.ts", "tests/corpus/2896-child-stdin-write-after-finish.ts", "tests/corpus/2897-child-stdin-destroy.ts", "tests/corpus/2898-child-stdin-spawn-failure.ts"] },
+    { "chapter": "fs", "signatures": ["`fsPromises.lstat(path[, options])`"], "status": "partial", "evidence": ["tests/corpus/2941-fsp-lstat-identity.ts"] },
+    { "chapter": "fs", "signatures": ["`dev` Type: {number|bigint}", "`ino` Type: {number|bigint}", "`ctimeMs` Type: {number|bigint}"], "status": "partial", "evidence": ["tests/corpus/2941-fsp-lstat-identity.ts"] },
     { "chapter": "fs", "signatures": ["`filehandle[Symbol.asyncDispose]()`"], "status": "partial", "evidence": ["tests/corpus/2844-node-disposable-resources.ts"] },
     { "chapter": "fs", "signatures": ["`fsPromises.realpath(path[, options])`"], "status": "partial", "evidence": ["tests/corpus/2940-fsp-realpath.ts"] },
     { "chapter": "readline", "signatures": ["`rl[Symbol.dispose]()`"], "status": "partial", "evidence": ["tests/corpus/2844-node-disposable-resources.ts"] },

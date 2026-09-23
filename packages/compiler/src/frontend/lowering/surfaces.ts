@@ -697,6 +697,7 @@ export const BUILTIN_MODULE_FNS: Record<string, Record<string, BuiltinModuleFn |
     rm: { fn: "fsp.rm", params: [STRING], result: { kind: "promise", inner: VOID } },
     stat: { fn: "fsp.stat", params: [STRING], result: { kind: "promise", inner: STATS_T } },
     realpath: { fn: "fsp.realpath", params: [STRING], result: { kind: "promise", inner: STRING } },
+    lstat: { fn: "fsp.lstat", params: [STRING], result: { kind: "promise", inner: STATS_T } },
     unlink: { fn: "fsp.unlink", params: [STRING], result: { kind: "promise", inner: VOID }, valueParams: exactValueParams(STRING) },
     chmod: { fn: "fsp.chmod", params: [STRING, F64], result: { kind: "promise", inner: VOID }, valueParams: exactValueParams(STRING, F64) },
     rename: { fn: "fsp.rename", params: [STRING, STRING], result: { kind: "promise", inner: VOID }, valueParams: exactValueParams(STRING, STRING) },

@@ -943,6 +943,12 @@
       "status": "static"
     },
     {
+      "id": "node-builtin.fs.promises.lstat",
+      "kind": "node-builtin",
+      "name": "fs/promises.lstat",
+      "status": "static"
+    },
+    {
       "id": "node-builtin.fs.promises.mkdir",
       "kind": "node-builtin",
       "name": "fs/promises.mkdir",

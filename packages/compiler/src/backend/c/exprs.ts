@@ -4528,12 +4528,18 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             return finish(`scr_stats_atime_ms(${arg(0)})`);
           case "stats.mtimeMs":
             return finish(`scr_stats_mtime_ms(${arg(0)})`);
+          case "stats.ctimeMs":
+            return finish(`scr_stats_ctime_ms(${arg(0)})`);
           case "stats.isFile":
             return finish(`scr_stats_is_file(${arg(0)})`);
           case "stats.isDirectory":
             return finish(`scr_stats_is_dir(${arg(0)})`);
           case "stats.size":
             return finish(`scr_stats_size(${arg(0)})`);
+          case "stats.dev":
+            return finish(`scr_stats_dev(${arg(0)})`);
+          case "stats.ino":
+            return finish(`scr_stats_ino(${arg(0)})`);
           case "fs.toUnixTimestamp":
             return finish(`scr_fs_to_unix_timestamp(${arg(0)})`);
           // The fs argument-validation ladders: the always-throw Chk
@@ -4669,6 +4675,8 @@ function emitFilesystemLibCall(state: LibCallState): Temp {
             return finish(`scr_fsp_stat(${arg(0)})`);
           case "fsp.realpath":
             return finish(`scr_fsp_realpath(${arg(0)})`);
+          case "fsp.lstat":
+            return finish(`scr_fsp_lstat(${arg(0)})`);
           case "fsp.open":
             return finish(`scr_fsp_open(${arg(0)}, ${arg(1)}, ${arg(2)})`);
           case "fileHandle.fd":

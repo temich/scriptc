@@ -1080,17 +1080,21 @@ declare module "node:fs" {
   };
   /* A stat(2) snapshot (statSync follows symlinks, lstatSync does not —
    * Node's split) — immutable; the supported surface is exactly these
-   * members. blocks is the allocated size in 512-byte units; the time
-   * fields are milliseconds with their sub-second fractions. */
+   * members. dev/ino identify the filesystem entry, blocks is the allocated
+   * size in 512-byte units, and the time fields are milliseconds with their
+   * sub-second fractions. */
   export interface Stats {
     isFile(): boolean;
     isDirectory(): boolean;
     isSymbolicLink(): boolean;
+    readonly dev: number;
+    readonly ino: number;
     readonly size: number;
     readonly blocks: number;
     readonly nlink: number;
     readonly atimeMs: number;
     readonly mtimeMs: number;
+    readonly ctimeMs: number;
   }
   export function statSync(path: string): Stats;
   export function lstatSync(path: string): Stats;
@@ -1226,6 +1230,7 @@ declare module "fs/promises" {
   export function rm(path: string): Promise<void>;
   export function stat(path: string): Promise<import("node:fs").Stats>;
   export function realpath(path: string): Promise<string>;
+  export function lstat(path: string): Promise<import("node:fs").Stats>;
   export function unlink(path: string): Promise<void>;
   export function chmod(path: string, mode: number): Promise<void>;
   export function rename(oldPath: string, newPath: string): Promise<void>;

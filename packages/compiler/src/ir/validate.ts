@@ -353,10 +353,13 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "stats.isDirectory": { argTypes: [STATS_T], result: BOOL },
   "stats.isSymbolicLink": { argTypes: [STATS_T], result: BOOL },
   "stats.size": { argTypes: [STATS_T], result: F64 },
+  "stats.dev": { argTypes: [STATS_T], result: F64 },
+  "stats.ino": { argTypes: [STATS_T], result: F64 },
   "stats.blocks": { argTypes: [STATS_T], result: F64 },
   "stats.nlink": { argTypes: [STATS_T], result: F64 },
   "stats.atimeMs": { argTypes: [STATS_T], result: F64 },
   "stats.mtimeMs": { argTypes: [STATS_T], result: F64 },
+  "stats.ctimeMs": { argTypes: [STATS_T], result: F64 },
   // The wider sync fs slice (unlink/chmod/chown/copyfile and the
   // mode-carrying write/mkdir forms).
   "fs.unlinkSync": { argTypes: [STRING], result: VOID },
@@ -875,6 +878,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "fsp.rm": { argTypes: [STRING], result: { kind: "promise", inner: VOID } },
   "fsp.stat": { argTypes: [STRING], result: { kind: "promise", inner: STATS_T } },
   "fsp.realpath": { argTypes: [STRING], result: { kind: "promise", inner: STRING } },
+  "fsp.lstat": { argTypes: [STRING], result: { kind: "promise", inner: STATS_T } },
   "fsp.open": { argTypes: [STRING, STRING, F64], result: { kind: "promise", inner: FILEHANDLE_T } },
   "fileHandle.fd": { argTypes: [FILEHANDLE_T], result: F64 },
   "fileHandle.close": { argTypes: [FILEHANDLE_T], result: { kind: "promise", inner: VOID } },

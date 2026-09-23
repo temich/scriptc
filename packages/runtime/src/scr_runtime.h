@@ -2389,9 +2389,9 @@ void scr_process_stdin_set_raw_mode(bool raw);
  * `.columns` is undefined). Never throws. */
 double scr_process_columns(double fd);
 
-/* Stats values (statSync / fs.promises.stat): an immutable snapshot of
- * stat(2) — follows symlinks, like Node's stat family. scr_fs_stat
- * THROWS like the other sync calls. */
+/* Stats values (statSync/lstatSync and their fs.promises twins): an immutable
+ * snapshot of stat(2). scr_fs_stat follows symlinks; scr_fs_lstat does not.
+ * Both THROW like the other sync calls. */
 typedef struct ScrStats ScrStats;
 typedef struct ScrFileHandle ScrFileHandle;
 typedef struct ScrPromise ScrPromise; /* full section further down */
@@ -2405,11 +2405,14 @@ void scr_stats_release_v(void *p);
 bool scr_stats_is_file(ScrStats *s);
 bool scr_stats_is_dir(ScrStats *s);
 bool scr_stats_is_symlink(ScrStats *s); /* lstat snapshots only */
+double scr_stats_dev(ScrStats *s);
+double scr_stats_ino(ScrStats *s);
 double scr_stats_size(ScrStats *s);
 double scr_stats_blocks(ScrStats *s); /* allocated size in 512-byte units */
 double scr_stats_nlink(ScrStats *s);
 double scr_stats_atime_ms(ScrStats *s); /* ms with the sub-second fraction */
 double scr_stats_mtime_ms(ScrStats *s); /* ms with the ns fraction */
+double scr_stats_ctime_ms(ScrStats *s); /* ms with the ns fraction */
 
 /* fs/promises: the SAME sync operations, minting an already-settled
  * promise — success fulfills, failure REJECTS with the would-be thrown
@@ -2430,6 +2433,7 @@ ScrPromise *scr_fsp_readdir(ScrStr *path);
 ScrPromise *scr_fsp_rm(ScrStr *path);
 ScrPromise *scr_fsp_stat(ScrStr *path);
 ScrPromise *scr_fsp_realpath(ScrStr *path);
+ScrPromise *scr_fsp_lstat(ScrStr *path);
 ScrPromise *scr_fsp_rename(ScrStr *oldpath, ScrStr *newpath);
 ScrPromise *scr_fsp_open(ScrStr *path, ScrStr *flags, double mode);
 ScrPromise *scr_file_handle_close_promise(ScrFileHandle *h);

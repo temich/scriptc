@@ -3157,20 +3157,24 @@ void scr_process_stdin_destroy(void) {
 }
 
 /* ── Stats values ────────────────────────────────────────────────────
- * An immutable snapshot of stat(2) results — the lowered type/mode, size,
- * allocation/link, and access/write-time slice. statSync THROWS like the
- * other sync fs calls; the promise form rejects (see the fsp section). */
+ * An immutable snapshot of stat(2) results — the lowered type/mode, device,
+ * inode, size, allocation/link, and access/write/change-time slice. statSync
+ * THROWS like the other sync fs calls; the promise form rejects (see the fsp
+ * section). */
 
 struct ScrStats {
   size_t rc;
   bool is_file;
   bool is_dir;
   bool is_symlink; /* lstat only — a followed stat never sees one */
+  double dev;
+  double ino;
   double size;
   double blocks;   /* allocated size in 512-byte units (Node/libuv) */
   double nlink;
   double atime_ms;
   double mtime_ms; /* milliseconds with the nanosecond fraction (Node) */
+  double ctime_ms;
 };
 
 ScrStats *scr_stats_retain(ScrStats *s) {
@@ -3189,11 +3193,14 @@ void scr_stats_release_v(void *p) { scr_stats_release(p); }
 bool scr_stats_is_file(ScrStats *s) { return s->is_file; }
 bool scr_stats_is_dir(ScrStats *s) { return s->is_dir; }
 bool scr_stats_is_symlink(ScrStats *s) { return s->is_symlink; }
+double scr_stats_dev(ScrStats *s) { return s->dev; }
+double scr_stats_ino(ScrStats *s) { return s->ino; }
 double scr_stats_size(ScrStats *s) { return s->size; }
 double scr_stats_blocks(ScrStats *s) { return s->blocks; }
 double scr_stats_nlink(ScrStats *s) { return s->nlink; }
 double scr_stats_atime_ms(ScrStats *s) { return s->atime_ms; }
 double scr_stats_mtime_ms(ScrStats *s) { return s->mtime_ms; }
+double scr_stats_ctime_ms(ScrStats *s) { return s->ctime_ms; }
 
 static ScrStats *scr_stats_new(void) {
   ScrStats *s = malloc(sizeof(ScrStats));
@@ -3213,11 +3220,14 @@ static ScrStats *scr_stats_of_crt(const struct stat *st) {
   s->is_file = S_ISREG(st->st_mode);
   s->is_dir = S_ISDIR(st->st_mode);
   s->is_symlink = false;
+  s->dev = (double)st->st_dev;
+  s->ino = (double)st->st_ino;
   s->size = (double)st->st_size;
   s->blocks = st->st_size <= 0 ? 0.0 : (double)(((uint64_t)st->st_size + 511) >> 9);
   s->nlink = (double)st->st_nlink;
   s->atime_ms = (double)st->st_atime * 1000.0;
   s->mtime_ms = (double)st->st_mtime * 1000.0;
+  s->ctime_ms = (double)st->st_ctime * 1000.0;
   return s;
 }
 
@@ -3426,6 +3436,9 @@ static ScrStats *scr_stats_of_path(const ScrStr *path, const char *op,
   FILE_STANDARD_INFO standard;
   bool have_standard = GetFileInformationByHandleEx(
     h, FileStandardInfo, &standard, sizeof standard);
+  FILE_BASIC_INFO times;
+  bool have_times = GetFileInformationByHandleEx(
+    h, FileBasicInfo, &times, sizeof times);
   CloseHandle(h);
 
   bool is_dir = (basic.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -3434,6 +3447,9 @@ static ScrStats *scr_stats_of_path(const ScrStr *path, const char *op,
   s->is_file = !is_link && (have_standard ? !standard.Directory : !is_dir);
   s->is_dir = !is_link && (have_standard ? standard.Directory : is_dir);
   s->is_symlink = is_link;
+  s->dev = (double)basic.dwVolumeSerialNumber;
+  s->ino = (double)basic.nFileIndexHigh * 4294967296.0 +
+    (double)basic.nFileIndexLow;
   s->size = is_link && link_size >= 0 ? link_size : s->is_dir ? 0.0
     : have_standard ? (double)standard.EndOfFile.QuadPart : (double)size;
   s->blocks = have_standard
@@ -3444,6 +3460,14 @@ static ScrStats *scr_stats_of_path(const ScrStr *path, const char *op,
     : (double)basic.nNumberOfLinks;
   s->atime_ms = scr_filetime_unix_ms(basic.ftLastAccessTime);
   s->mtime_ms = scr_filetime_unix_ms(basic.ftLastWriteTime);
+  if (have_times) {
+    FILETIME changed;
+    changed.dwLowDateTime = times.ChangeTime.LowPart;
+    changed.dwHighDateTime = times.ChangeTime.HighPart;
+    s->ctime_ms = scr_filetime_unix_ms(changed);
+  } else {
+    s->ctime_ms = s->mtime_ms;
+  }
   return s;
 }
 #else
@@ -3452,16 +3476,22 @@ static ScrStats *scr_stats_of(const struct stat *st) {
   s->is_file = S_ISREG(st->st_mode);
   s->is_dir = S_ISDIR(st->st_mode);
   s->is_symlink = S_ISLNK(st->st_mode);
+  s->dev = (double)st->st_dev;
+  s->ino = (double)st->st_ino;
 #if defined(__APPLE__)
   s->atime_ms = (double)st->st_atimespec.tv_sec * 1000.0 +
                 (double)st->st_atimespec.tv_nsec / 1e6;
   s->mtime_ms = (double)st->st_mtimespec.tv_sec * 1000.0 +
                 (double)st->st_mtimespec.tv_nsec / 1e6;
+  s->ctime_ms = (double)st->st_ctimespec.tv_sec * 1000.0 +
+                (double)st->st_ctimespec.tv_nsec / 1e6;
 #else
   s->atime_ms = (double)st->st_atim.tv_sec * 1000.0 +
                 (double)st->st_atim.tv_nsec / 1e6;
   s->mtime_ms = (double)st->st_mtim.tv_sec * 1000.0 +
                 (double)st->st_mtim.tv_nsec / 1e6;
+  s->ctime_ms = (double)st->st_ctim.tv_sec * 1000.0 +
+                (double)st->st_ctim.tv_nsec / 1e6;
 #endif
   s->blocks = (double)st->st_blocks;
   s->nlink = (double)st->st_nlink;
