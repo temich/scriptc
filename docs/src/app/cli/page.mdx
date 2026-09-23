@@ -104,6 +104,9 @@ Prebuilds release runtime objects and native TLS/dynamic-engine archives for tar
   <dt><code>--backend &lt;c|llvm&gt;</code></dt>
   <dd>Code generator: <code>llvm</code> (default) or <code>c</code> (the readable debugging backend). On supported targets, LLVM-tier executable code generation uses the bundled helper and precompiled runtime pack before the platform link. Unset, a native build can fall back to C when the program is outside the LLVM tier. The production <code>wasm32-wasi</code> target never falls back: a missing LLVM lowering is <code>SC3001</code>.</dd>
 
+  <dt><code>--windows-subsystem &lt;console|gui&gt;</code></dt>
+  <dd>Select the subsystem of a Windows executable. <code>console</code> is the default; <code>gui</code> prevents Windows from opening a console window for the app. Valid only for executable builds targeting Windows, including <code>--from-c</code>.</dd>
+
   <dt><code>--npm-static &lt;pkg[,pkg…]|auto&gt;</code></dt>
   <dd>EXPERIMENTAL. Compile the named npm packages' shipped JS statically as program modules instead of embedding them for the engine (repeatable; <code>auto</code> opts in every eligible direct import). A package the preflight refuses falls back to the island with a coverage-report note. See <a href="/dependencies">npm Dependencies</a> for maturity notes.</dd>
 

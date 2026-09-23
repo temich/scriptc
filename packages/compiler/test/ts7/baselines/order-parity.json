@@ -6474,6 +6474,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2942-fsp-readdir-dirent.ts": {
+   "order": [
+    "<repo>/tests/corpus/2942-fsp-readdir-dirent.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2942-process-exit-code-override.ts": {
    "order": [
     "<repo>/tests/corpus/2942-process-exit-code-override.ts"
@@ -6498,21 +6504,33 @@
    ],
    "diags": []
   },
-  "<repo>/tests/corpus/2946-stdio-callback-record.ts": {
+  "<repo>/tests/corpus/2946-url-port-hash.ts": {
    "order": [
-    "<repo>/tests/corpus/2946-stdio-callback-record.ts"
+    "<repo>/tests/corpus/2946-url-port-hash.ts"
    ],
    "diags": []
   },
-  "<repo>/tests/corpus/2947-url-password.ts": {
+  "<repo>/tests/corpus/2947-set-readonly-seeds.ts": {
    "order": [
-    "<repo>/tests/corpus/2947-url-password.ts"
+    "<repo>/tests/corpus/2947-set-readonly-seeds.ts"
    ],
    "diags": []
   },
-  "<repo>/tests/corpus/2948-fs-descriptor-publication.ts": {
+  "<repo>/tests/corpus/2948-stdio-callback-record.ts": {
    "order": [
-    "<repo>/tests/corpus/2948-fs-descriptor-publication.ts"
+    "<repo>/tests/corpus/2948-stdio-callback-record.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2949-url-password.ts": {
+   "order": [
+    "<repo>/tests/corpus/2949-url-password.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2950-fs-descriptor-publication.ts": {
+   "order": [
+    "<repo>/tests/corpus/2950-fs-descriptor-publication.ts"
    ],
    "diags": []
   },
@@ -9321,6 +9339,12 @@
   "<repo>/tests/fixtures/node-types/stream-capture.ts": {
    "order": [
     "<repo>/tests/fixtures/node-types/stream-capture.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/fixtures/node-types/url-getters.ts": {
+   "order": [
+    "<repo>/tests/fixtures/node-types/url-getters.ts"
    ],
    "diags": []
   }

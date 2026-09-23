@@ -295,15 +295,19 @@ export function emitFilesystemLibCall(host: LlvmEmitterContext, e: LibCallExpr):
       B.line(`call void @scr_watcher_close(ptr ${w.name})`);
       return { name: "", type: e.type };
     }
-    if (e.fn === "fs.readdirTypesSync") {
+    if (e.fn === "fs.readdirTypesSync" || e.fn === "fsp.readdirTypes") {
       // Dirent rows assembled inline from one scandir snapshot — the C
-      // emitter's flat loop. The snapshot call throws Node's scandir
-      // error and answers NULL then, so the pending check runs before
-      // any allocation.
-      if (e.type.kind !== "array" || e.type.elem.kind !== "record") {
-        throw new InternalCompilerError("llvm emitter bug: readdirTypesSync result is not a record array");
+      // emitter's flat loop. The sync form checks a scandir error before
+      // allocation. The promise form lets the null-tolerant count/free
+      // accessors turn a failed snapshot into an empty dummy array, then
+      // settled_ref converts the pending exception to a rejection and
+      // releases that dummy.
+      const promiseForm = e.fn === "fsp.readdirTypes";
+      const arrayT = promiseForm && e.type.kind === "promise" ? e.type.inner : e.type;
+      if (arrayT.kind !== "array" || arrayT.elem.kind !== "record") {
+        throw new InternalCompilerError(`llvm emitter bug: ${e.fn} result is not a Dirent record array`);
       }
-      const recT = e.type.elem;
+      const recT = arrayT.elem;
       const path = host.emitExpr(e.args[0]!);
       host.declare(`declare ptr @scr_fs_scandir(ptr)`);
       host.declare(`declare ${host.sizeType} @scr_fs_scandir_count(ptr)`);
@@ -312,12 +316,12 @@ export function emitFilesystemLibCall(host: LlvmEmitterContext, e: LibCallExpr):
       host.declare(`declare void @scr_fs_scandir_free(ptr)`);
       const snap = B.tmp();
       B.line(`${snap} = call ptr @scr_fs_scandir(ptr ${path.name})`);
-      host.emitPendingCheck();
+      if (!promiseForm) host.emitPendingCheck();
       const cnt = B.tmp();
       B.line(`${cnt} = call ${host.sizeType} @scr_fs_scandir_count(ptr ${snap})`);
       const arr = B.tmp();
       B.line(`${arr} = ${arrNewCall(host, recT, cnt)}`);
-      const out = host.own({ name: arr, type: e.type });
+      const arrayOut = host.own({ name: arr, type: arrayT });
       const iSlot = B.slot();
       B.entryAllocas.push(`${iSlot} = alloca ${host.sizeType}`);
       B.line(`store ${host.sizeType} 0, ptr ${iSlot}`);
@@ -348,7 +352,15 @@ export function emitFilesystemLibCall(host: LlvmEmitterContext, e: LibCallExpr):
       B.br(lc);
       B.startBlock(le);
       B.line(`call void @scr_fs_scandir_free(ptr ${snap})`);
-      return out;
+      if (!promiseForm) return arrayOut;
+      const rc = vAdapters(host, arrayT);
+      host.declare(`declare ptr @scr_promise_settled_ref(ptr, ptr, ptr, ptr)`);
+      host.moveTemp(arrayOut); // promise fulfillment owns the result array
+      const promise = B.tmp();
+      B.line(
+        `${promise} = call ptr @scr_promise_settled_ref(ptr ${arr}, ptr ${rc.retain}, ptr ${rc.release}, ptr ${traceArg(host, arrayT)})`,
+      );
+      return host.own({ name: promise, type: e.type });
     }
     return host.emitGenericLibCall(e);
   }

@@ -350,6 +350,10 @@ jobs:
           if ($actual -ne "hello world") {
             throw "unexpected scriptc output: $actual"
           }
+      - name: Windows PE subsystem selection
+        env:
+          SCRIPTC_NO_CACHE: "0"
+        run: pnpm exec vitest run packages/cli/test/windows-subsystem.test.ts
       - name: Windows CA-store differential
         shell: pwsh
         run: |

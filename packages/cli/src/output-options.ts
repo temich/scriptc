@@ -9,6 +9,7 @@ export interface OutputOptionValues {
   keepC: boolean;
   sanitize: boolean;
   optimization?: string;
+  windowsSubsystem?: string;
   ffi?: string;
 }
 
@@ -57,6 +58,9 @@ export function resolveOutputOptions(
   }
   if (values.fromC && emit !== "exe") {
     return { ok: false, message: `--from-c only supports --emit=exe` };
+  }
+  if (values.windowsSubsystem !== undefined && emit !== "exe") {
+    return { ok: false, message: `--windows-subsystem is only supported with --emit=exe` };
   }
   if (emit === "ir" && backend !== undefined) {
     return { ok: false, message: `--emit=ir cannot be combined with --backend; IR is emitted before backend selection` };

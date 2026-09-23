@@ -2260,6 +2260,7 @@ export type IrLibFn =
   | "url.password"
   | "url.host"
   | "url.hostname"
+  | "url.port"
   | "url.pathname"
   | "url.href"
   | "url.fileURLToPathUrl"
@@ -2294,6 +2295,7 @@ export type IrLibFn =
   | "sp.with"
   | "url.searchParams"
   | "url.search"
+  | "url.hash"
   | "sp.get"
   | "sp.getAll"
   | "sp.append"
@@ -3311,6 +3313,11 @@ export type IrLibFn =
   | "fsp.chmod"
   | "fsp.rename"
   | "fsp.readdir"
+  /** `fs.promises.readdir(path, { withFileTypes: true })` — the settled-
+   * promise twin of fs.readdirTypesSync. The backends assemble the same
+   * call-site-shaped Dirent rows, then move the array into a promise;
+   * scandir failure becomes its rejection. */
+  | "fsp.readdirTypes"
   | "fsp.rm"
   | "fsp.stat"
   | "fsp.realpath"

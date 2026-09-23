@@ -1241,6 +1241,15 @@ declare module "fs/promises" {
   export function writeFile(path: string, data: string, encoding: "utf8" | "utf-8"): Promise<void>;
   export function mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<void>;
   export function readdir(path: string): Promise<string[]>;
+  export function readdir(
+    path: string,
+    options: {
+      encoding?: "utf8" | "utf-8";
+      withFileTypes: true;
+      recursive?: boolean;
+      [option: string]: unknown;
+    },
+  ): Promise<import("node:fs").Dirent[]>;
   export function rm(path: string): Promise<void>;
   export function stat(path: string): Promise<import("node:fs").Stats>;
   export function realpath(path: string): Promise<string>;
@@ -1373,7 +1382,7 @@ declare module "node:os" {
 /* The WHATWG URL class (a Node global; the es2023 lib doesn't declare it),
  * typed as exactly the supported surface: construction from ONE absolute-
  * URL string (invalid input throws a catchable TypeError, like Node), the
- * protocol/origin/username/pathname/href/host/hostname/search getters, searchParams (the
+ * protocol/origin/username/pathname/href/host/hostname/port/search/hash getters, searchParams (the
  * LIVE query view — mutations through it re-serialize into the URL, so
  * href reflects immediately; every read answers the same object, Node's
  * caching), and toString() (the href serialization).
@@ -1392,7 +1401,9 @@ interface URL {
   readonly href: string;
   readonly host: string;
   readonly hostname: string;
+  readonly port: string;
   readonly search: string;
+  readonly hash: string;
   readonly searchParams: URLSearchParams;
   toString(): string;
 }

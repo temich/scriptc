@@ -5323,12 +5323,11 @@ export function lowerNew(lowerer: Lowerer, expr: ts.NewExpression): IrExpr {
         }
         lowerer.badType(expr, tsType);
       }
-      // `new Set<T>()`: Map's sibling. The SEEDED form lowers for any
-      // T[]-typed argument — literal or variable, T already a legal
-      // element type — as construct + bulk add (duplicates collapse,
-      // insertion order preserved, exactly JS). Non-array seeds (another
-      // Set, general iterables) keep the fence. Unsupported element types
-      // are named specifically.
+      // `new Set<T>()`: Map's sibling. The SEEDED form lowers for arrays
+      // and fixed tuples of legal elements — literal or variable — as
+      // construct + bulk add (duplicates collapse, insertion order
+      // preserved, exactly JS). Other iterables keep the fence.
+      // Unsupported element types are named specifically.
       // `new WeakMap()` / `new WeakSet()` in JAVASCRIPT sources: no weak
       // container exists in the value model, but harness code constructs
       // one unconditionally and touches it only on paths tests don't
@@ -5379,6 +5378,24 @@ export function lowerNew(lowerer: Lowerer, expr: ts.NewExpression): IrExpr {
               // Any other lowered kind falls through to the named fence
               // below — never a mistyped seed into the validator.
             }
+            // Fixed tuples use record storage, not T[] storage. Snapshot
+            // their legal elements into an array before bulk insertion;
+            // the helper takes the tuple as one argument, so an effectful
+            // seed expression is evaluated exactly once.
+            if (argIr?.kind === "record") {
+              const shape = lowerer.shapes.get(argIr.shapeId);
+              if (shape?.tuple && shape.fields.every((field) => typeEquals(field.type, mapped.elem))) {
+                const seedType = { kind: "array" as const, elem: mapped.elem };
+                const helper = lowerer.tupleArrayWidthHelper(argIr.shapeId, seedType, loc);
+                if (helper) {
+                  const tuple = lowerer.lowerExpr(argNode);
+                  if (typeEquals(tuple.type, argIr)) {
+                    const seed: IrExpr = { kind: "call", callee: helper, args: [tuple], type: seedType, loc };
+                    return { kind: "setNew", seed, type: mapped, loc };
+                  }
+                }
+              }
+            }
           }
         }
         // JavaScript's identity-Set idiom: `new Set([setTimeout, atob,
@@ -5410,7 +5427,7 @@ export function lowerNew(lowerer: Lowerer, expr: ts.NewExpression): IrExpr {
           lowerer.noLowering(
             "new Set(values)",
             expr,
-            "construct the Set empty and add() each value — only an array of " +
+            "construct the Set empty and add() each value — only an array or fixed tuple of " +
               "already-legal elements (string or number) seeds a Set",
           );
         }

@@ -2938,6 +2938,7 @@ ScrStr *scr_url_username(ScrUrl *u); /* +1 encoded username, possibly empty */
 ScrStr *scr_url_password(ScrUrl *u); /* +1 encoded password, possibly empty */
 ScrStr *scr_url_host(ScrUrl *u);     /* +1 "host[:port]" (defaults stripped) */
 ScrStr *scr_url_hostname(ScrUrl *u); /* +1 port-less host ("" when none) */
+ScrStr *scr_url_port(ScrUrl *u);     /* +1 "" or normalized non-default port */
 ScrStr *scr_url_pathname(ScrUrl *u); /* +1 */
 ScrStr *scr_url_href(ScrUrl *u);     /* +1; also toString() */
 ScrStr *scr_url_to_path(ScrUrl *u);      /* +1, or throws */
@@ -2977,6 +2978,7 @@ void *scr_sp_retain_v(void *p);
 void scr_sp_release_v(void *p);
 ScrSearchParams *scr_url_search_params(ScrUrl *u); /* +1 live cached view */
 ScrStr *scr_url_search(ScrUrl *u);                 /* +1 "?..." or "" */
+ScrStr *scr_url_hash(ScrUrl *u);                   /* +1 "#..." or "" */
 void scr_sp_append(ScrSearchParams *sp, ScrStr *name, ScrStr *value);
 void scr_sp_set(ScrSearchParams *sp, ScrStr *name, ScrStr *value);
 void scr_sp_delete(ScrSearchParams *sp, ScrStr *name);
@@ -3077,14 +3079,15 @@ ScrStr *scr_os_user_homedir(void);
  * UV_DIRENT encoding (1 file, 2 dir, 3 link, 4 fifo, 5 socket, 6 char,
  * 7 block, 0 unknown); a DT_UNKNOWN d_type falls back to lstat(2) —
  * Node's own getDirents rule. OS order, no "."/"..". scr_fs_scandir
- * throws Node's scandir errno error and answers NULL then; the name
- * accessor returns +1. */
+ * throws Node's scandir errno error and answers NULL then; count/free are
+ * NULL-tolerant so the promise emitter can turn that pending error into a
+ * rejection, while the name accessor returns +1. */
 typedef struct ScrScandir ScrScandir;
 ScrScandir *scr_fs_scandir(ScrStr *path); /* or throws (NULL) */
-size_t scr_fs_scandir_count(const ScrScandir *s);
+size_t scr_fs_scandir_count(const ScrScandir *s); /* NULL -> 0 */
 ScrStr *scr_fs_scandir_name(const ScrScandir *s, size_t i); /* +1 */
 double scr_fs_scandir_type(const ScrScandir *s, size_t i);
-void scr_fs_scandir_free(ScrScandir *s);
+void scr_fs_scandir_free(ScrScandir *s); /* NULL-tolerant */
 
 /* os.networkInterfaces(): a getifaddrs(3) snapshot (scr_lib.c) the emitter
  * walks to build the typed Dict<NetworkInterfaceInfo[]> record inline. Row
