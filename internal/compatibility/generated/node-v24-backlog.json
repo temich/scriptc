@@ -8,8 +8,8 @@
     "tiers": {
       "static": {
         "replace-refusal": 46,
-        "verify-gap": 2699,
-        "audit-partial": 467,
+        "verify-gap": 2688,
+        "audit-partial": 478,
         "classify": 2,
         "implement": 81
       },

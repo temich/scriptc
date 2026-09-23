@@ -6522,9 +6522,21 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2948-child-fork-eof-callback/main.ts": {
+   "order": [
+    "<repo>/tests/corpus/2948-child-fork-eof-callback/main.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2948-stdio-callback-record.ts": {
    "order": [
     "<repo>/tests/corpus/2948-stdio-callback-record.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2949-child-fork-default/main.mjs": {
+   "order": [
+    "<repo>/tests/corpus/2949-child-fork-default/main.mjs"
    ],
    "diags": []
   },

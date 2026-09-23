@@ -5419,7 +5419,7 @@ static void scr_ipc_mark_disconnected(ScrIpc *ipc, bool write_failed,
 
 static void scr_ipc_stream_end(ScrClosure *closure) {
   ScrIpc *ipc = scr_ipc_from_closure(closure);
-  scr_ipc_mark_disconnected(ipc, ipc->n_send > 0, NULL);
+  scr_ipc_mark_disconnected(ipc, scr_child_writer_pending(ipc->writer), NULL);
   scr_ipc_release(ipc);
 }
 

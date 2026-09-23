@@ -51,6 +51,29 @@ export function isBuiltinMemberImport(
   return false;
 }
 
+/** True when an identifier is the namespace/default binding for one Node
+ * builtin module. JavaScript default imports of CommonJS builtins expose the
+ * same module object as namespace imports, matching lowering's provenance. */
+function isBuiltinNamespaceImport(
+  program: ts.Program,
+  ident: ts.Identifier,
+  moduleName: string,
+): boolean {
+  const checker = program.getTypeChecker();
+  const symbol = checker.getSymbolAtLocation(ident);
+  const decl = symbol ? checker.declarationsOf(symbol)[0] : undefined;
+  let importDecl: ts.ImportDeclaration | undefined;
+  if (decl !== undefined && ts.isNamespaceImport(decl)) {
+    const candidate = decl.parent.parent;
+    if (ts.isImportDeclaration(candidate)) importDecl = candidate;
+  } else if (decl !== undefined && ts.isImportClause(decl) && decl.name !== undefined) {
+    if (ts.isImportDeclaration(decl.parent)) importDecl = decl.parent;
+  }
+  return importDecl !== undefined &&
+    ts.isStringLiteral(importDecl.moduleSpecifier) &&
+    canonicalBuiltinModule(importDecl.moduleSpecifier.text) === moduleName;
+}
+
 function constInitializer(program: ts.Program, expr: ts.Expression): ts.Expression | null {
   const current = strip(expr);
   if (!ts.isIdentifier(current)) return null;
@@ -215,11 +238,19 @@ export function staticForkModulePath(program: ts.Program, expr: ts.Expression): 
 }
 
 export function forkCallModulePath(program: ts.Program, call: ts.CallExpression): string | null {
+  const callee = strip(call.expression);
+  const isFork =
+    (ts.isIdentifier(callee) &&
+      isBuiltinMemberImport(program, callee, "child_process", "fork")) ||
+    (ts.isPropertyAccessExpression(callee) &&
+      !callee.questionDotToken &&
+      callee.name.text === "fork" &&
+      ts.isIdentifier(callee.expression) &&
+      isBuiltinNamespaceImport(program, callee.expression, "child_process"));
   if (
     call.questionDotToken ||
     call.arguments[0] === undefined ||
-    !ts.isIdentifier(call.expression) ||
-    !isBuiltinMemberImport(program, call.expression, "child_process", "fork")
+    !isFork
   ) {
     return null;
   }
