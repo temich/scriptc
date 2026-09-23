@@ -134,7 +134,7 @@ stdlib-fence.ts:30:12 - error SC2020: 'new Set(values)' is part of the standard 
      |            ^~~~~~~~~~~~~~~~~~~~~~~~
   31 | // (new Error / TypeError / RangeError / SyntaxError now LOWER — the error
 
-  hint: construct the Set empty and add() each value — only an array of already-legal elements (string or number) seeds a Set
+  hint: construct the Set empty and add() each value — only an array or fixed tuple of already-legal elements (string or number) seeds a Set
 
 stdlib-fence.ts:34:7 - error SC2020: 'AggregateError' is part of the standard library types but has no scriptc lowering yet
 

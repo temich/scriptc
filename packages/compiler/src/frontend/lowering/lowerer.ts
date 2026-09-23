@@ -6002,8 +6002,9 @@ export class Lowerer {
   tupleArrayWidthHelper(fromId: string, toT: IrType & { kind: "array" }, loc: SrcLoc): string | null {
     const from = this.shapes.get(fromId);
     if (!from || !from.tuple) return null;
+    const fields = [...from.fields].sort((a, b) => Number(a.name) - Number(b.name));
     const lifts: WidthLift[] = [];
-    for (const f of from.fields) {
+    for (const f of fields) {
       const lift = this.widthLiftPlan(f.type, toT.elem);
       if (!lift) return null;
       lifts.push(lift);
@@ -6025,7 +6026,7 @@ export class Lowerer {
           kind: "return",
           value: {
             kind: "arrayLit",
-            elems: from.fields.map((f, i) =>
+            elems: fields.map((f, i) =>
               this.applyWidthLift(
                 lifts[i]!,
                 { kind: "recordGet", obj: t, shapeId: fromId, field: f.name, type: f.type, loc },

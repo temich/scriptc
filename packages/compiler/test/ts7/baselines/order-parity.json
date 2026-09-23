@@ -6510,6 +6510,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2947-set-readonly-seeds.ts": {
+   "order": [
+    "<repo>/tests/corpus/2947-set-readonly-seeds.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
