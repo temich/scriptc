@@ -1,6 +1,6 @@
 /* Focused LLVM expression emission extracted from emitter.ts. */
 import { InternalCompilerError } from "../../errors.js";
-import { undefinedArmTag } from "../../ir/analysis.js";
+import { isStableReceiverOperand, undefinedArmTag } from "../../ir/analysis.js";
 import { IrExpr, IrType, isRefCounted, typeEquals, typeKey } from "../../ir/ir.js";
 import { mangleResolveThunk } from "../mangle.js";
 import { elemAccess, FN_ATTRS, mapKeyAccess, mapKeyKindNum, mapValKindNum, traceArg, vAdapters } from "./shapes.js";
@@ -182,9 +182,28 @@ export function emitStrIntrinsic(host: LlvmEmitterContext, e: IrExpr & { kind: "
     }
   }
 
+export function emitStableReceiver(host: LlvmEmitterContext, receiver: IrExpr, following: IrExpr[]): LlValue {
+    if (
+      receiver.kind === "varRef" &&
+      following.every((operand) => isStableReceiverOperand(operand, receiver.localId))
+    ) {
+      const b = host.binding(receiver.localId);
+      if (b.kind !== "boxed") {
+        const value = host.B.tmp();
+        host.B.line(`${value} = load ptr, ptr ${b.slot}`);
+        return { name: value, type: receiver.type };
+      }
+    }
+    return host.emitExpr(receiver);
+  }
+
 export function emitArrIntrinsic(host: LlvmEmitterContext, e: IrExpr & { kind: "arrIntrinsic" }): LlValue {
     const B = host.B;
-    const r = host.emitExpr(e.receiver);
+    // getNumber copies out a scalar without invoking user code. A stable
+    // binding can own its receiver until that lookup finishes.
+    const r = e.method === "getNumber"
+      ? host.emitStableReceiver(e.receiver, e.args)
+      : host.emitExpr(e.receiver);
     if (e.receiver.type.kind !== "array") throw new InternalCompilerError("llvm emitter bug: arrIntrinsic on non-array");
     const elem = e.receiver.type.elem;
     const acc = elemAccess(elem);

@@ -10,7 +10,7 @@ import { OVERFLOW_MEMBER } from "./shapes.js";
 import { dynDestrCheckHelper, dynIterNHelper, dynKeyGetHelper } from "./walkers.js";
 import { collectFfiRetainedOps, parseFfiCallbackKey } from "../ffi-callbacks.js";
 import { genResultThunkFor } from "./async.js";
-import { isStableBytesOperand, matchStringSelfConcat, newValueMayThrow, streamTypedRefEligible, undefinedArmTag } from "../../ir/analysis.js";
+import { isStableReceiverOperand, matchStringSelfConcat, newValueMayThrow, streamTypedRefEligible, undefinedArmTag } from "../../ir/analysis.js";
 
 function streamTypedRefCommitAdapter(
   emitter: CEmitter,
@@ -611,14 +611,14 @@ function dynPromiseAdapter(
 
 
 
-/** Evaluate a bytes receiver as a borrow when it is a direct, unboxed
+/** Evaluate a receiver as a borrow when it is a direct, unboxed
  * binding and all later operands are stable. The binding's scope/global
  * owner then keeps the value alive, avoiding retain/release traffic around
  * every indexed access. Any uncertain shape falls back to an owned temp. */
-export function emitBytesReceiver(emitter: CEmitter, receiver: IrExpr, following: IrExpr[]): Temp {
+export function emitStableReceiver(emitter: CEmitter, receiver: IrExpr, following: IrExpr[]): Temp {
   if (
     receiver.kind === "varRef" &&
-    following.every((operand) => isStableBytesOperand(operand, receiver.localId))
+    following.every((operand) => isStableReceiverOperand(operand, receiver.localId))
   ) {
     const local = emitter.currentLocals.get(receiver.localId);
     if (local && !local.boxed) {
@@ -1699,7 +1699,11 @@ function emitContainerExpr(
         return emitter.newTemp(e.type, `scr_arr_state(${arr.name}, ${idx.name})`);
       }
       case "arrIntrinsic": {
-        const r = emitter.emitExpr(e.receiver);
+        // getNumber copies out a scalar without invoking user code. A
+        // stable binding can own its receiver until that lookup finishes.
+        const r = e.method === "getNumber"
+          ? emitStableReceiver(emitter, e.receiver, e.args)
+          : emitter.emitExpr(e.receiver);
         if (e.receiver.type.kind !== "array") throw new InternalCompilerError("emitter bug: arrIntrinsic on non-array");
         const acc = elemAccess(e.receiver.type.elem);
         const method = e.method;
@@ -1932,7 +1936,7 @@ function emitContainerExpr(
         const method = e.method;
         const directElementAccess = method === "length" || method === "byteLength" || method === "get";
         const r = directElementAccess
-          ? emitBytesReceiver(emitter, e.receiver, e.args)
+          ? emitStableReceiver(emitter, e.receiver, e.args)
           : emitter.emitExpr(e.receiver);
         const integerIndex = method === "get" ? emitter.integerLoopIndex(e.args[0]!) : null;
         const args = integerIndex === null ? e.args.map((a) => emitter.emitExpr(a)) : [];

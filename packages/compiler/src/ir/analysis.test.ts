@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { matchStringSelfConcat } from "./analysis.js";
-import { F64, STRING, type IrExpr } from "./ir.js";
+import { isStableReceiverOperand, matchStringSelfConcat } from "./analysis.js";
+import { BOOL, F64, STRING, arrayOf, bytesOf, type IrExpr } from "./ir.js";
 
 const loc = { file: "analysis.ts", start: 0, end: 0 };
 const str = (value: string): IrExpr => ({ kind: "strLit", value, type: STRING, loc });
@@ -20,4 +20,29 @@ test("matchStringSelfConcat rejects non-canonical and non-string shapes", () => 
   expect(matchStringSelfConcat("acc", str("x"))).toBeNull();
   expect(matchStringSelfConcat("acc", concat(ref("acc", F64), str("x")))).toBeNull();
   expect(matchStringSelfConcat("acc", concat(ref("acc"), str("x"), F64))).toBeNull();
+});
+
+test("receiver borrowing accepts scalar index updates and stable byte reads", () => {
+  const index: IrExpr = { kind: "assignExpr", localId: "index", value: ref("next", F64), type: F64, loc };
+  const read: IrExpr = { kind: "bytesIntrinsic", method: "get", receiver: ref("bytes", bytesOf("u8")), args: [index], type: F64, loc };
+  expect(isStableReceiverOperand(index, "values")).toBe(true);
+  expect(isStableReceiverOperand(read, "values")).toBe(true);
+});
+
+test("receiver borrowing rejects replacement hidden inside numeric or byte indices", () => {
+  const type = arrayOf(F64);
+  const replace: IrExpr = { kind: "assignExpr", localId: "values", value: ref("replacement", type), type, loc };
+  const index: IrExpr = {
+    kind: "ternary", cond: { kind: "toBool", operand: replace, type: BOOL, loc },
+    then: { kind: "numLit", value: 0, type: F64, loc }, else_: ref("index", F64), type: F64, loc,
+  };
+  const read: IrExpr = { kind: "bytesIntrinsic", method: "get", receiver: ref("bytes", bytesOf("u8")), args: [index], type: F64, loc };
+  expect(isStableReceiverOperand(index, "values")).toBe(false);
+  expect(isStableReceiverOperand(read, "values")).toBe(false);
+});
+
+test("receiver borrowing rejects calls even when nested in arithmetic", () => {
+  const call: IrExpr = { kind: "call", callee: "index", args: [], type: F64, loc };
+  const index: IrExpr = { kind: "bin", op: "+", left: ref("offset", F64), right: call, type: F64, loc };
+  expect(isStableReceiverOperand(index, "values")).toBe(false);
 });

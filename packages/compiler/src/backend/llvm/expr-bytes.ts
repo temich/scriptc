@@ -1,6 +1,5 @@
 /* Focused LLVM expression emission extracted from emitter.ts. */
 import { InternalCompilerError } from "../../errors.js";
-import { isStableBytesOperand } from "../../ir/analysis.js";
 import { F64, IrBytesElem, IrExpr } from "../../ir/ir.js";
 import type { LlvmEmitterContext, LlValue } from "./expr-context.js";
 import { F64_INF, f64Lit } from "./common.js";
@@ -52,21 +51,6 @@ const DV_SET_KIND: Record<string, number> = {
   dvSetFloat32: 6,
   dvSetFloat64: 7,
 };
-
-export function emitBytesReceiver(host: LlvmEmitterContext, receiver: IrExpr, following: IrExpr[]): LlValue {
-    if (
-      receiver.kind === "varRef" &&
-      following.every((operand) => isStableBytesOperand(operand, receiver.localId))
-    ) {
-      const b = host.binding(receiver.localId);
-      if (b.kind !== "boxed") {
-        const value = host.B.tmp();
-        host.B.line(`${value} = load ptr, ptr ${b.slot}`);
-        return { name: value, type: receiver.type };
-      }
-    }
-    return host.emitExpr(receiver);
-  }
 
 export function emitIntegerLoopIndex(host: LlvmEmitterContext, expr: IrExpr): string | null {
     if (expr.kind !== "varRef") return null;
@@ -327,7 +311,7 @@ export function emitBytesIntrinsic(host: LlvmEmitterContext, e: IrExpr & { kind:
     const method = e.method;
     const directElementAccess = method === "length" || method === "byteLength" || method === "get";
     const r = directElementAccess
-      ? host.emitBytesReceiver(e.receiver, e.args)
+      ? host.emitStableReceiver(e.receiver, e.args)
       : host.emitExpr(e.receiver);
     const integerIndex = method === "get" ? host.emitIntegerLoopIndex(e.args[0]!) : null;
     const args = integerIndex === null ? e.args.map((a) => host.emitExpr(a)) : [];

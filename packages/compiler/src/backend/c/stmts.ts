@@ -9,7 +9,7 @@ import { mangleField, mangleGlobal, mangleLocal, mangleRawParam } from "../mangl
 import { BOOL, CAUGHT, IrExpr, IrStmt, RUNTIME_ERROR_CLASSES, isRefCounted } from "../../ir/ir.js";
 import { boxAccess, cDecl, cStringLiteral, elemAccess, vAdapters } from "./types.js";
 import { OVERFLOW_MEMBER } from "./shapes.js";
-import { emitBytesReceiver } from "./exprs.js";
+import { emitStableReceiver } from "./exprs.js";
 import { matchIntegerBytesForLoop } from "../../ir/integer-loops.js";
 import { endsWithJump, matchStringSelfConcat } from "../../ir/analysis.js";
 
@@ -357,7 +357,7 @@ export function emitStmt(emitter: CEmitter, s: IrStmt): void {
         emitter.line(`for (;;) {`);
         emitter.indent++;
         if (integerLoop && integerShadow) {
-          const receiver = emitBytesReceiver(emitter, integerLoop.limitReceiver, []);
+          const receiver = emitStableReceiver(emitter, integerLoop.limitReceiver, []);
           emitter.line(`if (!(${integerShadow} < ${receiver.name}->len)) break;`);
         } else if (s.cond) {
           const cond = emitter.emitCondition(s.cond);
@@ -436,7 +436,7 @@ export function emitStmt(emitter: CEmitter, s: IrStmt): void {
         // JS-exactly), so no ownership moves. Any invalid index traps — no
         // append. The IR carries the element kind; do not rediscover it in
         // the generic runtime accessor on every loop iteration.
-        const arr = emitBytesReceiver(emitter, s.arr, [s.index, s.value]);
+        const arr = emitStableReceiver(emitter, s.arr, [s.index, s.value]);
         const integerIndex = emitter.integerLoopIndex(s.index);
         const idx = integerIndex === null ? emitter.emitExpr(s.index).name : integerIndex;
         const v = emitter.emitExpr(s.value);

@@ -71,7 +71,7 @@ export interface LlvmEmitterContext extends ShapeHost {
   emitBytesIndex(receiver: string, index: string, integerIndex?: boolean): string;
   emitBytesIntrinsic(e: IrExpr & { kind: "bytesIntrinsic" }): LlValue;
   emitBytesLength(elem: IrBytesElem, receiver: string, bytes: boolean): LlValue;
-  emitBytesReceiver(receiver: IrExpr, following: IrExpr[]): LlValue;
+  emitStableReceiver(receiver: IrExpr, following: IrExpr[]): LlValue;
   emitToUint32(value: string): string;
   emitCallExpr(e: ExprOf<"call" | "ffiCall" | "closure" | "callValue" | "selfRef" | "new" | "classRef" | "newValue" | "instanceOfValue" | "promiseVoidWiden" | "upcast" | "downcast" | "instanceOf" | "virtualCall">): LlValue;
   emitChildProcessLibCall(e: LibCallExpr): LlValue;

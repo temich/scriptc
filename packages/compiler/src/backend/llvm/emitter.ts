@@ -96,8 +96,8 @@ import { emitJsInteropExpr, emitExpr } from "./expr-dispatch.js";
 import { emitJsMarshal, emitJsOp, emitJsExit, islandAdapter, islandTypedAdapter } from "./expr-island.js";
 import { dynKind, raceAdapterFor, genResultThunkFor, childExitThunkFor, childExitSignalThunkFor, childDataThunkFor, execFileThunkFor, ipcMessageThunkFor, ipcSendThunkFor, emitterFixedAdapter, wrapEmitterListener, unwrapNullableClosure, closeBindThunkFor, closeOverrideWrapFor } from "./expr-callbacks.js";
 import { streamDataAdapter, streamDoneFnFor, cryptoBytesThunkFor, fsRenameThunkFor, streamCbThunkFor, zlibBytesThunkFor } from "./expr-stream-callbacks.js";
-import { resolveThunkFor, tagInSet, arrPush, emitArrayCopyLoop, emitStrIntrinsic, emitArrIntrinsic, wrapNullable, emitMapNew, mapSet, emitMapLikeIntrinsic, emitSetNew } from "./expr-containers.js";
-import { emitBytesReceiver, emitIntegerLoopIndex, emitBytesIndex, emitBytesData, emitBytesLength, emitBytesGet, emitToUint32, emitBytesSet, emitBytesIntrinsic } from "./expr-bytes.js";
+import { emitStableReceiver, resolveThunkFor, tagInSet, arrPush, emitArrayCopyLoop, emitStrIntrinsic, emitArrIntrinsic, wrapNullable, emitMapNew, mapSet, emitMapLikeIntrinsic, emitSetNew } from "./expr-containers.js";
+import { emitIntegerLoopIndex, emitBytesIndex, emitBytesData, emitBytesLength, emitBytesGet, emitToUint32, emitBytesSet, emitBytesIntrinsic } from "./expr-bytes.js";
 import { emitRegexIntrinsic, emitRecordKeyGet, keyedRecordReadInto } from "./expr-records.js";
 import { dynPromiseAdapter, streamTypedRefCommitAdapter, liveDynUnionRefAdapter, streamTypedRefBoxValue, streamTypedRefMaterializeAdapter, streamFromArrayAdapter } from "./expr-stream-bridges.js";
 import { emitWebLibCall, emitDynamicLibCall, emitFilesystemLibCall, emitPathUrlLibCall, emitPrimitiveLibCall } from "./lib-filesystem.js";
@@ -3238,7 +3238,7 @@ class LlEmitter {
         // JS-exactly), so no ownership moves. Any invalid index traps — no
         // append. IrBytesElem is static, so never rediscover it through the
         // generic runtime switch in a hot loop.
-        const arr = this.emitBytesReceiver(s.arr, [s.index, s.value]);
+        const arr = this.emitStableReceiver(s.arr, [s.index, s.value]);
         const integerIndex = this.emitIntegerLoopIndex(s.index);
         const idx = integerIndex ?? this.emitExpr(s.index).name;
         const v = this.emitExpr(s.value);
@@ -3522,7 +3522,7 @@ class LlEmitter {
         B.br(lc);
         B.startBlock(lc);
         if (integerLoop && integerSlot) {
-          const receiver = this.emitBytesReceiver(integerLoop.limitReceiver, []);
+          const receiver = this.emitStableReceiver(integerLoop.limitReceiver, []);
           const lenPtr = B.tmp();
           const len = B.tmp();
           const index = B.tmp();
@@ -4298,8 +4298,8 @@ class LlEmitter {
     return emitSetNew(this.expressionContext(), e);
   }
 
-  private emitBytesReceiver(receiver: IrExpr, following: IrExpr[]): LlValue {
-    return emitBytesReceiver(this.expressionContext(), receiver, following);
+  private emitStableReceiver(receiver: IrExpr, following: IrExpr[]): LlValue {
+    return emitStableReceiver(this.expressionContext(), receiver, following);
   }
 
   private emitIntegerLoopIndex(expr: IrExpr): string | null {

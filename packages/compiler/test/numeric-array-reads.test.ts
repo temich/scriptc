@@ -51,6 +51,8 @@ test("ordinary numeric-array arithmetic uses one lookup per read without boxing"
     expect(llvm.match(/call double @scr_arr_get_number\(/g)).toHaveLength(3);
     expect(c).not.toContain("scr_arr_state(");
     expect(llvm).not.toContain("@scr_arr_state(");
+    expect(c).not.toContain("scr_arr_retain(");
+    expect(llvm).not.toContain("@scr_arr_retain_v");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
