@@ -555,9 +555,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 78,
+        "partial": 79,
         "refused": 0,
-        "not-implemented": 96,
+        "not-implemented": 95,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -62166,6 +62166,7 @@
           "tests/corpus/2955-http-static-state.ts",
           "tests/corpus/2956-http-static-informational.ts",
           "tests/corpus/2957-http-static-response-controls.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -62673,6 +62674,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -62803,6 +62805,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -63147,6 +63150,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -64535,6 +64539,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -64568,6 +64573,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -64633,6 +64639,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -64884,6 +64891,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -65650,6 +65658,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -65737,8 +65746,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.rawHeaders",
+        "tests": [
+          "tests/corpus/2972-http-static-distinct-snapshots.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65770,6 +65782,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -65887,6 +65900,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -65920,6 +65934,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -66064,6 +66079,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -66124,6 +66140,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -66211,6 +66228,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -66487,6 +66505,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -66631,6 +66650,7 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2972-http-static-distinct-snapshots.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },

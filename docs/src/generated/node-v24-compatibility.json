@@ -506,9 +506,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 78,
+        "partial": 79,
         "refused": 0,
-        "not-implemented": 96,
+        "not-implemented": 95,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -48622,7 +48622,7 @@
       },
       "static": {
         "status": "partial",
-        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "detail": "Static IncomingMessage header and trailer reads support the tested HTTP/1.1 forms.",
         "verification": "test-backed"
       },
       "dynamic": {
@@ -48705,9 +48705,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static IncomingMessage header and trailer reads support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48734,7 +48734,7 @@
       },
       "static": {
         "status": "partial",
-        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "detail": "Static IncomingMessage header and trailer reads support the tested HTTP/1.1 forms.",
         "verification": "test-backed"
       },
       "dynamic": {
@@ -48846,7 +48846,7 @@
       },
       "static": {
         "status": "partial",
-        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "detail": "Static IncomingMessage header and trailer reads support the tested HTTP/1.1 forms.",
         "verification": "test-backed"
       },
       "dynamic": {
@@ -48874,7 +48874,7 @@
       },
       "static": {
         "status": "partial",
-        "detail": "Implemented for the documented scriptc module-loader subset.",
+        "detail": "Static IncomingMessage header and trailer reads support the tested HTTP/1.1 forms.",
         "verification": "test-backed"
       },
       "dynamic": {

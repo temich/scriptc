@@ -1773,6 +1773,17 @@ function trailersSnapshotHelper(lowerer: Lowerer, shapeId: string, loc: SrcLoc):
   });
 }
 
+function distinctSnapshotHelper(lowerer: Lowerer, shapeId: string, loc: SrcLoc,
+  collection: "headersDistinct" | "trailersDistinct",): string | null {
+  return pairsSnapshotHelper(lowerer, shapeId, loc, {
+    keyPrefix: collection,
+    libCall: collection === "headersDistinct" ? "http.reqHeaderPairs" : "http.reqTrailerPairs",
+    lookupValue: collection === "headersDistinct" ? "http.reqHeaderValues" : "http.reqTrailerValues",
+    params: [{ localId: "r.0", name: "r", type: HTTPREQ_T }],
+    callArgs: [varRef("r.0", HTTPREQ_T, loc)],
+  });
+}
+
 /** The `endStream` boolean of an h2 options object literal, as a literal
  * bool. Returns undefined when absent (or the arg is absent). Fences on
  * a non-literal endStream value or unknown keys that would matter. */
@@ -2152,15 +2163,15 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
         "compatibility requests do not expose their backing h2 stream/session yet; guarded method calls no-op and other reads have no lowering",
       );
     }
-    if (name === "headers" || name === "trailers") {
-      // `req.headers` as a VALUE — the `{ ...req.headers }` spread and
-      // record flows: a fresh snapshot record per read (Node's spread
-      // copies too; the per-name READS keep their direct lowerings).
+    if (name === "headers" || name === "trailers" || name === "headersDistinct" || name === "trailersDistinct") {
+      // Whole-object reads materialize a typed snapshot record. Per-name
+      // reads retain their direct lowerings.
       const mapped = lowerer.mapTypeOf(lowerer.typeOf(expr));
       if (mapped?.kind === "record") {
         const helper = name === "headers"
           ? headersSnapshotHelper(lowerer, mapped.shapeId, loc)
-          : trailersSnapshotHelper(lowerer, mapped.shapeId, loc);
+          : name === "trailers" ? trailersSnapshotHelper(lowerer, mapped.shapeId, loc)
+          : distinctSnapshotHelper(lowerer, mapped.shapeId, loc, name);
         if (helper !== null) {
           const receiver = coerceToHandle(lowerer, expr.expression, HTTPREQ_T);
           return { kind: "call", callee: helper, args: [receiver], type: mapped, loc };
@@ -2171,9 +2182,6 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
         expr,
         `req.${name} as a value of this type (read one field: req.${name}.name or req.${name}[name])`,
       );
-    }
-    if (name === "headersDistinct" || name === "trailersDistinct") {
-      lowerer.unsupported("SC1090", expr, `req.${name} as a value (read one name with req.${name}[name])`);
     }
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "stream") {
