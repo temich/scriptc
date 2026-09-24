@@ -6277,6 +6277,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2900-float64array-static.ts": {
+   "order": [
+    "<repo>/tests/corpus/2900-float64array-static.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2900-void-conditional-arrow.ts": {
    "order": [
     "<repo>/tests/corpus/2900-void-conditional-arrow.ts"
@@ -6576,6 +6582,42 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2951-math-static-analytic.ts": {
+   "order": [
+    "<repo>/tests/corpus/2951-math-static-analytic.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2952-math-static-remaining.ts": {
+   "order": [
+    "<repo>/tests/corpus/2952-math-static-remaining.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2953-http-header-validation.ts": {
+   "order": [
+    "<repo>/tests/corpus/2953-http-header-validation.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2954-http-outgoing-headers.ts": {
+   "order": [
+    "<repo>/tests/corpus/2954-http-outgoing-headers.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2955-http-static-state.ts": {
+   "order": [
+    "<repo>/tests/corpus/2955-http-static-state.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2956-http-static-informational.ts": {
+   "order": [
+    "<repo>/tests/corpus/2956-http-static-informational.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2961-emitter-computed-names.cjs": {
    "order": [
     "<repo>/tests/corpus/2961-emitter-computed-names.cjs"
@@ -6591,6 +6633,36 @@
   "<repo>/tests/corpus/2963-child-fork-dispatch/main.ts": {
    "order": [
     "<repo>/tests/corpus/2963-child-fork-dispatch/main.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2964-indexed-compound.ts": {
+   "order": [
+    "<repo>/tests/corpus/2964-indexed-compound.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2966-numeric-array-read-fusion.ts": {
+   "order": [
+    "<repo>/tests/corpus/2966-numeric-array-read-fusion.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2967-numeric-array-read-lifetime.ts": {
+   "order": [
+    "<repo>/tests/corpus/2967-numeric-array-read-lifetime.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2968-numeric-array-borrow.ts": {
+   "order": [
+    "<repo>/tests/corpus/2968-numeric-array-borrow.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2969-scalar-record-results.ts": {
+   "order": [
+    "<repo>/tests/corpus/2969-scalar-record-results.ts"
    ],
    "diags": []
   },
