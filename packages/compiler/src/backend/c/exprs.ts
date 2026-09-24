@@ -1712,7 +1712,8 @@ function emitContainerExpr(
             return emitter.newTemp(e.type, `scr_arr_len(${r.name})`);
           case "getNumber": {
             const index = emitter.emitExpr(e.args[0]!);
-            return emitter.newTemp(e.type, `scr_arr_get_number(${r.name}, ${index.name})`);
+            const table = e.receiver.kind === "varRef" ? emitter.constantNumericTables.get(e.receiver.localId) : undefined;
+            return emitter.newTemp(e.type, `${table ? `${table.symbol}_get` : "scr_arr_get_number"}(${r.name}, ${index.name})`);
           }
           case "nextPresent": {
             const start = emitter.emitExpr(e.args[0]!);

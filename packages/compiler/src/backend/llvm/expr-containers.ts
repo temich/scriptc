@@ -219,9 +219,10 @@ export function emitArrIntrinsic(host: LlvmEmitterContext, e: IrExpr & { kind: "
       }
       case "getNumber": {
         const index = host.emitExpr(e.args[0]!);
+        const table = e.receiver.kind === "varRef" ? host.constantNumericTables.get(e.receiver.localId) : undefined;
         host.declare(`declare double @scr_arr_get_number(ptr, double)`);
         const t = B.tmp();
-        B.line(`${t} = call double @scr_arr_get_number(ptr ${r.name}, double ${index.name})`);
+        B.line(`${t} = call double @${table ? `${table.symbol}_get` : "scr_arr_get_number"}(ptr ${r.name}, double ${index.name})`);
         return { name: t, type: e.type };
       }
       case "nextPresent": {

@@ -3,6 +3,7 @@
  * with LlEmitter; helpers receive this structural view at delegation. */
 import type { IrBytesElem, IrExpr, IrFfiImport, IrFunction, IrLibFn, IrLocal, IrModule, IrRecordShape, IrStmt, IrType, IrUnionDef, SrcLoc } from "../../ir/ir.js";
 import type { FfiCallbackAdapter } from "../ffi-callbacks.js";
+import type { ConstantNumericTable } from "../../ir/constant-tables.js";
 import type { BlockBuilder } from "./blocks.js";
 import type { LlClassMeta } from "./classes.js";
 import type { LlDyn } from "./dyn.js";
@@ -54,6 +55,7 @@ export interface LlvmEmitterContext extends ShapeHost {
   closeOverrideWrapFor(cbUnion: IrType, retServer: boolean): string;
   cstr(text: string): string;
   currentGenerator: { yieldT: IrType; nextT: IrType; } | null;
+  constantNumericTables: ReadonlyMap<string, ConstantNumericTable>;
   currentWasiCoro: { kind: "async" | "generator"; id: string; handle: string; self: string; finalLabel: string; cleanupLabel: string; suspendLabel: string; } | null;
   declare(decl: string): void;
   dyn: LlDyn;
