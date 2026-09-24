@@ -686,6 +686,38 @@ double scr_math_min_arr(ScrArr *a) {
   return best;
 }
 
+/* Math.hypot is variadic. Scale before summing to avoid intermediate
+ * overflow/underflow, and scan every element so Infinity wins over NaN. */
+double scr_math_hypot_arr(ScrArr *a) {
+  double scale = 0.0;
+  bool has_nan = false;
+  for (size_t i = 0; i < a->len; i++) {
+    uint64_t slot;
+    if (scr_arr_state_at(a, i, &slot) != SCR_ARR_VALUE) {
+      has_nan = true;
+      continue;
+    }
+    double v = fabs(scr_slot_to_f64(slot));
+    if (isinf(v)) return INFINITY;
+    if (isnan(v)) has_nan = true;
+    else if (v > scale) scale = v;
+  }
+  if (has_nan) return NAN;
+  if (scale == 0.0) return 0.0;
+  double sum = 0.0;
+  double correction = 0.0;
+  for (size_t i = 0; i < a->len; i++) {
+    uint64_t slot;
+    (void)scr_arr_state_at(a, i, &slot);
+    double v = scr_slot_to_f64(slot) / scale;
+    double term = v * v - correction;
+    double next = sum + term;
+    correction = (next - sum) - term;
+    sum = next;
+  }
+  return scale * sqrt(sum);
+}
+
 /* ── reads ─────────────────────────────────────────────────────────────── */
 
 static uint64_t scr_arr_require_index(const ScrArr *a, size_t idx, double i);

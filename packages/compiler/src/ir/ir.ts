@@ -2120,6 +2120,7 @@ export type IrLibFn =
    * zero-argument calls. Borrows the array; never throws. */
   | "math.maxArr"
   | "math.minArr"
+  | "math.hypotArr"
   /** `fs.readdirSync(path, { withFileTypes: true })` — Dirent rows over
    * one readdir pass (scr_lib.c's scandir snapshot; DT_UNKNOWN falls back
    * to lstat, Node's getDirents rule). The result type is the call site's
@@ -2155,6 +2156,15 @@ export type IrLibFn =
    * inference needs them compiled, not island-served. Never throw. */
   | "math.trunc"
   | "math.ceil"
+  | "math.sin"
+  | "math.cos"
+  | "math.exp"
+  | "math.sqrt"
+  | "math.log"
+  | "math.log2"
+  | "math.log10"
+  | "math.atan2"
+  | "math.pow"
   /** The static global parsers/tests (scr_string.c). num.parseInt is
    * ECMA-262 19.2.5 exactly — JS whitespace, sign, ToInt32 radix (the
    * frontend completes an omitted radix to 0 = the spec's "undefined":

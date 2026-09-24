@@ -1,7 +1,7 @@
-dynamic-surface.ts:10:12 - error SC2012: 'Math.sqrt' runs in the embedded dynamic engine, which this build does not include
+dynamic-surface.ts:10:12 - error SC2012: 'Math.cbrt' runs in the embedded dynamic engine, which this build does not include
 
    9 | // appear here.)
-  10 | const up = Math.sqrt(2);
+  10 | const up = Math.cbrt(2);
      |            ^~~~~~~~~~~~
   11 | const tau = Math.PI * 2;
 

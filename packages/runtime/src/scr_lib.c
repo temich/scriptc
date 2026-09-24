@@ -3872,6 +3872,14 @@ double scr_math_round(double x) {
   return (r == 0.0 && x < 0.0) ? -0.0 : r;
 }
 
+/* IEEE pow(±1, ±Infinity) and pow(1, NaN) return 1; ECMAScript requires
+ * NaN. The other special cases, including signed zero and odd integer
+ * powers, follow libm. */
+double scr_math_pow(double base, double exponent) {
+  if (isnan(exponent) || (isinf(exponent) && fabs(base) == 1.0)) return NAN;
+  return pow(base, exponent);
+}
+
 double scr_math_random(void) {
   uint64_t r;
   arc4random_buf(&r, sizeof r);

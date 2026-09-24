@@ -5111,6 +5111,8 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             return finish(`scr_math_max_arr(${arg(0)})`);
           case "math.minArr":
             return finish(`scr_math_min_arr(${arg(0)})`);
+          case "math.hypotArr":
+            return finish(`scr_math_hypot_arr(${arg(0)})`);
           // Math.floor/trunc/ceil — the C functions ARE the JS operations
           // (math.h is always included). Borrow nothing; no throw.
           case "math.floor":
@@ -5119,6 +5121,24 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             return finish(`trunc(${arg(0)})`);
           case "math.ceil":
             return finish(`ceil(${arg(0)})`);
+          case "math.sin":
+            return finish(`sin(${arg(0)})`);
+          case "math.cos":
+            return finish(`cos(${arg(0)})`);
+          case "math.exp":
+            return finish(`exp(${arg(0)})`);
+          case "math.sqrt":
+            return finish(`sqrt(${arg(0)})`);
+          case "math.log":
+            return finish(`log(${arg(0)})`);
+          case "math.log2":
+            return finish(`log2(${arg(0)})`);
+          case "math.log10":
+            return finish(`log10(${arg(0)})`);
+          case "math.atan2":
+            return finish(`atan2(${arg(0)}, ${arg(1)})`);
+          case "math.pow":
+            return finish(`scr_math_pow(${arg(0)}, ${arg(1)})`);
           // Math.abs — C fabs IS the JS operation. Math.round — the JS
           // half-toward-+Infinity rule (scr_lib.c; C round() differs on
           // halves and naive floor(x+0.5) drifts at the epsilon boundary).

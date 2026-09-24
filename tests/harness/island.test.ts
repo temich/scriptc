@@ -496,17 +496,17 @@ console.log("unreachable", direct);
       "math-on-fiber",
       `async function calc(n: number): Promise<number> {
   await new Promise<void>((resolve) => resolve());
-  return Math.sqrt(n) + Math.floor(1.9);
+  return Math.sign(n) + Math.floor(1.9);
 }
 async function main(): Promise<void> {
   console.log(await calc(144));
-  console.log((await calc(2.25)).toFixed(1));
+  console.log((await calc(-1)).toFixed(1));
 }
 main();
 `,
     );
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toBe("13\n2.5\n");
+    expect(r.stdout).toBe("2\n0.0\n");
     expect(r.stderr).toBe("");
   });
 

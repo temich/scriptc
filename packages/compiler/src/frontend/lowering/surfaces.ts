@@ -448,8 +448,8 @@ export const boundaryOutOfIslandMsg = (typeName: string): string =>
   `and 'T | undefined' over those)`;
 
 /** The island-backed surface — standard-library APIs with no static
- * runtime implementation (Math methods/properties beyond the compile-time
- * constants, number/string methods beyond the
+ * runtime implementation (Math methods outside STATIC_MATH_FNS,
+ * number/string methods beyond the
  * intrinsic set, parseFloat, ...). ONE table drives both sides of the
  * gate: under --dynamic each entry lowers to marshal → engine execution →
  * validated exit to the declared return type; without the flag each use
@@ -466,11 +466,10 @@ export const ISLAND_SURFACE = {
   /** `Math.<fn>(...)` lowers to callMethod(globalGet("Math"), fn, args);
    * Math.PI and Math.E are compile-time numeric literals in STATIC_MATH_PROPS;
    * remaining Math properties retain island/fence behavior.
-   * min/max/atan2/hypot/pow are declared with exactly two parameters
-   * (rest/optional parameters aren't representable). */
+   * The entries here handle untabled scalar call shapes where --dynamic is
+   * available; STATIC_MATH_FNS handles the ordinary typed calls first. */
   math: {
-    // floor, min/max (two-arg), and random are STATIC now
-    // (STATIC_MATH_FNS below).
+    // The static table below handles these methods at its admitted arities.
     fns: {
       abs: ISL_N1, acos: ISL_N1, asin: ISL_N1, atan: ISL_N1, atan2: ISL_N2,
       cbrt: ISL_N1, ceil: ISL_N1, cos: ISL_N1, exp: ISL_N1,
@@ -523,16 +522,10 @@ export const STATIC_MATH_PROPS: Record<string, number | undefined> = {
   E: 2.718281828459045,
 };
 
-/** Math members with a STATIC lowering — each is one C call that IS the
- * JS operation, at the tabled arity (floor: libm's floor; min/max: the
- * NaN-poisoning ±0-ordered scalar folds; random: arc4random-backed
- * uniform [0,1) — SEMANTICS.md 62). Checked BEFORE the island table
- * (lowerIslandMethodCall), so the tabled arities compile statically and
- * other arities keep the island/fence story — except min/max, whose
- * variadic spelling lowers at ANY plain arity (the n-ary left fold of
- * the scalar compare; zero arguments answer the fold's ∓Infinity seed);
- * unioned with the island table for the methods-as-values fence
- * (lowerMathProperty). */
+/** Math members with a STATIC lowering. Most use the tabled arity; min/max
+ * accept any plain arity, and hypot accepts any arity including number[]
+ * spreads. Checked before the island table by lowerIslandMethodCall and
+ * included in the methods-as-values fence by lowerMathProperty. */
 export const STATIC_MATH_FNS: Record<string, { fn: IrLibFn; arity: number } | undefined> = {
   floor: { fn: "math.floor", arity: 1 },
   abs: { fn: "math.abs", arity: 1 },
@@ -545,6 +538,16 @@ export const STATIC_MATH_FNS: Record<string, { fn: IrLibFn; arity: number } | un
   min: { fn: "math.min", arity: 2 },
   max: { fn: "math.max", arity: 2 },
   random: { fn: "math.random", arity: 0 },
+  sin: { fn: "math.sin", arity: 1 },
+  cos: { fn: "math.cos", arity: 1 },
+  exp: { fn: "math.exp", arity: 1 },
+  sqrt: { fn: "math.sqrt", arity: 1 },
+  log: { fn: "math.log", arity: 1 },
+  log2: { fn: "math.log2", arity: 1 },
+  log10: { fn: "math.log10", arity: 1 },
+  atan2: { fn: "math.atan2", arity: 2 },
+  pow: { fn: "math.pow", arity: 2 },
+  hypot: { fn: "math.hypotArr", arity: 2 },
 };
 
 /** Number prototype methods with dedicated STATIC lowering paths. The

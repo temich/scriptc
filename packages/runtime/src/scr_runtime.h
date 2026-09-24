@@ -997,12 +997,14 @@ void scr_arr_copy_range_ex(ScrArr *dst, size_t dst_start, const ScrArr *src,
  * fold (NaN poisons, ±0 by the JS preferences, empty → ∓Infinity). */
 double scr_math_max_arr(ScrArr *a);
 double scr_math_min_arr(ScrArr *a);
+double scr_math_hypot_arr(ScrArr *a);
 /* The scalar Math statics (scr_lib.c): min/max are the ECMA two-argument
  * folds (NaN poisons; max prefers +0, min prefers -0 — NOT C's fmin/fmax);
  * random is a uniform [0,1) double at 53-bit granularity from
  * arc4random_buf (SEMANTICS.md 62: Node's distribution, not its sequence). */
 double scr_math_min(double a, double b);
 double scr_math_round(double x);
+double scr_math_pow(double base, double exponent);
 double scr_math_max(double a, double b);
 double scr_math_random(void);
 

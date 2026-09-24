@@ -2704,8 +2704,8 @@
       "id": "stdlib.math.atan2",
       "kind": "stdlib",
       "name": "Math.atan2",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 2; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.cbrt",
@@ -2725,15 +2725,15 @@
       "id": "stdlib.math.cos",
       "kind": "stdlib",
       "name": "Math.cos",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.exp",
       "kind": "stdlib",
       "name": "Math.exp",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.floor",
@@ -2746,29 +2746,29 @@
       "id": "stdlib.math.hypot",
       "kind": "stdlib",
       "name": "Math.hypot",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at any arity, including number[] spreads"
     },
     {
       "id": "stdlib.math.log",
       "kind": "stdlib",
       "name": "Math.log",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.log10",
       "kind": "stdlib",
       "name": "Math.log10",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.log2",
       "kind": "stdlib",
       "name": "Math.log2",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.max",
@@ -2788,8 +2788,8 @@
       "id": "stdlib.math.pow",
       "kind": "stdlib",
       "name": "Math.pow",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 2; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.random",
@@ -2816,15 +2816,15 @@
       "id": "stdlib.math.sin",
       "kind": "stdlib",
       "name": "Math.sin",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.sqrt",
       "kind": "stdlib",
       "name": "Math.sqrt",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.tan",

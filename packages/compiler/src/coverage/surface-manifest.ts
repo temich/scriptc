@@ -233,11 +233,12 @@ export function generateSurfaceManifest(compilerVersion: string): SurfaceManifes
         // untabled arities go there. Elsewhere untabled shapes may have
         // their own special-cased lowerings (Math.min/max over one array
         // spread), so no claim is made about them.
-        note:
-          `compiles statically at arity ${stat.arity}` +
-          (island !== undefined
-            ? "; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
-            : ""),
+        note: name === "hypot"
+          ? "compiles statically at any arity, including number[] spreads"
+          : `compiles statically at arity ${stat.arity}` +
+            (island !== undefined
+              ? "; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
+              : ""),
       });
     } else {
       add({ id: `stdlib.math.${name}`, kind: "stdlib", name: `Math.${name}`, status: "dynamic-only", code: "SC2012" });

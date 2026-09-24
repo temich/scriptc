@@ -5,7 +5,7 @@ import { InternalCompilerError } from "../../errors.js";
  * package boundary fences for node_modules-declared symbols. */
 import * as ts from "../ts7/adapter.js";
 import type { Lowerer } from "./lowerer.js";
-import { BOOL, BYTES_U8, DYN, F64, IrExpr, IrStmt, IrType, JSVAL, MAX_ISLAND_CALLBACK_ARITY, STRING, VOID, canConvertToDyn, canMarshalTypedFuncIntoIsland, islandPromisePayloadTag, isUnitType } from "../../ir/ir.js";
+import { arrayOf, BOOL, BYTES_U8, DYN, F64, IrExpr, IrStmt, IrType, JSVAL, MAX_ISLAND_CALLBACK_ARITY, STRING, VOID, canConvertToDyn, canMarshalTypedFuncIntoIsland, islandPromisePayloadTag, isUnitType } from "../../ir/ir.js";
 import { ISLAND_SURFACE, IslandFnEntry, STATIC_MATH_FNS, STATIC_MATH_PROPS, boundaryIntoIslandMsg } from "./surfaces.js";
 import { requiresDynamicApiDiag, requiresDynamicPackageDiag } from "../../diagnostics/diagnostic.js";
 import { esmNamedImportLinkCrash, isCjsJsFile, isJsSourceFile, locOf, npmPackageNameOf } from "../program.js";
@@ -3347,11 +3347,17 @@ export function lowerStaticReadableStreamReaderCall(
       };
     }
     const isMath = lowerer.stdlibGlobalMember(access, "Math") !== null;
-    // The STATIC Math members (floor/min/max/random): one C call IS the
-    // JS operation — no island, no --dynamic. Only the tabled arity with
-    // plain (non-spread) arguments takes this path; other forms fall
-    // through to the spread fold / island / lib fence below.
+    // Static numeric Math calls precede the island path. The scalar methods
+    // use their declared arity; min/max and hypot accept their variadic forms.
     const staticMath = isMath ? own(STATIC_MATH_FNS, name) : undefined;
+    if (staticMath && name === "hypot") {
+      const elems = call.arguments.map((a) => ts.isSpreadElement(a)
+        ? lowerer.lowerExprExpecting(a.expression, arrayOf(F64))
+        : lowerer.lowerExprExpecting(a, F64));
+      const spreads = call.arguments.flatMap((a, i) => ts.isSpreadElement(a) ? [i] : []);
+      const packed: IrExpr = { kind: "arrayLit", elems, ...(spreads.length > 0 ? { spreads } : {}), type: arrayOf(F64), loc };
+      return { kind: "libCall", fn: staticMath.fn, args: [packed], type: F64, loc };
+    }
     if (
       staticMath &&
       call.arguments.every((a) => !ts.isSpreadElement(a))

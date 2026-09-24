@@ -27,6 +27,7 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "util.parseArgs": "scr_util_parse_args",
   "math.maxArr": "scr_math_max_arr",
   "math.minArr": "scr_math_min_arr",
+  "math.hypotArr": "scr_math_hypot_arr",
   "math.min": "scr_math_min",
   "math.max": "scr_math_max",
   "math.random": "scr_math_random",
@@ -34,6 +35,15 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "num.parseFloat": "scr_parse_float",
   "num.fromString": "scr_string_to_number",
   "math.round": "scr_math_round",
+  "math.sin": "sin",
+  "math.cos": "cos",
+  "math.exp": "exp",
+  "math.sqrt": "sqrt",
+  "math.log": "log",
+  "math.log2": "log2",
+  "math.log10": "log10",
+  "math.atan2": "atan2",
+  "math.pow": "scr_math_pow",
   // decodeUriComponent is NOT here: it throws (MAY_THROW_LIB_FNS), so it
   // refuses by name like the rest of the throwing tier.
   "str.encodeUriComponent": "scr_str_encode_uri_component",
