@@ -1570,6 +1570,10 @@ export type IrStmt =
  * the fresh array. */
 export type IrArrIntrinsicMethod =
   | "length"
+  /** Internal ToNumber(a[index]) for f64-backed arrays: one numeric index,
+   * returning the stored number or NaN for a hole/undefined/missing key.
+   * Borrows the receiver and never traps on missing values. */
+  | "getNumber"
   | "push"
   | "pushSpread"
   | "concatSpread"

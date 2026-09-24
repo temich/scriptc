@@ -766,6 +766,19 @@ double scr_arr_get_f64(ScrArr *a, double i) {
   return scr_slot_to_f64(scr_arr_require_slot(a, i));
 }
 
+double scr_arr_get_number(const ScrArr *a, double i) {
+  size_t idx;
+  uint64_t slot;
+  uint8_t state;
+  if (scr_arr_valid_index(i, &idx)) {
+    if (idx >= a->len) return NAN;
+    state = scr_arr_state_at(a, idx, &slot);
+  } else if (!scr_arr_prop_get_state(a, i, &slot, &state)) {
+    return NAN;
+  }
+  return state == SCR_ARR_VALUE ? scr_slot_to_f64(slot) : NAN;
+}
+
 bool scr_arr_get_bool(ScrArr *a, double i) {
   return scr_arr_require_slot(a, i) != 0;
 }

@@ -1428,24 +1428,20 @@ function arrayUnionHofHelper(
   }
 
 /** An ordinary indexed read: values retain their element type, while
- * holes, missing properties, and present undefined yield undefined.
- * Numeric consumption may instead return the scalar ToNumber result,
- * avoiding a temporary union without changing the array's storage. */
+ * holes, missing properties, and present undefined yield undefined. */
   export function lowerSafeIndexRead(
     lowerer: Lowerer,
     arr: IrExpr & { type: { kind: "array" } },
     index: IrExpr,
     loc: SrcLoc,
-    numeric = false,
   ): IrExpr | null {
     const elem = arr.type.elem;
     if (elem.kind === "void" || elem.kind === "dyn") return null;
-    if (numeric && elem.kind !== "f64") throw new InternalCompilerError("numeric index read requires f64 storage");
-    const resultT = numeric ? F64 : arrayValueType(lowerer, elem);
-    const key = `${numeric ? "idxNumber" : "idxOr"}:${typeKey(elem)}`;
+    const resultT = arrayValueType(lowerer, elem);
+    const key = `idxOr:${typeKey(elem)}`;
     let name = lowerer.arrHofHelpers.get(key);
     if (!name) {
-      name = `%arr.${numeric ? "idxNumber" : "idxOr"}.${lowerer.arrHofHelpers.size}`;
+      name = `%arr.idxOr.${lowerer.arrHofHelpers.size}`;
       lowerer.arrHofHelpers.set(key, name);
       const arrT = arr.type;
       lowerer.liftedFns.push({
@@ -1459,21 +1455,7 @@ function arrayUnionHofHelper(
           { id: "a.0", name: "a", type: arrT, mutable: false },
           { id: "i.0", name: "i", type: F64, mutable: false },
         ],
-        body: [{
-          kind: "return",
-          value: numeric ? {
-            kind: "ternary",
-            cond: {
-              kind: "bin", op: "===",
-              left: { kind: "arrayState", arr: varRef("a.0", arrT, loc), index: varRef("i.0", F64, loc), type: F64, loc },
-              right: numLit(1, loc), type: BOOL, loc,
-            },
-            then: { kind: "arrayGet", arr: varRef("a.0", arrT, loc), index: varRef("i.0", F64, loc), type: F64, loc },
-            else_: { kind: "bin", op: "/", left: numLit(0, loc), right: numLit(0, loc), type: F64, loc },
-            type: F64, loc,
-          } : arrayValueRead(lowerer, varRef("a.0", arrT, loc), varRef("i.0", F64, loc), elem, loc),
-          loc,
-        }],
+        body: [{ kind: "return", value: arrayValueRead(lowerer, varRef("a.0", arrT, loc), varRef("i.0", F64, loc), elem, loc), loc }],
         loc,
       });
     }
@@ -1488,7 +1470,10 @@ export function tryLowerNumericIndexRead(lowerer: Lowerer, operand: IrExpr, loc:
   if (operand.kind !== "call" || operand.callee !== lowerer.arrHofHelpers.get(`idxOr:${typeKey(F64)}`)) return null;
   const [arr, index] = operand.args;
   if (operand.args.length !== 2 || arr?.type.kind !== "array" || arr.type.elem.kind !== "f64" || index?.type.kind !== "f64") return null;
-  return lowerSafeIndexRead(lowerer, arr as IrExpr & { type: { kind: "array" } }, index, loc, true);
+  // The intrinsic owns the evaluated receiver through index evaluation,
+  // then borrows it for one slot lookup. No extra helper parameter or
+  // separate state/getter expressions need to retain the array again.
+  return { kind: "arrIntrinsic", method: "getNumber", receiver: arr, args: [index], type: F64, loc };
 }
 
   /** Backward-compatible name for the npm-static probe path. */

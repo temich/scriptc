@@ -64,6 +64,38 @@ static void test_f64_basics(void) {
   scr_arr_release(a);
 }
 
+static void test_numeric_read(void) {
+  ScrArr *a = scr_arr_new(SCR_ELEM_F64, 0);
+  check(isnan(scr_arr_get_number(a, 0)), "numeric read of empty array");
+  scr_arr_set_f64(a, 0, -0.0);
+  check(signbit(scr_arr_get_number(a, -0.0)), "numeric read preserves signed zero");
+  scr_arr_set_f64(a, 3, INFINITY);
+  check(isnan(scr_arr_get_number(a, 1)), "numeric read of dense hole");
+  check_f64(scr_arr_get_number(a, 3), INFINITY, "numeric read of infinity");
+  scr_arr_set_undefined(a, 2);
+  check(isnan(scr_arr_get_number(a, 2)) && scr_arr_has(a, 2),
+        "numeric read of present undefined keeps presence");
+  scr_arr_set_f64(a, 4294967294.0, -INFINITY);
+  check_f64(scr_arr_get_number(a, 4294967294.0), -INFINITY,
+            "numeric read of last sparse array index");
+  check(isnan(scr_arr_get_number(a, 4294967293.0)), "numeric read of sparse hole");
+  scr_arr_set_undefined(a, 4294967294.0);
+  check(isnan(scr_arr_get_number(a, 4294967294.0)), "numeric read of sparse undefined");
+  double keys[] = {-1, 0.5, 4294967295.0, NAN, INFINITY, -INFINITY};
+  for (size_t i = 0; i < sizeof keys / sizeof *keys; i++) {
+    check(isnan(scr_arr_get_number(a, keys[i])), "numeric read of missing property");
+    scr_arr_set_f64(a, keys[i], (double)i + 10);
+    check_f64(scr_arr_get_number(a, keys[i]), (double)i + 10,
+              "numeric read of ordinary numeric property");
+    scr_arr_set_undefined(a, keys[i]);
+    check(isnan(scr_arr_get_number(a, keys[i])) && scr_arr_has(a, keys[i]),
+          "numeric read of undefined numeric property");
+  }
+  scr_arr_set_f64(a, 0, NAN);
+  check(isnan(scr_arr_get_number(a, 0)), "numeric read of stored NaN");
+  scr_arr_release(a);
+}
+
 static void test_bool(void) {
   ScrArr *a = scr_arr_new(SCR_ELEM_BOOL, 2);
   scr_arr_push_bool(a, true);
@@ -592,6 +624,7 @@ int main(int argc, char **argv) {
   }
 
   test_f64_basics();
+  test_numeric_read();
   test_bool();
   test_unshift_reverse();
   test_str_rc();

@@ -2719,7 +2719,7 @@ function validateFunction(
             ? { argTypes: e.args.map(() => elem), result: F64 }
             : e.method === "pushSpread" || e.method === "concatSpread" || e.method === "unshiftSpread"
               ? { argTypes: [e.receiver.type], result: F64 }
-              : e.method === "nextPresent"
+              : e.method === "nextPresent" || e.method === "getNumber"
               ? { argTypes: [F64], result: F64 }
               : e.method === "pop"
               ? { argTypes: [], result: e.type } // union-checked below
@@ -2746,6 +2746,9 @@ function validateFunction(
                         : e.method === "shift"
                           ? { argTypes: [], result: e.type } // union-checked below
                           : { argTypes: [], result: F64 }; // length
+        if (e.method === "getNumber" && elem.kind !== "f64") {
+          err(`arrIntrinsic getNumber requires f64 elements, got ${elem.kind}`, e.loc);
+        }
         if (
           e.method === "join" &&
           elem.kind !== "f64" && elem.kind !== "string" && elem.kind !== "bool" &&

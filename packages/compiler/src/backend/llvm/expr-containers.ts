@@ -198,6 +198,13 @@ export function emitArrIntrinsic(host: LlvmEmitterContext, e: IrExpr & { kind: "
         B.line(`${t} = call double @scr_arr_len(ptr ${r.name})`);
         return { name: t, type: e.type };
       }
+      case "getNumber": {
+        const index = host.emitExpr(e.args[0]!);
+        host.declare(`declare double @scr_arr_get_number(ptr, double)`);
+        const t = B.tmp();
+        B.line(`${t} = call double @scr_arr_get_number(ptr ${r.name}, double ${index.name})`);
+        return { name: t, type: e.type };
+      }
       case "nextPresent": {
         const start = host.emitExpr(e.args[0]!);
         host.declare(`declare double @scr_arr_next_present(ptr, double)`);

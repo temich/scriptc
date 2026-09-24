@@ -1706,6 +1706,10 @@ function emitContainerExpr(
         switch (method) {
           case "length":
             return emitter.newTemp(e.type, `scr_arr_len(${r.name})`);
+          case "getNumber": {
+            const index = emitter.emitExpr(e.args[0]!);
+            return emitter.newTemp(e.type, `scr_arr_get_number(${r.name}, ${index.name})`);
+          }
           case "nextPresent": {
             const start = emitter.emitExpr(e.args[0]!);
             return emitter.newTemp(e.type, `scr_arr_next_present(${r.name}, ${start.name})`);

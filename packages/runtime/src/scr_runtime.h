@@ -1009,6 +1009,8 @@ double scr_math_max(double a, double b);
 double scr_math_random(void);
 
 double scr_arr_get_f64(ScrArr *a, double i); /* trap missing/hole */
+/* ToNumber(a[i]) for f64 storage: borrows a; missing/hole/undefined -> NaN. */
+double scr_arr_get_number(const ScrArr *a, double i);
 bool scr_arr_get_bool(ScrArr *a, double i);  /* trap missing/hole */
 void *scr_arr_get_ref(ScrArr *a, double i);  /* trap missing/hole; +1 */
 

@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { compile, deserializeModule, validateModule } from "../src/index.js";
+import { emitCModule } from "../src/backend/c/c-emitter.js";
+import { emitLlvmModule } from "../src/backend/llvm/emitter.js";
 
-test("ordinary numeric-array arithmetic has no reachable union allocation", async () => {
+test("ordinary numeric-array arithmetic uses one lookup per read without boxing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "scriptc-numeric-array-reads-"));
   try {
     const entry = join(dir, "main.ts");
@@ -25,9 +27,11 @@ test("ordinary numeric-array arithmetic has no reachable union allocation", asyn
     function visit(value: unknown): void {
       if (value === null || typeof value !== "object") return;
       if (Array.isArray(value)) { value.forEach(visit); return; }
-      const node = value as { kind?: string; callee?: string };
+      const node = value as { kind?: string; callee?: string; method?: string };
       expect(node.kind).not.toBe("unionWrap");
-      if (node.kind === "arrayGet") arrayReads++;
+      expect(node.kind).not.toBe("arrayState");
+      expect(node.kind).not.toBe("arrayGet");
+      if (node.kind === "arrIntrinsic" && node.method === "getNumber") arrayReads++;
       if (node.kind === "call" && node.callee) visitFunction(node.callee);
       Object.values(value).forEach(visit);
     }
@@ -39,7 +43,14 @@ test("ordinary numeric-array arithmetic has no reachable union allocation", asyn
       visit(fn!.body);
     }
     visitFunction(mod.entry);
-    expect(arrayReads).toBeGreaterThan(0);
+    expect(arrayReads).toBe(3);
+    const reachable = { ...mod, functions: mod.functions.filter((fn) => visited.has(fn.name)) };
+    const c = emitCModule(reachable);
+    const llvm = emitLlvmModule(reachable);
+    expect(c.match(/scr_arr_get_number\(/g)).toHaveLength(3);
+    expect(llvm.match(/call double @scr_arr_get_number\(/g)).toHaveLength(3);
+    expect(c).not.toContain("scr_arr_state(");
+    expect(llvm).not.toContain("@scr_arr_state(");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
