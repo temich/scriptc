@@ -172,8 +172,15 @@ export function emitBytesGet(host: LlvmEmitterContext, elem: IrBytesElem, receiv
     return { name: out, type: F64 };
   }
 
-export function emitToUint32(host: LlvmEmitterContext, value: string): string {
+export function emitToUint32(host: LlvmEmitterContext, value: string, expr?: IrExpr): string {
     const B = host.B;
+    if (expr && host.integerRanges.get(expr)) {
+      const integer = B.tmp();
+      const out = B.tmp();
+      B.line(`${integer} = fptosi double ${value} to i64`);
+      B.line(`${out} = trunc i64 ${integer} to i32`);
+      return out;
+    }
     const aboveMin = B.tmp();
     const belowMax = B.tmp();
     const fast = B.tmp();

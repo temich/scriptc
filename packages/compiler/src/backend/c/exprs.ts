@@ -838,6 +838,25 @@ function emitLiteralExpr(
   }
 }
 
+/** Unsigned operations avoid signed overflow and implementation-defined
+ * right shifts/conversions. Reinterpret the final bits numerically. */
+function emitIntegerBits(emitter: CEmitter, e: ExprOf<"bin" | "unary">, left: string, right?: string): Temp {
+  const a = `sc_bits_${emitter.tempCounter++}`;
+  const out = `sc_bits_${emitter.tempCounter++}`;
+  emitter.line(`uint32_t ${a} = (uint32_t)(int64_t)${left};`);
+  let operation: string;
+  if (e.kind === "unary") operation = `~${a}`;
+  else {
+    const b = `sc_bits_${emitter.tempCounter++}`;
+    const shift = e.op === "<<" || e.op === ">>" || e.op === ">>>";
+    emitter.line(`uint32_t ${b} = (uint32_t)(int64_t)${right}${shift ? " & 31u" : ""};`);
+    operation = e.op === ">>" ? `(${a} >> ${b}) | ((${a} & 0x80000000u) ? ~(UINT32_MAX >> ${b}) : 0u)`
+      : `${a} ${e.op === ">>>" ? ">>" : e.op} ${b}`;
+  }
+  emitter.line(`uint32_t ${out} = ${operation};`);
+  return emitter.newTemp(e.type, e.op === ">>>" ? `(double)${out}` : `(double)${out} - ((${out} & 0x80000000u) ? 4294967296.0 : 0.0)`);
+}
+
 function emitOperatorExpr(
   emitter: CEmitter,
   e: ExprOf<"bin" | "unary" | "incDec" | "fieldIncDec" | "assignExpr" | "seqExpr">,
@@ -846,6 +865,12 @@ function emitOperatorExpr(
       case "bin": {
         const l = emitter.emitExpr(e.left);
         const r = emitter.emitExpr(e.right);
+        if ((e.op === "+" || e.op === "-") && emitter.integerRanges.get(e)) {
+          return emitter.newTemp(e.type, `(double)((int64_t)${l.name} ${e.op} (int64_t)${r.name})`);
+        }
+        if (["&", "|", "^", "<<", ">>", ">>>"].includes(e.op) && emitter.integerRanges.get(e.left) && emitter.integerRanges.get(e.right)) {
+          return emitIntegerBits(emitter, e, l.name, r.name);
+        }
         switch (e.op) {
           case "%":
             return emitter.newTemp(e.type, `fmod(${l.name}, ${r.name})`);
@@ -875,7 +900,8 @@ function emitOperatorExpr(
       }
       case "unary": {
         const v = emitter.emitExpr(e.operand);
-        if (e.op === "~") return emitter.newTemp(e.type, `scr_bit_not(${v.name})`);
+        if (e.op === "~") return emitter.integerRanges.get(e.operand)
+          ? emitIntegerBits(emitter, e, v.name) : emitter.newTemp(e.type, `scr_bit_not(${v.name})`);
         return emitter.newTemp(e.type, `${e.op}${v.name}`);
       }
       case "incDec": {

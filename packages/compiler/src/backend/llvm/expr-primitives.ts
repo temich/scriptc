@@ -98,14 +98,25 @@ export function emitOperatorExpr(host: LlvmEmitterContext, e: ExprOf<"bin" | "un
           B.line(`${t} = icmp ${e.op === "===" ? "eq" : "ne"} ptr ${l.name}, ${r.name}`);
         } else if (arith[e.op] !== undefined || cmp[e.op] !== undefined) {
           if (e.left.type.kind !== "f64") throw new LlvmUnsupportedError(`bin:${e.op}:${e.left.type.kind}`, e.loc);
-          if (arith[e.op] !== undefined) B.line(`${t} = ${arith[e.op]} double ${l.name}, ${r.name}`);
+          if ((e.op === "+" || e.op === "-") && host.integerRanges.get(e)) {
+            const left = B.tmp();
+            const right = B.tmp();
+            const result = B.tmp();
+            // Every signed i54 value is exactly representable as a double.
+            // Exposing that width lets LLVM cancel later number/integer
+            // round trips. The proven safe result cannot overflow i54.
+            B.line(`${left} = fptosi double ${l.name} to i54`);
+            B.line(`${right} = fptosi double ${r.name} to i54`);
+            B.line(`${result} = ${e.op === "+" ? "add" : "sub"} nsw i54 ${left}, ${right}`);
+            B.line(`${t} = sitofp i54 ${result} to double`);
+          } else if (arith[e.op] !== undefined) B.line(`${t} = ${arith[e.op]} double ${l.name}, ${r.name}`);
           else B.line(`${t} = fcmp ${cmp[e.op]} double ${l.name}, ${r.name}`);
         } else if (bit[e.op] !== undefined) {
           if (e.left.type.kind !== "f64" || e.right.type.kind !== "f64") {
             throw new LlvmUnsupportedError(`bin:${e.op}:${e.left.type.kind}:${e.right.type.kind}`, e.loc);
           }
-          const left = host.emitToUint32(l.name);
-          let right = host.emitToUint32(r.name);
+          const left = host.emitToUint32(l.name, e.left);
+          let right = host.emitToUint32(r.name, e.right);
           if (e.op === "<<" || e.op === ">>" || e.op === ">>>") {
             const shift = B.tmp();
             B.line(`${shift} = and i32 ${right}, 31`);
@@ -128,7 +139,7 @@ export function emitOperatorExpr(host: LlvmEmitterContext, e: ExprOf<"bin" | "un
         if (e.op === "-") B.line(`${t} = fneg double ${v.name}`);
         else if (e.op === "!") B.line(`${t} = xor i1 ${v.name}, true`);
         else {
-          const value = host.emitToUint32(v.name);
+          const value = host.emitToUint32(v.name, e.operand);
           const result = B.tmp();
           B.line(`${result} = xor i32 ${value}, -1`);
           B.line(`${t} = sitofp i32 ${result} to double`);

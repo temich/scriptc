@@ -6691,6 +6691,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2973-integer-bitwise-arithmetic.ts": {
+   "order": [
+    "<repo>/tests/corpus/2973-integer-bitwise-arithmetic.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"

@@ -82,6 +82,7 @@ import type {
 import { CAUGHT, ffiCallbackType, isDynTypedRefType, isFfiContextParam, isRefCounted, isUnitType, moduleEmbedsBuiltin, moduleEmbedsCompressedNpm, moduleUsesChildProcess, moduleUsesDynInvoke, moduleUsesFetch, moduleUsesFsWatch, moduleUsesHttpServer, moduleUsesNet, moduleUsesNodeTest, moduleUsesProcessEvents, moduleUsesStream, moduleUsesTls, moduleUsesTlsCa, NPM_COMPRESS_MIN, POINTER_KINDS, RUNTIME_EMITTER_CLASS, RUNTIME_ERROR_CLASSES, RUNTIME_STREAM_CLASSES, typeKey, VOID } from "../../ir/ir.js";
 import { matchIntegerBytesForLoop } from "../../ir/integer-loops.js";
 import { scalarizeNumericRecords } from "../../ir/scalar-records.js";
+import { analyzeIntegerRanges, type IntegerRanges } from "../../ir/integer-ranges.js";
 import { findConstantNumericTables, type ConstantNumericTable } from "../../ir/constant-tables.js";
 import { allocateFfiCallbackAdapters, hasForeignFfiCallback, hasRetainedFfiCallback, type FfiCallbackAdapter } from "../ffi-callbacks.js";
 import { RUNTIME_ABI_MARKER } from "../runtime-abi.js";
@@ -336,6 +337,7 @@ class LlEmitter {
   private captureIds = new Set<string>();
   /** Active canonical byte-loop induction bindings: local id → size_t slot. */
   private integerLoopBindings = new Map<string, string>();
+  private integerRanges: IntegerRanges = new Map();
   /** Enclosing try-with-FINALLY regions, innermost last: a `return`
    * inside one runs every crossed finally (innermost first) before the
    * actual ret — the C emitter's pending-return path, with the finally
@@ -2972,6 +2974,7 @@ class LlEmitter {
     this.currentLocals = new Map(fn.locals.map((l) => [l.id, l]));
     this.captureIds = new Set((fn.captures ?? []).map((c) => c.localId));
     this.integerLoopBindings.clear();
+    this.integerRanges = analyzeIntegerRanges(fn);
     this.chainSlots.clear();
     this.finallyStack = [];
     this.tryStack = [];
@@ -4356,8 +4359,8 @@ class LlEmitter {
     return emitBytesGet(this.expressionContext(), elem, receiver, index, integerIndex);
   }
 
-  private emitToUint32(value: string): string {
-    return emitToUint32(this.expressionContext(), value);
+  private emitToUint32(value: string, expr?: IrExpr): string {
+    return emitToUint32(this.expressionContext(), value, expr);
   }
 
   private emitBytesSet(elem: IrBytesElem, receiver: string, index: string, value: string, integerIndex = false): void {
