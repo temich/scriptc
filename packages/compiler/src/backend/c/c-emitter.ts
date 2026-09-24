@@ -42,6 +42,7 @@ import type {
 } from "../../ir/ir.js";
 import { ffiCallbackType, funcOf, isFfiCallbackParam, isFfiContextParam, isFfiReleaseParam, isRefCounted, isUnitType, mapOf, moduleEmbedsCompressedNpm, moduleUsesChildProcess, moduleUsesDgram, moduleUsesDynInvoke, moduleEmbedsBuiltin, moduleUsesFetch, moduleUsesFsWatch, moduleUsesHttp2, moduleUsesHttpServer, moduleUsesNet, moduleUsesNodeTest, moduleUsesProcessEvents, moduleUsesStream, moduleUsesTls, moduleUsesTlsCa, POINTER_KINDS, type PointerKind, RUNTIME_EMITTER_CLASS, STRING, VOID } from "../../ir/ir.js";
 import { undefinedArmTag } from "../../ir/analysis.js";
+import { scalarizeNumericRecords } from "../../ir/scalar-records.js";
 import { allocateFfiCallbackAdapters, hasForeignFfiCallback, hasRetainedFfiCallback, type FfiCallbackAdapter } from "../ffi-callbacks.js";
 import {
   mangleAsyncSpawn,
@@ -77,7 +78,7 @@ export function emitCModule(
   sourceText?: string,
   options: CEmitOptions = {},
 ): string {
-  return new CEmitter(mod, sourceText, options).emit();
+  return new CEmitter(scalarizeNumericRecords(mod), sourceText, options).emit();
 }
 
 // Box construction moved onto CEmitter (boxNewC method): obj-kind boxes now
