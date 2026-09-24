@@ -43,6 +43,7 @@ import type {
 import { ffiCallbackType, funcOf, isFfiCallbackParam, isFfiContextParam, isFfiReleaseParam, isRefCounted, isUnitType, mapOf, moduleEmbedsCompressedNpm, moduleUsesChildProcess, moduleUsesDgram, moduleUsesDynInvoke, moduleEmbedsBuiltin, moduleUsesFetch, moduleUsesFsWatch, moduleUsesHttp2, moduleUsesHttpServer, moduleUsesNet, moduleUsesNodeTest, moduleUsesProcessEvents, moduleUsesStream, moduleUsesTls, moduleUsesTlsCa, POINTER_KINDS, type PointerKind, RUNTIME_EMITTER_CLASS, STRING, VOID } from "../../ir/ir.js";
 import { undefinedArmTag } from "../../ir/analysis.js";
 import { scalarizeNumericRecords } from "../../ir/scalar-records.js";
+import { findConstantNumericTables, type ConstantNumericTable } from "../../ir/constant-tables.js";
 import { allocateFfiCallbackAdapters, hasForeignFfiCallback, hasRetainedFfiCallback, type FfiCallbackAdapter } from "../ffi-callbacks.js";
 import {
   mangleAsyncSpawn,
@@ -57,7 +58,7 @@ import {
   mangleVtSlot,
   mangleWrapper,
 } from "../mangle.js";
-import { cCommentText, cFnPtrCast, cType, releaseCallC, cStringLiteral, cDecl } from "./types.js";
+import { cCommentText, cFnPtrCast, cType, releaseCallC, cStringLiteral, cDecl, cNumberLiteral } from "./types.js";
 import { computeMayThrow } from "./may-throw.js";
 import { unionTruthyHelper, unionEqHelper, unionToStrHelper, unionJoinHelper, jsonWriteHelper, jsonIndentHelper, dynMatchHelper, dynCheckHelper, dynFuncBoxHelper, dynToStrHelper, caughtToDynHelper, toDynHelper, recordKeyGetHelper, recordKeySetHelper } from "./walkers.js";
 import { VtSlot, ClassMeta, emitStructDefs, vtEntriesFor, vtSlotParams, emitVtableDecls, emitVtableInstances, emitVtAdapterDefs, emitHierarchyClassHelpers, emitClassObjs, emitCtorThunkDefs, errorVtStampLines, emitterVtStampLines, streamVtStampLines, traceAdapterC, traceArgC, boxNewC, arrNewC } from "./shapes.js";
@@ -267,6 +268,7 @@ export class CEmitter {
   readonly ffiHasRetainedCallback: boolean;
   readonly ffiHasForeignCallback: boolean;
   readonly globalsById = new Map<string, IrGlobal>();
+  readonly constantNumericTables: ReadonlyMap<string, ConstantNumericTable>;
   readonly unionsById = new Map<string, IrUnionDef>();
   /** Active optional-chain bind temps, by chain id (chainRecv reads). */
   readonly chainTemps = new Map<string, Temp>();
@@ -436,6 +438,7 @@ export class CEmitter {
     sourceText?: string,
     private readonly options: CEmitOptions = {},
   ) {
+    this.constantNumericTables = findConstantNumericTables(mod);
     this.ffiCallbackAdapters = allocateFfiCallbackAdapters(mod.ffiImports ?? []);
     this.ffiHasRetainedCallback = hasRetainedFfiCallback(mod.ffiImports ?? []);
     this.ffiHasForeignCallback = hasForeignFfiCallback(mod.ffiImports ?? []);
@@ -684,6 +687,20 @@ export class CEmitter {
       ``,
     ];
     out.push(...this.emitBytesElementHelpers());
+    for (const table of this.constantNumericTables.values()) {
+      out.push(
+        `static const double ${table.symbol}[] = { ${table.values.map(cNumberLiteral).join(", ")} };`,
+        `static inline double ${table.symbol}_get(const ScrArr *a, double i) {`,
+        // Range checks precede the conversion: NaN, infinities and large
+        // numbers must never reach a C float-to-integer conversion.
+        `  if (a != NULL && i >= 0.0 && i < ${table.values.length}.0) {`,
+        `    size_t index = (size_t)i;`,
+        `    if ((double)index == i) return ${table.symbol}[index];`,
+        `  }`,
+        `  return scr_arr_get_number(a, i);`,
+        `}`, ``,
+      );
+    }
     // Struct defs render into their own buffer BEFORE the unit-instance
     // table flushes: class newFns point undefined-armed union fields at
     // interned unit instances (fields start as JS's undefined, not NULL),

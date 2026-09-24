@@ -6666,6 +6666,19 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2970-constant-numeric-tables.ts": {
+   "order": [
+    "<repo>/tests/corpus/2970-constant-numeric-tables.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2971-constant-table-modules/main.ts": {
+   "order": [
+    "<repo>/tests/corpus/2971-constant-table-modules/tables.ts",
+    "<repo>/tests/corpus/2971-constant-table-modules/main.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
