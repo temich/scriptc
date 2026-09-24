@@ -2228,6 +2228,7 @@ declare module "net" {
     once(event: "session", listener: (session: Buffer) => void): void;
   }
   export interface Server {
+    readonly listening: boolean;
     /* Node answers the server itself (`return this` chaining). */
     listen(port: number, callback?: () => void): Server;
     /* The positional bind address (the options form's host in argument
@@ -2356,6 +2357,8 @@ declare module "http" {
   export interface IncomingMessage {
     readonly url: string;
     readonly method: string;
+    readonly httpVersion: string;
+    readonly complete: boolean;
     readonly statusCode: number | undefined;
     readonly statusMessage: string | undefined;
     readonly socket: Socket;
@@ -2372,7 +2375,7 @@ declare module "http" {
     setEncoding(encoding: string): void;
     /* The proxy legs: the body streams into a ServerResponse, a
      * ClientRequest, or a raw Socket; natural end ends the destination. */
-    pipe(destination: ServerResponse | ClientRequest | Socket): void;
+    pipe(destination: ServerResponse | import("http2").Http2ServerResponse | ClientRequest | Socket): void;
     on(event: "data", listener: (chunk: any) => void): void;
     on(event: "end" | "close", listener: () => void): void;
     on(event: "error", listener: (err: Error) => void): void;
@@ -2386,18 +2389,25 @@ declare module "http" {
   }
   export interface ServerResponse {
     readonly headersSent: boolean;
+    readonly writableEnded: boolean;
     readonly writableCorked: number;
     /* Node's writable head properties: the implicit head reads them. */
     statusCode: number;
     statusMessage: string;
     setHeader(name: string, value: string | number): void;
     getHeader(name: string): string | undefined;
+    getHeaderNames(): string[];
+    getRawHeaderNames(): string[];
+    getHeaders(): OutgoingHttpHeaders;
     hasHeader(name: string): boolean;
     removeHeader(name: string): void;
     /* Both overloads answer the response (`return this` chaining); the
      * headers argument also takes Node's flat [name, value, ...] array. */
     writeHead(statusCode: number, headers?: OutgoingHttpHeaders | string[]): ServerResponse;
     writeHead(statusCode: number, statusMessage: string, headers?: OutgoingHttpHeaders | string[]): ServerResponse;
+    writeContinue(callback?: () => void): void;
+    writeProcessing(callback?: () => void): void;
+    writeEarlyHints(hints: Record<string, string | string[]>, callback?: () => void): void;
     write(data: string | Uint8Array): void;
     flushHeaders(): void;
     cork(): void;
@@ -2479,6 +2489,19 @@ declare module "http" {
   export interface ClientRequest {
     readonly destroyed: boolean;
     readonly writableCorked: number;
+    readonly method: string;
+    readonly path: string;
+    readonly host: string;
+    readonly protocol: string;
+    readonly headersSent: boolean;
+    readonly writableEnded: boolean;
+    setHeader(name: string, value: string): void;
+    getHeader(name: string): string | undefined;
+    hasHeader(name: string): boolean;
+    removeHeader(name: string): void;
+    getHeaderNames(): string[];
+    getRawHeaderNames(): string[];
+    getHeaders(): OutgoingHttpHeaders;
     flushHeaders(): void;
     addTrailers(headers: OutgoingHttpHeaders | ReadonlyArray<[string, string]>): void;
     cork(): void;
@@ -2528,6 +2551,8 @@ declare module "http" {
     target: RequestOptions | string | URL,
     callback?: (res: IncomingMessage) => void,
   ): ClientRequest;
+  export function validateHeaderName(name: string, label?: string): void;
+  export function validateHeaderValue(name: string, value: unknown): void;
 }
 declare module "node:http" {
   export * from "http";
@@ -2700,6 +2725,7 @@ declare module "http2" {
   }
   export interface Http2ServerResponse {
     readonly headersSent: boolean;
+    readonly writableEnded: boolean;
     readonly writableCorked: number;
     /* The same lowered surface as http.ServerResponse — the allowHTTP1
      * lowering serves every connection as HTTP/1.1, where the compat
@@ -2708,10 +2734,15 @@ declare module "http2" {
     statusMessage: string;
     setHeader(name: string, value: string | number): void;
     getHeader(name: string): string | undefined;
+    getHeaderNames(): string[];
+    getRawHeaderNames(): string[];
+    getHeaders(): import("http").OutgoingHttpHeaders;
     hasHeader(name: string): boolean;
     removeHeader(name: string): void;
     writeHead(statusCode: number, headers?: import("http").OutgoingHttpHeaders | string[]): Http2ServerResponse;
     writeHead(statusCode: number, statusMessage: string, headers?: import("http").OutgoingHttpHeaders | string[]): Http2ServerResponse;
+    writeContinue(): void;
+    writeEarlyHints(hints: Record<string, string | string[]>): void;
     write(data: string | Uint8Array): void;
     flushHeaders(): void;
     cork(): void;

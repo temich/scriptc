@@ -506,9 +506,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 40,
+        "partial": 70,
         "refused": 0,
-        "not-implemented": 134,
+        "not-implemented": 104,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -45933,9 +45933,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -45961,9 +45961,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -45989,9 +45989,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46017,9 +46017,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46045,9 +46045,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46073,9 +46073,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -46101,9 +46101,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "partial",
@@ -46381,9 +46381,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46409,9 +46409,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46437,9 +46437,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46465,9 +46465,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -46549,9 +46549,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -47109,9 +47109,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -47725,9 +47725,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -47753,9 +47753,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static outgoing header reads and mutations support the tested string-value shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -47949,9 +47949,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP/1.1 informational responses support the tested no-callback forms; Early Hints accepts string-valued fields.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -47977,9 +47977,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP/1.1 informational responses support the tested no-callback forms; Early Hints accepts string-valued fields.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48033,9 +48033,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP/1.1 informational responses support the tested no-callback forms; Early Hints accepts string-valued fields.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48117,9 +48117,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48229,9 +48229,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48313,9 +48313,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48537,9 +48537,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48649,9 +48649,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48677,9 +48677,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48789,9 +48789,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48901,9 +48901,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -49517,9 +49517,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -49601,9 +49601,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static HTTP request metadata and message state support the tested lifecycle.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -49993,9 +49993,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static header validation is implemented for the tested call shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -50021,9 +50021,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static header validation is implemented for the tested call shapes.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",

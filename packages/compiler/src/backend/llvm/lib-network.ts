@@ -242,7 +242,7 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       B.line(`${raw} = call ptr @scr_net_sock_read_bytes(ptr ${args[0]!.name}, double ${args[1]!.name}) ; +1 or NULL`);
       return host.wrapNullable(raw, raw, def!.arms[bytesTag]!, bytesTag, e.type, nullTag);
     }
-    if (e.fn === "net.sockRemoteAddress" || e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader" || e.fn === "http.reqStatusMessage") {
+    if (e.fn === "net.sockRemoteAddress" || e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader" || e.fn === "http.clientGetHeader" || e.fn === "http.reqStatusMessage") {
       // string | undefined: +1 or NULL, NULL takes the undefined arm.
       if (e.type.kind !== "union") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} result is not a union`);
       const def = host.unionsById.get(e.type.unionId);
@@ -254,6 +254,7 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
         "http.reqHeader": "scr_http_req_header",
         "http.reqTrailer": "scr_http_req_trailer",
         "http.resGetHeader": "scr_http_res_get_header",
+        "http.clientGetHeader": "scr_http_client_get_header",
         "http.reqStatusMessage": "scr_http_req_status_message",
       }[e.fn]!;
       const args = e.args.map((a) => host.emitExpr(a));

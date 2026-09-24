@@ -8,8 +8,8 @@
     "tiers": {
       "static": {
         "replace-refusal": 46,
-        "verify-gap": 2672,
-        "audit-partial": 494,
+        "verify-gap": 2642,
+        "audit-partial": 524,
         "classify": 2,
         "implement": 81
       },
@@ -47149,12 +47149,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.getHeader",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -47184,12 +47186,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.getHeaderNames",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47217,12 +47221,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.getHeaders",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47250,12 +47256,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.getRawHeaderNames",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47283,12 +47291,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.hasHeader",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47316,12 +47326,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.removeHeader",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -47351,12 +47363,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.request.setHeader",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "partial",
@@ -47700,12 +47714,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.path",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47733,12 +47749,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.method",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47766,12 +47784,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.host",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47799,12 +47819,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.protocol",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -47898,12 +47920,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.writableEnded",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -48568,12 +48592,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.listening",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49333,12 +49359,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.getHeaderNames",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49366,12 +49394,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.getHeaders",
+          "tests": [
+            "tests/corpus/2954-http-outgoing-headers.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49618,12 +49648,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.writeContinue",
+          "tests": [
+            "tests/corpus/2956-http-static-informational.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49651,12 +49683,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.writeEarlyHints",
+          "tests": [
+            "tests/corpus/2956-http-static-informational.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49721,12 +49755,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.response.writeProcessing",
+          "tests": [
+            "tests/corpus/2956-http-static-informational.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49820,12 +49856,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.headersSent",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -49952,12 +49990,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.statusCode",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50051,12 +50091,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.writableEnded",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50319,12 +50361,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.complete",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50456,12 +50500,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.httpVersion",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50489,12 +50535,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.method",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50626,12 +50674,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.statusCode",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -50768,12 +50818,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.url",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -51514,12 +51566,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.headersSent",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -51618,12 +51672,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.writableEnded",
+          "tests": [
+            "tests/corpus/2955-http-static-state.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -52108,12 +52164,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.http.validateHeaderName",
+          "tests": [
+            "tests/corpus/2953-http-header-validation.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",
@@ -52141,12 +52199,14 @@
       "priority": "high",
       "tiers": {
         "static": {
-          "status": "not-implemented",
-          "action": "verify-gap",
-          "verification": "registry-gap",
-          "confidence": "low",
-          "source": "compiler-unmatched:http",
-          "tests": []
+          "status": "partial",
+          "action": "audit-partial",
+          "verification": "test-backed",
+          "confidence": "high",
+          "source": "compiler-feature:http.http.validateHeaderValue",
+          "tests": [
+            "tests/corpus/2953-http-header-validation.ts"
+          ]
         },
         "dynamic": {
           "status": "not-implemented",

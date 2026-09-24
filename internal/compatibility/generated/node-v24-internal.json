@@ -555,9 +555,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 40,
+        "partial": 70,
         "refused": 0,
-        "not-implemented": 134,
+        "not-implemented": 104,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -62161,6 +62161,10 @@
           "tests/corpus/2700-http-static-trailers.ts",
           "tests/corpus/2701-http-static-trailer-wire.ts",
           "tests/corpus/2702-http-static-trailer-end.ts",
+          "tests/corpus/2953-http-header-validation.ts",
+          "tests/corpus/2954-http-outgoing-headers.ts",
+          "tests/corpus/2955-http-static-state.ts",
+          "tests/corpus/2956-http-static-informational.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -62828,8 +62832,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.getHeader",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "partial",
@@ -62858,8 +62865,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.getHeaderNames",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -62885,8 +62895,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.getHeaders",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -62912,8 +62925,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.getRawHeaderNames",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -62939,8 +62955,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.hasHeader",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -62966,8 +62985,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.removeHeader",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "partial",
@@ -62996,8 +63018,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.request.setHeader",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "partial",
@@ -63291,8 +63316,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.path",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -63318,8 +63346,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.method",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -63345,8 +63376,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.host",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -63372,8 +63406,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.protocol",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -63453,8 +63490,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.writableEnded",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64006,8 +64046,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.listening",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64648,8 +64691,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.getHeaderNames",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64675,8 +64721,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.getHeaders",
+        "tests": [
+          "tests/corpus/2954-http-outgoing-headers.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64890,8 +64939,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.writeContinue",
+        "tests": [
+          "tests/corpus/2956-http-static-informational.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64917,8 +64969,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.writeEarlyHints",
+        "tests": [
+          "tests/corpus/2956-http-static-informational.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -64976,8 +65031,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.writeProcessing",
+        "tests": [
+          "tests/corpus/2956-http-static-informational.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65057,8 +65115,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.headersSent",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65165,8 +65226,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.statusCode",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65246,8 +65310,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.writableEnded",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65468,8 +65535,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.complete",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65582,8 +65652,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.httpVersion",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65609,8 +65682,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.method",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65723,8 +65799,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.statusCode",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65843,8 +65922,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.url",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66461,8 +66543,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.headersSent",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66548,8 +66633,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.writableEnded",
+        "tests": [
+          "tests/corpus/2955-http-static-state.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66963,8 +67051,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.http.validateHeaderName",
+        "tests": [
+          "tests/corpus/2953-http-header-validation.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -66990,8 +67081,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.http.validateHeaderValue",
+        "tests": [
+          "tests/corpus/2953-http-header-validation.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",

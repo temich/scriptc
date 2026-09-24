@@ -599,6 +599,23 @@ function publicDetail(tier) {
     if (source.startsWith("compiler-feature:stream.") || source.startsWith("compiler-feature:webstreams.")) {
       return "Implemented for the documented static async-iteration subset.";
     }
+    if (source.startsWith("compiler-feature:http.http.validateHeader")) {
+      return "Static header validation is implemented for the tested call shapes.";
+    }
+    if (source.startsWith("compiler-feature:http.request.getHeader") ||
+        source.startsWith("compiler-feature:http.request.getRawHeaderNames") ||
+        source.startsWith("compiler-feature:http.request.hasHeader") ||
+        source.startsWith("compiler-feature:http.request.removeHeader") ||
+        source.startsWith("compiler-feature:http.request.setHeader") ||
+        source.startsWith("compiler-feature:http.response.getHeader")) {
+      return "Static outgoing header reads and mutations support the tested string-value shapes.";
+    }
+    if (/^compiler-feature:http\.(?:path|method|host|protocol|listening|headersSent|writableEnded|complete|httpVersion|url|statusCode)$/.test(source)) {
+      return "Static HTTP request metadata and message state support the tested lifecycle.";
+    }
+    if (/^compiler-feature:http\.response\.write(?:Continue|Processing|EarlyHints)$/.test(source)) {
+      return "Static HTTP/1.1 informational responses support the tested no-callback forms; Early Hints accepts string-valued fields.";
+    }
     return "Implemented for the documented scriptc module-loader subset.";
   }
   if (source.startsWith("compiler-chapter-policy:")) {

@@ -428,6 +428,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // the callback follows the reusePort BOOL in this additive ABI.
   "net.listenOptsReusePortCb": { argTypes: [NETSERVER_T, F64, STRING, BOOL, BOOL, null], result: VOID },
   "net.serverPort": { argTypes: [NETSERVER_T], result: F64 },
+  "net.serverListening": { argTypes: [NETSERVER_T], result: BOOL },
   // net.serverAddress's record result is shape-checked in the libCall case
   // (the dgram.address sentinel pattern).
   "net.serverAddress": { argTypes: [NETSERVER_T], result: VOID },
@@ -503,6 +504,8 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // union, checked like process.envGet.
   "http.createServer": { argTypes: [null], result: NETSERVER_T },
   "http.createServerEmpty": { argTypes: [], result: NETSERVER_T },
+  "http.validateHeaderName": { argTypes: [STRING, STRING], result: VOID },
+  "http.validateHeaderValue": { argTypes: [STRING, DYN], result: VOID },
   "http.serverJoinDupHeaders": { argTypes: [NETSERVER_T], result: VOID },
   "http.serverAllowMissingHostHeader": { argTypes: [NETSERVER_T], result: VOID },
   "http.serverTimeoutGet": { argTypes: [NETSERVER_T, F64], result: F64 },
@@ -516,6 +519,9 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // resGetHeader answers the interned `string | undefined` union — the
   // reqHeader/envGet sentinel pattern (VOID here, checked specially).
   "http.resGetHeader": { argTypes: [HTTPRES_T, STRING], result: VOID },
+  "http.resGetHeaderNames": { argTypes: [HTTPRES_T], result: arrayOf(STRING) },
+  "http.resGetRawHeaderNames": { argTypes: [HTTPRES_T], result: arrayOf(STRING) },
+  "http.resGetHeaders": { argTypes: [HTTPRES_T], result: DYN },
   "http.resHasHeader": { argTypes: [HTTPRES_T, STRING], result: BOOL },
   "http.resRemoveHeader": { argTypes: [HTTPRES_T, STRING], result: VOID },
   "http.resOnFinish": { argTypes: [HTTPRES_T, { kind: "func", params: [], ret: VOID }], result: VOID },
@@ -530,6 +536,9 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "http.resSetHeader": { argTypes: [HTTPRES_T, STRING, STRING], result: VOID },
   "http.resWriteHead": { argTypes: [HTTPRES_T, F64], result: VOID },
   "http.resWriteHeadN": { argTypes: [HTTPRES_T, F64, arrayOf(STRING), arrayOf(STRING)], result: VOID },
+  "http.resWriteContinue": { argTypes: [HTTPRES_T], result: VOID },
+  "http.resWriteProcessing": { argTypes: [HTTPRES_T], result: VOID },
+  "http.resWriteEarlyHints": { argTypes: [HTTPRES_T, arrayOf(STRING)], result: VOID },
   "http.resWrite": { argTypes: [HTTPRES_T, STRING], result: VOID },
   "http.resWriteBytes": { argTypes: [HTTPRES_T, BYTES_U8], result: VOID },
   "http.resEnd": { argTypes: [HTTPRES_T], result: VOID },
@@ -538,6 +547,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "http.resWriteDyn": { argTypes: [HTTPRES_T, DYN], result: VOID },
   "http.resEndDyn": { argTypes: [HTTPRES_T, DYN], result: VOID },
   "http.resHeadersSent": { argTypes: [HTTPRES_T], result: BOOL },
+  "http.resWritableEnded": { argTypes: [HTTPRES_T], result: BOOL },
   "http.resFlushHeaders": { argTypes: [HTTPRES_T], result: VOID },
   "http.resAddTrailers": { argTypes: [HTTPRES_T, arrayOf(STRING)], result: VOID },
   "http.resCork": { argTypes: [HTTPRES_T], result: VOID },
@@ -742,6 +752,13 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "https.requestFn": { argTypes: [BOOL, STRING, F64, STRING, STRING, F64, arrayOf(STRING), BOOL, BOOL, null], result: HTTPCLIENTREQ_T },
   "https.requestFnCb": { argTypes: [BOOL, STRING, F64, STRING, STRING, F64, arrayOf(STRING), BOOL, BOOL, null, null], result: HTTPCLIENTREQ_T },
   "http.clientWrite": { argTypes: [HTTPCLIENTREQ_T, STRING], result: VOID },
+  "http.clientSetHeader": { argTypes: [HTTPCLIENTREQ_T, STRING, STRING], result: VOID },
+  "http.clientGetHeader": { argTypes: [HTTPCLIENTREQ_T, STRING], result: VOID },
+  "http.clientHasHeader": { argTypes: [HTTPCLIENTREQ_T, STRING], result: BOOL },
+  "http.clientRemoveHeader": { argTypes: [HTTPCLIENTREQ_T, STRING], result: VOID },
+  "http.clientGetHeaderNames": { argTypes: [HTTPCLIENTREQ_T], result: arrayOf(STRING) },
+  "http.clientGetRawHeaderNames": { argTypes: [HTTPCLIENTREQ_T], result: arrayOf(STRING) },
+  "http.clientGetHeaders": { argTypes: [HTTPCLIENTREQ_T], result: DYN },
   "http.clientWriteBytes": { argTypes: [HTTPCLIENTREQ_T, BYTES_U8], result: VOID },
   "http.clientEnd": { argTypes: [HTTPCLIENTREQ_T], result: VOID },
   "http.clientEndStr": { argTypes: [HTTPCLIENTREQ_T, STRING], result: VOID },
@@ -753,6 +770,12 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "http.clientCork": { argTypes: [HTTPCLIENTREQ_T], result: VOID },
   "http.clientUncork": { argTypes: [HTTPCLIENTREQ_T], result: VOID },
   "http.clientWritableCorked": { argTypes: [HTTPCLIENTREQ_T], result: F64 },
+  "http.clientMethod": { argTypes: [HTTPCLIENTREQ_T], result: STRING },
+  "http.clientPath": { argTypes: [HTTPCLIENTREQ_T], result: STRING },
+  "http.clientHost": { argTypes: [HTTPCLIENTREQ_T], result: STRING },
+  "http.clientProtocol": { argTypes: [HTTPCLIENTREQ_T], result: STRING },
+  "http.clientHeadersSent": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
+  "http.clientWritableEnded": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
   "http.clientDestroy": { argTypes: [HTTPCLIENTREQ_T], result: VOID },
   "http.clientDestroyed": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
   "http.clientOnResponse": { argTypes: [HTTPCLIENTREQ_T, null, BOOL], result: VOID },
@@ -4235,7 +4258,7 @@ function validateFunction(
           if (!ok) err(`libCall http.reqH2Stream must return the 'Http2Stream | undefined' union`, e.loc);
           break;
         }
-        if (e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader") {
+        if (e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader" || e.fn === "http.clientGetHeader") {
           // Result is the interned `string | undefined` union (envGet's).
           const def = e.type.kind === "union" ? unions.get(e.type.unionId) : undefined;
           const ok =

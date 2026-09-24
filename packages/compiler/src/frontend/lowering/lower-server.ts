@@ -2057,6 +2057,10 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
   // req.headers.NAME — the `string | undefined` union (envGet's type).
   const recvKind = lowerer.mapTypeOf(lowerer.typeOf(expr.expression))?.kind;
   if (recvKind === "netServer" && lowerer.isStdlibMember(expr)) {
+    if (expr.name.text === "listening") {
+      const receiver = coerceToHandle(lowerer, expr.expression, NETSERVER_T);
+      return { kind: "libCall", fn: "net.serverListening", args: [receiver], type: BOOL, loc };
+    }
     const field = httpServerTimeoutField(expr.name.text);
     if (field !== null) {
       const receiver = coerceToHandle(lowerer, expr.expression, NETSERVER_T);
@@ -2245,6 +2249,23 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
     return { kind: "libCall", fn: "http.clientWritableCorked", args: [receiver], type: F64, loc };
   }
+  if (recvKind === "httpClientReq" && lowerer.isStdlibMember(expr)) {
+    const name = expr.name.text;
+    const strFn: IrLibFn | null = name === "method" ? "http.clientMethod"
+      : name === "path" ? "http.clientPath"
+      : name === "host" ? "http.clientHost"
+      : name === "protocol" ? "http.clientProtocol" : null;
+    if (strFn !== null) {
+      const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
+      return { kind: "libCall", fn: strFn, args: [receiver], type: STRING, loc };
+    }
+    const boolFn: IrLibFn | null = name === "headersSent" ? "http.clientHeadersSent"
+      : name === "writableEnded" ? "http.clientWritableEnded" : null;
+    if (boolFn !== null) {
+      const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
+      return { kind: "libCall", fn: boolFn, args: [receiver], type: BOOL, loc };
+    }
+  }
   if (httpReqFieldCollection(lowerer, expr.expression) !== null) {
     const collection = httpReqFieldCollection(lowerer, expr.expression)!;
     const receiver = coerceToHandle(lowerer, (expr.expression as ts.PropertyAccessExpression).expression, HTTPREQ_T);
@@ -2258,6 +2279,10 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "headersSent") {
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
     return { kind: "libCall", fn: "http.resHeadersSent", args: [receiver], type: BOOL, loc };
+  }
+  if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "writableEnded") {
+    const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+    return { kind: "libCall", fn: "http.resWritableEnded", args: [receiver], type: BOOL, loc };
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "writableCorked") {
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
@@ -2706,6 +2731,26 @@ export function lowerHttpServerNew(lowerer: Lowerer, expr: ts.NewExpression): Ir
 function lowerHttpModuleCall(lowerer: Lowerer, expr: ts.CallExpression,
   bi: { module: string; member: string },
   loc: SrcLoc,): IrExpr {
+  if (bi.member === "validateHeaderName") {
+    requireStatementPosition(lowerer, expr, "http.validateHeaderName(...)");
+    if (expr.arguments.length < 1 || expr.arguments.length > 2 || expr.arguments.some(ts.isSpreadElement)) {
+      lowerer.noLowering("http.validateHeaderName arguments", expr, "pass a header name and an optional label");
+    }
+    const name = lowerer.lowerExprExpecting(expr.arguments[0]!, STRING);
+    const label = expr.arguments.length === 2
+      ? lowerer.lowerExprExpecting(expr.arguments[1]!, STRING)
+      : strLit("Header name", loc);
+    return { kind: "libCall", fn: "http.validateHeaderName", args: [name, label], type: VOID, loc };
+  }
+  if (bi.member === "validateHeaderValue") {
+    requireStatementPosition(lowerer, expr, "http.validateHeaderValue(...)");
+    if (expr.arguments.length !== 2 || expr.arguments.some(ts.isSpreadElement)) {
+      lowerer.noLowering("http.validateHeaderValue arguments", expr, "pass a header name and a value");
+    }
+    const name = lowerer.lowerExprExpecting(expr.arguments[0]!, STRING);
+    const value = lowerer.lowerExprExpecting(expr.arguments[1]!, DYN);
+    return { kind: "libCall", fn: "http.validateHeaderValue", args: [name, value], type: VOID, loc };
+  }
   if (bi.member === "createServer" || bi.member === "Server") {
     return lowerHttpCreateServerForms(lowerer, expr, `http.${bi.member}`, loc);
   }
@@ -2715,7 +2760,7 @@ function lowerHttpModuleCall(lowerer: Lowerer, expr: ts.CallExpression,
   lowerer.noLowering(
     `http.${bi.member}`,
     expr,
-    "createServer, Server, request, and get are the lowered http module functions",
+    "createServer, Server, request, get, validateHeaderName, and validateHeaderValue are the lowered http module functions",
     lowerer.resolveValueSymbol(expr.expression as ts.Identifier),
   );
 }
@@ -4235,6 +4280,31 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "setHeader") {
+    requireStatementPosition(lowerer, call, "request.setHeader(...)");
+    if (args.length !== 2) lowerer.noLowering("request.setHeader arguments", call, "pass a name and string value");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const header = lowerer.lowerExprExpecting(args[0]!, STRING);
+    const value = lowerer.lowerExprExpecting(args[1]!, STRING);
+    return { kind: "libCall", fn: "http.clientSetHeader", args: [receiver, header, value], type: VOID, loc };
+  }
+  if (name === "getHeader" || name === "hasHeader" || name === "removeHeader") {
+    if (name === "removeHeader") requireStatementPosition(lowerer, call, "request.removeHeader(...)");
+    if (args.length !== 1) lowerer.noLowering(`request.${name} arguments`, call, `pass one header name`);
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const header = lowerer.lowerExprExpecting(args[0]!, STRING);
+    const fn: IrLibFn = name === "getHeader" ? "http.clientGetHeader"
+      : name === "hasHeader" ? "http.clientHasHeader" : "http.clientRemoveHeader";
+    const type = name === "getHeader" ? lowerer.envValueType() : name === "hasHeader" ? BOOL : VOID;
+    return { kind: "libCall", fn, args: [receiver, header], type, loc };
+  }
+  if (name === "getHeaderNames" || name === "getRawHeaderNames" || name === "getHeaders") {
+    if (args.length !== 0) lowerer.noLowering(`request.${name} arguments`, call, `${name}() takes no arguments`);
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const fn: IrLibFn = name === "getHeaderNames" ? "http.clientGetHeaderNames"
+      : name === "getRawHeaderNames" ? "http.clientGetRawHeaderNames" : "http.clientGetHeaders";
+    return { kind: "libCall", fn, args: [receiver], type: name === "getHeaders" ? DYN : arrayOf(STRING), loc };
+  }
   if (name === "flushHeaders" || name === "cork" || name === "uncork") {
     requireStatementPosition(lowerer, call, `request.${name}()`);
     if (args.length !== 0) lowerer.noLowering(`request.${name} with arguments`, call, `${name}() takes no arguments`);
@@ -4359,7 +4429,7 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   lowerer.noLowering(
     `ClientRequest.${name}`,
     call,
-    "write, end, destroy, destroyed, and on/once of response/error/timeout/close are the supported ClientRequest members",
+    "header reads/mutations, write, end, destroy, and on/once of response/error/timeout/close are the supported ClientRequest members",
     lowerer.checker.getSymbolAtLocation(access.name),
   );
 }
@@ -4564,6 +4634,53 @@ function lowerHttpResMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "writeContinue" || name === "writeProcessing" || name === "writeEarlyHints") {
+    requireStatementPosition(lowerer, call, `res.${name}(...)`);
+    if (lowerer.typeOf(access.expression).getSymbol()?.name === "Http2ServerResponse") {
+      lowerer.noLowering(`Http2ServerResponse.${name}`, call, "HTTP/2 informational responses are not supported by the static runtime yet");
+    }
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPRES_T);
+    if (name !== "writeEarlyHints") {
+      if (args.length !== 0) lowerer.noLowering(`res.${name} callback`, call, `${name}() supports no callback here`);
+      return { kind: "libCall", fn: name === "writeContinue" ? "http.resWriteContinue" : "http.resWriteProcessing", args: [receiver], type: VOID, loc };
+    }
+    if (args.length !== 1) lowerer.noLowering("res.writeEarlyHints arguments", call, "pass one header object or Record<string, string> without a callback");
+    const node = args[0]!;
+    let pairs: IrExpr;
+    if (ts.isObjectLiteralExpression(node)) {
+      const elems: IrExpr[] = [];
+      for (const prop of node.properties) {
+        const key = ts.isPropertyAssignment(prop) ? staticHeaderKeyOf(lowerer, prop) : null;
+        if (!ts.isPropertyAssignment(prop) || key === null) {
+          lowerer.noLowering("writeEarlyHints headers with dynamic keys, spreads, or shorthand entries", prop, "use literal header keys and string values");
+        }
+        const value = lowerer.lowerExpr(prop.initializer);
+        if (value.type.kind !== "string") {
+          lowerer.noLowering(`writeEarlyHints value of type '${lowerer.fmt(value.type)}'`, prop.initializer, "header values must be strings here");
+        }
+        elems.push({ kind: "strLit", value: key, type: STRING, loc }, value);
+      }
+      pairs = { kind: "arrayLit", elems, type: arrayOf(STRING), loc };
+    } else {
+      const value = lowerer.lowerExpr(node);
+      if (value.type.kind !== "record") {
+        lowerer.noLowering(`writeEarlyHints headers of '${lowerer.fmt(value.type)}'`, node, "pass an object literal or a Record<string, string>");
+      }
+      const helper = lowerer.envToPairsHelper(value.type.shapeId, loc);
+      if (helper === null) {
+        lowerer.noLowering("writeEarlyHints header values", node, "use a Record<string, string> with string values");
+      }
+      pairs = { kind: "call", callee: helper, args: [value], type: arrayOf(STRING), loc };
+    }
+    return { kind: "libCall", fn: "http.resWriteEarlyHints", args: [receiver, pairs], type: VOID, loc };
+  }
+  if (name === "getHeaderNames" || name === "getRawHeaderNames" || name === "getHeaders") {
+    if (args.length !== 0) lowerer.noLowering(`res.${name} arguments`, call, `${name}() takes no arguments`);
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPRES_T);
+    const fn: IrLibFn = name === "getHeaderNames" ? "http.resGetHeaderNames"
+      : name === "getRawHeaderNames" ? "http.resGetRawHeaderNames" : "http.resGetHeaders";
+    return { kind: "libCall", fn, args: [receiver], type: name === "getHeaders" ? DYN : arrayOf(STRING), loc };
+  }
   if (name === "flushHeaders" || name === "cork" || name === "uncork") {
     requireStatementPosition(lowerer, call, `res.${name}()`);
     if (args.length !== 0) lowerer.noLowering(`res.${name} with arguments`, call, `${name}() takes no arguments`);
@@ -4857,7 +4974,7 @@ function lowerHttpResMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   lowerer.noLowering(
     `ServerResponse.${name}`,
     call,
-    "setHeader, getHeader, hasHeader, removeHeader, writeHead, write, end, destroy, headersSent, statusCode, statusMessage, and on/once of close are the supported ServerResponse members",
+    "setHeader, getHeader, hasHeader, removeHeader, writeHead, writeContinue, writeProcessing, writeEarlyHints, write, end, destroy, headersSent, statusCode, statusMessage, and on/once of close are the supported ServerResponse members",
     lowerer.checker.getSymbolAtLocation(access.name),
   );
 }

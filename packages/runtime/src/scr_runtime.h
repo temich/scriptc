@@ -5647,6 +5647,7 @@ void scr_net_listen_opts_reuse_port(ScrNetServer *s, double port, ScrStr *host /
                                     bool ipv6_only, bool reuse_port,
                                     ScrClosure *cb /*moves, nullable*/);
 double scr_net_server_port(ScrNetServer *s); /* address().port */
+bool scr_net_server_listening(ScrNetServer *s);
 /* Writable http.Server timeout property storage. `field` is the compiler
  * ABI selector: timeout, keepAliveTimeout, headersTimeout, requestTimeout,
  * keepAliveTimeoutBuffer. Typed reads validate that no dynamic write left
@@ -6056,6 +6057,8 @@ bool scr_http_req_complete(ScrHttpReq *r);
  * SCR_DYNH_HTTP_RES) — emitted main() calls this exactly when the http
  * unit is linked (the scr_net_dyn_install story). */
 void scr_http_dyn_install(void);
+void scr_http_validate_header_name(ScrStr *name /*borrowed*/, ScrStr *label /*borrowed*/);
+void scr_http_validate_header_value(ScrStr *name /*borrowed*/, const ScrDyn *value /*borrowed*/);
 
 ScrNetServer *scr_http_create_server(ScrClosure *handler /*moves, nullable*/, ScrHttpReqFn fn); /* +1 */
 /* The unguarded h2-only stream call: throws Node's exact catchable
@@ -6090,6 +6093,9 @@ void scr_http_req_on_end(ScrHttpReq *r, ScrClosure *cb /*moves*/, bool once);
 void scr_http_res_set_header(ScrHttpRes *r, ScrStr *name /*borrowed*/, ScrStr *value /*borrowed*/);
 void scr_http_res_write_head(ScrHttpRes *r, double status);
 void scr_http_res_write_head_n(ScrHttpRes *r, double status, ScrArr *names /*borrowed*/, ScrArr *values /*borrowed*/);
+void scr_http_res_write_continue(ScrHttpRes *r);
+void scr_http_res_write_processing(ScrHttpRes *r);
+void scr_http_res_write_early_hints(ScrHttpRes *r, ScrArr *pairs /*borrowed: [name, value, ...] */);
 /* writeHead with a CHECKED-DYNAMIC headers object (borrowed): OBJ
  * entries setHeader in insertion order (string/number values), then the
  * head goes out; undefined/null = the plain head; may throw. */
@@ -6107,6 +6113,7 @@ void scr_http_res_add_trailers(ScrHttpRes *r, ScrArr *pairs /*borrowed: [name, v
 void scr_http_res_write_dynv(ScrHttpRes *r, const ScrDyn *d /*borrowed*/);
 void scr_http_res_end_dynv(ScrHttpRes *r, const ScrDyn *d /*borrowed*/);
 bool scr_http_res_headers_sent(ScrHttpRes *r);
+bool scr_http_res_writable_ended(ScrHttpRes *r);
 /* The res member surface: statusCode (200 until assigned; inert once the
  * head went out), statusMessage (the reason phrase — assigned value, or
  * the code's default), the header CRUD trio, and end(cb)'s finish slot
@@ -6116,6 +6123,9 @@ void scr_http_res_status_set(ScrHttpRes *r, double status);
 ScrStr *scr_http_res_status_msg_get(ScrHttpRes *r); /* +1 */
 void scr_http_res_status_msg_set(ScrHttpRes *r, ScrStr *msg /*borrowed*/);
 ScrStr *scr_http_res_get_header(ScrHttpRes *r, ScrStr *name /*borrowed*/); /* +1 or NULL */
+ScrArr *scr_http_res_get_header_names(ScrHttpRes *r); /* +1 */
+ScrArr *scr_http_res_get_raw_header_names(ScrHttpRes *r); /* +1 */
+ScrDyn *scr_http_res_get_headers(ScrHttpRes *r); /* +1 */
 bool scr_http_res_has_header_named(ScrHttpRes *r, ScrStr *name /*borrowed*/);
 void scr_http_res_remove_header(ScrHttpRes *r, ScrStr *name /*borrowed*/);
 void scr_http_res_on_finish(ScrHttpRes *r, ScrClosure *cb /*moves*/);
@@ -6198,6 +6208,19 @@ void scr_http_client_end(ScrHttpClientReq *c);
 void scr_http_client_end_str(ScrHttpClientReq *c, ScrStr *data /*borrowed*/);
 void scr_http_client_end_bytes(ScrHttpClientReq *c, ScrBytes *data /*borrowed*/);
 void scr_http_client_flush_headers(ScrHttpClientReq *c);
+void scr_http_client_set_header(ScrHttpClientReq *c, ScrStr *name /*borrowed*/, ScrStr *value /*borrowed*/);
+ScrStr *scr_http_client_get_header(ScrHttpClientReq *c, ScrStr *name /*borrowed*/); /* +1 or NULL */
+bool scr_http_client_has_header_named(ScrHttpClientReq *c, ScrStr *name /*borrowed*/);
+void scr_http_client_remove_header(ScrHttpClientReq *c, ScrStr *name /*borrowed*/);
+ScrArr *scr_http_client_get_header_names(ScrHttpClientReq *c); /* +1 */
+ScrArr *scr_http_client_get_raw_header_names(ScrHttpClientReq *c); /* +1 */
+ScrDyn *scr_http_client_get_headers(ScrHttpClientReq *c); /* +1 */
+ScrStr *scr_http_client_method(ScrHttpClientReq *c); /* +1 */
+ScrStr *scr_http_client_path(ScrHttpClientReq *c); /* +1 */
+ScrStr *scr_http_client_host(ScrHttpClientReq *c); /* +1 */
+ScrStr *scr_http_client_protocol(ScrHttpClientReq *c); /* +1 */
+bool scr_http_client_headers_sent(ScrHttpClientReq *c);
+bool scr_http_client_writable_ended(ScrHttpClientReq *c);
 void scr_http_client_add_trailers(ScrHttpClientReq *c, ScrArr *pairs /*borrowed*/);
 void scr_http_client_cork(ScrHttpClientReq *c);
 void scr_http_client_uncork(ScrHttpClientReq *c);

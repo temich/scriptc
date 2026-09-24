@@ -1525,6 +1525,7 @@ void scr_net_listen_opts_reuse_port(ScrNetServer *s, double port, ScrStr *host /
 }
 
 double scr_net_server_port(ScrNetServer *s) { return (double)s->port; }
+bool scr_net_server_listening(ScrNetServer *s) { return s->listening; }
 
 double scr_net_server_timeout_get(ScrNetServer *s, double field) {
   static const char *const names[] = {

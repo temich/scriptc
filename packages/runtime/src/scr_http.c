@@ -267,11 +267,12 @@ void scr_http_req_release_v(void *p) { scr_http_req_release((ScrHttpReq *)p); }
 ScrStr *scr_http_req_url(ScrHttpReq *r) { return scr_str_retain(r->url); }
 ScrStr *scr_http_req_method(ScrHttpReq *r) { return scr_str_retain(r->method); }
 
-/* Case-insensitive equality of two lowercased-vs-any names. */
+/* Case-insensitive equality of HTTP field names. Incoming names happen to
+ * be lowercased already; outgoing names retain the spelling of the setter. */
 static bool scr_http_name_eq(const ScrStr *lower, const ScrStr *name) {
   if (lower->len != name->len) return false;
   for (size_t j = 0; j < name->len; j++) {
-    if (lower->data[j] != (char)tolower((unsigned char)name->data[j])) return false;
+    if (tolower((unsigned char)lower->data[j]) != tolower((unsigned char)name->data[j])) return false;
   }
   return true;
 }
@@ -682,6 +683,72 @@ static bool scr_http_token_char(unsigned char ch) {
     (ch >= 'a' && ch <= 'z') || (ch != 0 && strchr("!#$%&'*+-.^_`|~", ch) != NULL);
 }
 
+/* node:http's public validators use the same token and field-vchar rules
+ * as OutgoingMessage. Strings are UTF-8 here, so the Latin-1 obs-text
+ * range accepted by Node's JS regex is C2/C3 plus one continuation byte. */
+void scr_http_validate_header_name(ScrStr *name /*borrowed*/, ScrStr *label /*borrowed*/) {
+  bool valid = name->len > 0;
+  for (size_t i = 0; i < name->len && valid; i++)
+    valid = scr_http_token_char((unsigned char)name->data[i]);
+  if (valid) return;
+
+  ScrJsonBuf b;
+  scr_jb_init(&b);
+  ScrStr *shown = label->len ? label : NULL;
+  if (shown) {
+    for (size_t i = 0; i < shown->len; i++) scr_jb_putc(&b, shown->data[i]);
+  } else {
+    scr_jb_puts(&b, "Header name");
+  }
+  scr_jb_puts(&b, " must be a valid HTTP token [\"");
+  for (size_t i = 0; i < name->len; i++) scr_jb_putc(&b, name->data[i]);
+  scr_jb_puts(&b, "\"]");
+  ScrStr *msg = scr_jb_finish(&b);
+  scr_throw_error_msg_code(SCR_ERR_TYPE, msg->data, msg->len, "ERR_INVALID_HTTP_TOKEN");
+  scr_str_release(msg);
+}
+
+void scr_http_validate_header_value(ScrStr *name /*borrowed*/, const ScrDyn *value /*borrowed*/) {
+  if (value->kind == SCR_DYN_UNDEF) {
+    ScrJsonBuf b;
+    scr_jb_init(&b);
+    scr_jb_puts(&b, "Invalid value \"undefined\" for header \"");
+    for (size_t i = 0; i < name->len; i++) scr_jb_putc(&b, name->data[i]);
+    scr_jb_putc(&b, '"');
+    ScrStr *msg = scr_jb_finish(&b);
+    scr_throw_error_msg_code(SCR_ERR_TYPE, msg->data, msg->len, "ERR_HTTP_INVALID_HEADER_VALUE");
+    scr_str_release(msg);
+    return;
+  }
+
+  ScrStr *s = scr_dyn_string_coerce_js(value);
+  if (!s) return; /* object coercion threw */
+  bool invalid = false;
+  for (size_t i = 0; i < s->len; i++) {
+    unsigned char ch = (unsigned char)s->data[i];
+    if (ch == '\t' || (ch >= 0x20 && ch <= 0x7e)) continue;
+    if ((ch == 0xc2 || ch == 0xc3) && i + 1 < s->len &&
+        (unsigned char)s->data[i + 1] >= 0x80 &&
+        (unsigned char)s->data[i + 1] <= 0xbf) {
+      i++;
+      continue;
+    }
+    invalid = true;
+    break;
+  }
+  scr_str_release(s);
+  if (!invalid) return;
+
+  ScrJsonBuf b;
+  scr_jb_init(&b);
+  scr_jb_puts(&b, "Invalid character in header content [\"");
+  for (size_t i = 0; i < name->len; i++) scr_jb_putc(&b, name->data[i]);
+  scr_jb_puts(&b, "\"]");
+  ScrStr *msg = scr_jb_finish(&b);
+  scr_throw_error_msg_code(SCR_ERR_TYPE, msg->data, msg->len, "ERR_INVALID_CHAR");
+  scr_str_release(msg);
+}
+
 static bool scr_http_trailers_replace(ScrHttpTrailers *t, ScrArr *pairs /*borrowed*/) {
   scr_http_trailers_clear(t);
   size_t n = (size_t)scr_arr_len(pairs);
@@ -803,6 +870,7 @@ void *scr_http_res_retain_v(void *p) { return scr_http_res_retain((ScrHttpRes *)
 void scr_http_res_release_v(void *p) { scr_http_res_release((ScrHttpRes *)p); }
 
 bool scr_http_res_headers_sent(ScrHttpRes *r) { return r->head_sent; }
+bool scr_http_res_writable_ended(ScrHttpRes *r) { return r->finished; }
 
 /* res.statusCode: 200 until assigned (Node's fresh-response default);
  * assignment after the head went out is inert (Node throws on the WRITE
@@ -843,6 +911,50 @@ ScrStr *scr_http_res_get_header(ScrHttpRes *r, ScrStr *name) {
     }
   }
   return NULL;
+}
+
+/* Outgoing header snapshots omit the automatically serialized fields. The
+ * names API lowercases keys while the raw variant preserves their casing. */
+static ScrArr *scr_http_out_header_names(ScrStr **names, size_t count, bool raw) {
+  ScrArr *out = scr_arr_new(SCR_ELEM_STR, count);
+  for (size_t i = 0; i < count; i++) {
+    bool seen = false;
+    for (size_t j = 0; j < i && !seen; j++) seen = scr_http_name_eq(names[j], names[i]);
+    if (seen) continue;
+    if (raw) {
+      scr_arr_push_ref(out, scr_str_retain(names[i]));
+    } else {
+      ScrStr *lower = scr_str_new(names[i]->data, names[i]->len);
+      for (size_t j = 0; j < lower->len; j++)
+        lower->data[j] = (char)tolower((unsigned char)lower->data[j]);
+      scr_arr_push_ref(out, lower);
+    }
+  }
+  return out;
+}
+
+static ScrDyn *scr_http_out_headers(ScrStr **names, ScrStr **values, size_t count) {
+  ScrDyn *out = scr_dyn_new_obj();
+  for (size_t i = 0; i < count; i++) {
+    ScrStr *lower = scr_str_new(names[i]->data, names[i]->len);
+    for (size_t j = 0; j < lower->len; j++)
+      lower->data[j] = (char)tolower((unsigned char)lower->data[j]);
+    scr_dyn_obj_set(out, lower->data, lower->len, scr_dyn_new_str(values[i]));
+    scr_str_release(lower);
+  }
+  return out;
+}
+
+ScrArr *scr_http_res_get_header_names(ScrHttpRes *r) {
+  return scr_http_out_header_names(r->hnames, r->nheaders, false);
+}
+
+ScrArr *scr_http_res_get_raw_header_names(ScrHttpRes *r) {
+  return scr_http_out_header_names(r->hnames, r->nheaders, true);
+}
+
+ScrDyn *scr_http_res_get_headers(ScrHttpRes *r) {
+  return scr_http_out_headers(r->hnames, r->hvalues, r->nheaders);
 }
 
 bool scr_http_res_has_header_named(ScrHttpRes *r, ScrStr *name) {
@@ -914,6 +1026,8 @@ void scr_http_res_set_header(ScrHttpRes *r, ScrStr *name /*borrowed*/, ScrStr *v
         if (tolower((unsigned char)r->hnames[i]->data[j]) != tolower((unsigned char)name->data[j])) eq = false;
       }
       if (eq) {
+        scr_str_release(r->hnames[i]);
+        r->hnames[i] = scr_str_retain(name);
         scr_str_release(r->hvalues[i]);
         r->hvalues[i] = scr_str_retain(value);
         return;
@@ -950,6 +1064,144 @@ static void scr_http_buf_append(ScrHttpBuf *b, const char *s, size_t n) {
 }
 
 static void scr_http_buf_str(ScrHttpBuf *b, const char *s) { scr_http_buf_append(b, s, strlen(s)); }
+
+/* Informational response heads are written with Node's `ascii` encoding.
+ * The header validator allows Latin-1 obs-text; collapse its UTF-8 C2/C3
+ * spelling back to one wire byte. */
+static void scr_http_buf_header_value(ScrHttpBuf *b, const ScrStr *s) {
+  for (size_t i = 0; i < s->len; i++) {
+    unsigned char ch = (unsigned char)s->data[i];
+    if ((ch == 0xc2 || ch == 0xc3) && i + 1 < s->len) {
+      unsigned char next = (unsigned char)s->data[++i];
+      char byte = (char)(((ch & 1) << 6) | (next & 0x3f));
+      scr_http_buf_append(b, &byte, 1);
+    } else {
+      scr_http_buf_append(b, s->data + i, 1);
+    }
+  }
+}
+
+static bool scr_http_res_informational_h1(ScrHttpRes *r, const char *method) {
+  if (r->h2_stream == NULL) return true;
+  char msg[128];
+  int n = snprintf(msg, sizeof msg, "Http2ServerResponse.%s is not supported by the static runtime yet", method);
+  scr_throw_error_msg(SCR_ERR_ERROR, msg, (size_t)n);
+  return false;
+}
+
+void scr_http_res_write_continue(ScrHttpRes *r) {
+  if (!scr_http_res_informational_h1(r, "writeContinue")) return;
+  if (r->sock) scr_net_sock_write_native(r->sock, "HTTP/1.1 100 Continue\r\n\r\n", 25);
+}
+
+void scr_http_res_write_processing(ScrHttpRes *r) {
+  if (!scr_http_res_informational_h1(r, "writeProcessing")) return;
+  if (r->sock) scr_net_sock_write_native(r->sock, "HTTP/1.1 102 Processing\r\n\r\n", 27);
+}
+
+/* Node's linkValueRegExp from internal/validators: `<...>` followed by
+ * optional semicolon parameters. Its string arm refuses an empty or
+ * malformed link before the general header-content check runs. */
+static bool scr_http_early_link_format(const ScrStr *link) {
+  if (link->len < 2 || link->data[0] != '<') return false;
+  size_t i = 1;
+  while (i < link->len && link->data[i] != '>') {
+    if (link->data[i] == '\r' || link->data[i] == '\n') return false;
+    i++;
+  }
+  if (i == link->len) return false;
+  i++;
+  while (i < link->len) {
+    while (i < link->len && isspace((unsigned char)link->data[i])) i++;
+    if (i == link->len || link->data[i++] != ';') return false;
+    while (i < link->len && isspace((unsigned char)link->data[i])) i++;
+    size_t start = i;
+    while (i < link->len && link->data[i] != ';' && link->data[i] != '"' &&
+           !isspace((unsigned char)link->data[i])) i++;
+    if (i == start) return false;
+    if (i < link->len && link->data[i] == '"') {
+      if (link->data[i - 1] != '=') return false;
+      i++;
+      while (i < link->len && link->data[i] != ';' && link->data[i] != '"' &&
+             !isspace((unsigned char)link->data[i])) i++;
+      if (i == link->len || link->data[i++] != '"') return false;
+    }
+  }
+  return true;
+}
+
+/* A lowercase `link` controls whether Node sends a 103 at all; when
+ * present it is always the first field, followed by the other object
+ * properties in insertion order. This static entry accepts string-valued
+ * fields. */
+void scr_http_res_write_early_hints(ScrHttpRes *r, ScrArr *pairs /*borrowed*/) {
+  if (!scr_http_res_informational_h1(r, "writeEarlyHints")) return;
+  size_t count = (size_t)scr_arr_len(pairs);
+  ScrStr *link = NULL;
+  for (size_t i = 0; i + 1 < count; i += 2) {
+    ScrStr *name = (ScrStr *)scr_arr_get_ref(pairs, (double)i);
+    if (name->len == 4 && memcmp(name->data, "link", 4) == 0) {
+      scr_str_release(link);
+      link = (ScrStr *)scr_arr_get_ref(pairs, (double)(i + 1));
+    }
+    scr_str_release(name);
+  }
+  if (!link) return;
+  if (!scr_http_early_link_format(link)) {
+    ScrDyn *received = scr_dyn_new_str(link);
+    scr_dyn_arg_value_fail("hints", "must be an array or string of format \"</styles.css>; rel=preload; as=style\"", received);
+    scr_dyn_release(received);
+    scr_str_release(link);
+    return;
+  }
+  ScrStr *link_name = scr_str_new("Link", 4);
+  ScrDyn *link_value = scr_dyn_new_str(link);
+  scr_http_validate_header_value(link_name, link_value);
+  scr_dyn_release(link_value);
+  scr_str_release(link_name);
+  if (scr_exc_pending()) {
+    scr_str_release(link);
+    return;
+  }
+  ScrHttpBuf b = {NULL, 0, 0};
+  scr_http_buf_str(&b, "HTTP/1.1 103 Early Hints\r\nLink: ");
+  scr_http_buf_header_value(&b, link);
+  scr_http_buf_str(&b, "\r\n");
+  scr_str_release(link);
+  ScrStr *empty_label = scr_str_new("", 0);
+  for (size_t i = 0; i + 1 < count; i += 2) {
+    ScrStr *name = (ScrStr *)scr_arr_get_ref(pairs, (double)i);
+    ScrStr *value = (ScrStr *)scr_arr_get_ref(pairs, (double)(i + 1));
+    if (name->len == 4 && memcmp(name->data, "link", 4) == 0) {
+      scr_str_release(name);
+      scr_str_release(value);
+      continue;
+    }
+    scr_http_validate_header_name(name, empty_label);
+    if (!scr_exc_pending()) {
+      ScrDyn *wrapped = scr_dyn_new_str(value);
+      scr_http_validate_header_value(name, wrapped);
+      scr_dyn_release(wrapped);
+    }
+    if (scr_exc_pending()) {
+      scr_str_release(name);
+      scr_str_release(value);
+      scr_str_release(empty_label);
+      free(b.data);
+      return;
+    }
+    scr_http_buf_append(&b, name->data, name->len);
+    scr_http_buf_str(&b, ": ");
+    scr_http_buf_header_value(&b, value);
+    scr_http_buf_str(&b, "\r\n");
+    scr_str_release(name);
+    scr_str_release(value);
+  }
+  scr_str_release(empty_label);
+  scr_http_buf_str(&b, "\r\n");
+  if (r->sock) scr_net_sock_write_native(r->sock, b.data, b.len);
+  free(b.data);
+}
 
 static void scr_http_send_chunk_end(ScrNetSocket *sock, const ScrHttpTrailers *t) {
   ScrHttpBuf b = {NULL, 0, 0};
@@ -2684,6 +2936,8 @@ struct ScrHttpClientReq {
   ScrStr **hnames; /* user headers, verbatim case */
   ScrStr **hvalues;
   size_t nheaders;
+  bool removed_host;
+  bool removed_connection;
   ScrHttpTrailers trailers;
   bool user_cl;      /* caller set content-length/transfer-encoding */
   bool head_sent;
@@ -2822,6 +3076,106 @@ static bool scr_http_client_has_header(ScrHttpClientReq *c, const char *name) {
   return false;
 }
 
+static bool scr_http_header_name_is(ScrStr *name, const char *text) {
+  size_t len = strlen(text);
+  if (name->len != len) return false;
+  for (size_t i = 0; i < len; i++)
+    if (tolower((unsigned char)name->data[i]) != text[i]) return false;
+  return true;
+}
+
+ScrStr *scr_http_client_get_header(ScrHttpClientReq *c, ScrStr *name) {
+  for (size_t i = 0; i < c->nheaders; i++)
+    if (scr_http_name_eq(c->hnames[i], name)) return scr_str_retain(c->hvalues[i]);
+  return NULL;
+}
+
+bool scr_http_client_has_header_named(ScrHttpClientReq *c, ScrStr *name) {
+  for (size_t i = 0; i < c->nheaders; i++)
+    if (scr_http_name_eq(c->hnames[i], name)) return true;
+  return false;
+}
+
+ScrArr *scr_http_client_get_header_names(ScrHttpClientReq *c) {
+  return scr_http_out_header_names(c->hnames, c->nheaders, false);
+}
+
+ScrArr *scr_http_client_get_raw_header_names(ScrHttpClientReq *c) {
+  return scr_http_out_header_names(c->hnames, c->nheaders, true);
+}
+
+ScrDyn *scr_http_client_get_headers(ScrHttpClientReq *c) {
+  return scr_http_out_headers(c->hnames, c->hvalues, c->nheaders);
+}
+
+ScrStr *scr_http_client_method(ScrHttpClientReq *c) { return scr_str_retain(c->method); }
+ScrStr *scr_http_client_path(ScrHttpClientReq *c) { return scr_str_retain(c->path); }
+ScrStr *scr_http_client_host(ScrHttpClientReq *c) { return scr_str_retain(c->host); }
+ScrStr *scr_http_client_protocol(ScrHttpClientReq *c) {
+  return c->default_port == 443 ? scr_str_new("https:", 6) : scr_str_new("http:", 5);
+}
+bool scr_http_client_headers_sent(ScrHttpClientReq *c) { return c->head_sent; }
+bool scr_http_client_writable_ended(ScrHttpClientReq *c) { return c->ended; }
+
+static bool scr_http_client_header_mutable(ScrHttpClientReq *c, const char *op) {
+  if (!c->head_sent) return true;
+  char msg[80];
+  int len = snprintf(msg, sizeof msg, "Cannot %s headers after they are sent to the client", op);
+  scr_throw_error_msg_code(SCR_ERR_ERROR, msg, (size_t)len, "ERR_HTTP_HEADERS_SENT");
+  return false;
+}
+
+void scr_http_client_set_header(ScrHttpClientReq *c, ScrStr *name, ScrStr *value) {
+  if (!scr_http_client_header_mutable(c, "set")) return;
+  ScrStr *label = scr_str_new("Header name", 11);
+  scr_http_validate_header_name(name, label);
+  scr_str_release(label);
+  if (scr_exc_pending()) return;
+  ScrDyn *wrapped = scr_dyn_new_str(value);
+  scr_http_validate_header_value(name, wrapped);
+  scr_dyn_release(wrapped);
+  if (scr_exc_pending()) return;
+  for (size_t i = 0; i < c->nheaders; i++) {
+    if (!scr_http_name_eq(c->hnames[i], name)) continue;
+    scr_str_release(c->hnames[i]);
+    scr_str_release(c->hvalues[i]);
+    c->hnames[i] = scr_str_retain(name);
+    c->hvalues[i] = scr_str_retain(value);
+    goto updated;
+  }
+  c->hnames = realloc(c->hnames, (c->nheaders + 1) * sizeof *c->hnames);
+  c->hvalues = realloc(c->hvalues, (c->nheaders + 1) * sizeof *c->hvalues);
+  if (!c->hnames || !c->hvalues) scr_http_oom();
+  c->hnames[c->nheaders] = scr_str_retain(name);
+  c->hvalues[c->nheaders] = scr_str_retain(value);
+  c->nheaders++;
+updated:
+  if (scr_http_header_name_is(name, "host")) c->removed_host = false;
+  if (scr_http_header_name_is(name, "connection")) c->removed_connection = false;
+  c->user_cl = scr_http_client_has_header(c, "content-length") ||
+               scr_http_client_has_header(c, "transfer-encoding");
+}
+
+void scr_http_client_remove_header(ScrHttpClientReq *c, ScrStr *name) {
+  if (!scr_http_client_header_mutable(c, "remove")) return;
+  size_t w = 0;
+  for (size_t i = 0; i < c->nheaders; i++) {
+    if (scr_http_name_eq(c->hnames[i], name)) {
+      scr_str_release(c->hnames[i]);
+      scr_str_release(c->hvalues[i]);
+    } else {
+      c->hnames[w] = c->hnames[i];
+      c->hvalues[w] = c->hvalues[i];
+      w++;
+    }
+  }
+  c->nheaders = w;
+  if (scr_http_header_name_is(name, "host")) c->removed_host = true;
+  if (scr_http_header_name_is(name, "connection")) c->removed_connection = true;
+  c->user_cl = scr_http_client_has_header(c, "content-length") ||
+               scr_http_client_has_header(c, "transfer-encoding");
+}
+
 /* Serializes and sends the head. `body_len` >= 0 fixes Content-Length
  * (the end(data) path — and Node's Content-Length: 0 for empty POST/PUT/
  * PATCH bodies); -1 means STREAMING: chunked unless the caller set the
@@ -2845,7 +3199,7 @@ static void scr_http_client_send_head(ScrHttpClientReq *c, long long body_len) {
     }
     if (transfer && scr_http_header_has_token(c->hvalues[i], "chunked")) c->chunked = true;
   }
-  if (!scr_http_client_has_header(c, "host")) {
+  if (!c->removed_host && !scr_http_client_has_header(c, "host")) {
     /* Host: name[:port] — the scheme's default port omitted (80 http,
      * 443 https), IPv6 literals bracketed (Node) */
     bool v6 = memchr(c->host->data, ':', c->host->len) != NULL;
@@ -2860,7 +3214,7 @@ static void scr_http_client_send_head(ScrHttpClientReq *c, long long body_len) {
     }
     scr_http_buf_str(&b, "\r\n");
   }
-  if (!scr_http_client_has_header(c, "connection")) {
+  if (!c->removed_connection && !scr_http_client_has_header(c, "connection")) {
     scr_http_buf_str(&b, "Connection: keep-alive\r\n");
   }
   if (!c->user_cl) {
@@ -3437,6 +3791,26 @@ static ScrHttpClientReq *scr_http_request_impl(ScrStr *host /*borrowed*/, double
   }
   c->user_cl = scr_http_client_has_header(c, "content-length") ||
                scr_http_client_has_header(c, "transfer-encoding");
+  if (!scr_http_client_has_header(c, "host")) {
+    /* Node queues the implicit Host header at construction, so all three
+     * outgoing header readers see it before end()/flushHeaders(). */
+    ScrHttpBuf hostbuf = {NULL, 0, 0};
+    bool v6 = memchr(c->host->data, ':', c->host->len) != NULL;
+    if (v6) scr_http_buf_str(&hostbuf, "[");
+    scr_http_buf_append(&hostbuf, c->host->data, c->host->len);
+    if (v6) scr_http_buf_str(&hostbuf, "]");
+    if (c->port != c->default_port) {
+      char portbuf[16];
+      snprintf(portbuf, sizeof portbuf, ":%d", c->port);
+      scr_http_buf_str(&hostbuf, portbuf);
+    }
+    ScrStr *host_name = scr_str_new("Host", 4);
+    ScrStr *host_value = scr_str_new(hostbuf.data, hostbuf.len);
+    free(hostbuf.data);
+    scr_http_client_set_header(c, host_name, host_value);
+    scr_str_release(host_name);
+    scr_str_release(host_value);
+  }
   if (cb) scr_net_ls_add(&c->resp_ls, cb, (void *)fn, true);
 
   /* dial — or take the caller's pre-made socket (createConnection); dial

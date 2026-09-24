@@ -5924,6 +5924,8 @@ function emitNetworkLibCall(state: LibCallState): Temp {
           }
           case "net.serverPort":
             return finish(`scr_net_server_port(${arg(0)})`);
+          case "net.serverListening":
+            return finish(`scr_net_server_listening(${arg(0)})`);
           case "net.serverAddress": {
             // The AddressInfo record from the three runtime reads (the
             // dgram.address materialization; none of these throw).
@@ -6454,10 +6456,22 @@ function emitHttpLibCall(state: LibCallState): Temp {
           case "http.resSetHeader":
             emitter.line(`scr_http_res_set_header(${arg(0)}, ${arg(1)}, ${arg(2)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
+          case "http.validateHeaderName":
+            emitter.line(`scr_http_validate_header_name(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          case "http.validateHeaderValue":
+            emitter.line(`scr_http_validate_header_value(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
           case "http.resWriteHead":
             return finish(`scr_http_res_write_head(${arg(0)}, ${arg(1)})`);
           case "http.resWriteHeadN":
             return finish(`scr_http_res_write_head_n(${arg(0)}, ${arg(1)}, ${arg(2)}, ${arg(3)})`);
+          case "http.resWriteContinue":
+            return finish(`scr_http_res_write_continue(${arg(0)})`);
+          case "http.resWriteProcessing":
+            return finish(`scr_http_res_write_processing(${arg(0)})`);
+          case "http.resWriteEarlyHints":
+            return finish(`scr_http_res_write_early_hints(${arg(0)}, ${arg(1)})`);
           case "http.resWrite":
             return finish(`scr_http_res_write_str(${arg(0)}, ${arg(1)})`);
           case "http.resWriteBytes":
@@ -6474,6 +6488,8 @@ function emitHttpLibCall(state: LibCallState): Temp {
             return finish(`scr_http_res_end_dynv(${arg(0)}, ${arg(1)})`);
           case "http.resHeadersSent":
             return finish(`scr_http_res_headers_sent(${arg(0)})`);
+          case "http.resWritableEnded":
+            return finish(`scr_http_res_writable_ended(${arg(0)})`);
           case "http.resFlushHeaders":
             return finish(`scr_http_res_flush_headers(${arg(0)})`);
           case "http.resAddTrailers":
@@ -6653,21 +6669,29 @@ function emitHttpLibCall(state: LibCallState): Temp {
           case "http.resStatusMsgSet":
             emitter.line(`scr_http_res_status_msg_set(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
-          case "http.resGetHeader": {
+          case "http.resGetHeader":
+          case "http.clientGetHeader": {
             // string|undefined, exactly the http.reqHeader emission.
-            if (e.type.kind !== "union") throw new InternalCompilerError("emitter bug: http.resGetHeader result is not a union");
+            if (e.type.kind !== "union") throw new InternalCompilerError(`emitter bug: ${e.fn} result is not a union`);
             const def = emitter.unionsById.get(e.type.unionId);
             const strTag = def ? def.arms.findIndex((a) => a.kind === "string") : -1;
             const undefTag = undefinedArmTag(e.type, emitter.unionsById);
             if (strTag < 0 || undefTag < 0) {
               throw new InternalCompilerError("emitter bug: http.resGetHeader union lacks its arms");
             }
-            const s = emitter.newTemp(STRING, `scr_http_res_get_header(${arg(0)}, ${arg(1)})`);
+            const entry = e.fn === "http.resGetHeader" ? "scr_http_res_get_header" : "scr_http_client_get_header";
+            const s = emitter.newTemp(STRING, `${entry}(${arg(0)}, ${arg(1)})`);
             emitter.moveTemp(s); // moves into the box when present; NULL otherwise
             const present = `scr_union_new_ref(${strTag}, ${s.name}, &scr_str_retain_v, &scr_str_release_v, NULL)`;
             const absent = emitter.unitInstanceRef(e.type.unionId, undefTag);
             return emitter.newTemp(e.type, `${s.name} ? ${present} : ${absent}`);
           }
+          case "http.resGetHeaderNames":
+            return finish(`scr_http_res_get_header_names(${arg(0)})`);
+          case "http.resGetRawHeaderNames":
+            return finish(`scr_http_res_get_raw_header_names(${arg(0)})`);
+          case "http.resGetHeaders":
+            return finish(`scr_http_res_get_headers(${arg(0)})`);
           case "http.resHasHeader":
             return finish(`scr_http_res_has_header_named(${arg(0)}, ${arg(1)})`);
           case "http.resRemoveHeader":
@@ -6865,6 +6889,18 @@ function emitHttpLibCall(state: LibCallState): Temp {
           }
           case "http.clientWrite":
             return finish(`scr_http_client_write_str(${arg(0)}, ${arg(1)})`);
+          case "http.clientSetHeader":
+            return finish(`scr_http_client_set_header(${arg(0)}, ${arg(1)}, ${arg(2)})`);
+          case "http.clientHasHeader":
+            return finish(`scr_http_client_has_header_named(${arg(0)}, ${arg(1)})`);
+          case "http.clientRemoveHeader":
+            return finish(`scr_http_client_remove_header(${arg(0)}, ${arg(1)})`);
+          case "http.clientGetHeaderNames":
+            return finish(`scr_http_client_get_header_names(${arg(0)})`);
+          case "http.clientGetRawHeaderNames":
+            return finish(`scr_http_client_get_raw_header_names(${arg(0)})`);
+          case "http.clientGetHeaders":
+            return finish(`scr_http_client_get_headers(${arg(0)})`);
           case "http.clientWriteBytes":
             return finish(`scr_http_client_write_bytes(${arg(0)}, ${arg(1)})`);
           case "http.clientEnd":
@@ -6888,6 +6924,18 @@ function emitHttpLibCall(state: LibCallState): Temp {
             return finish(`scr_http_client_uncork(${arg(0)})`);
           case "http.clientWritableCorked":
             return finish(`scr_http_client_writable_corked(${arg(0)})`);
+          case "http.clientMethod":
+            return finish(`scr_http_client_method(${arg(0)})`);
+          case "http.clientPath":
+            return finish(`scr_http_client_path(${arg(0)})`);
+          case "http.clientHost":
+            return finish(`scr_http_client_host(${arg(0)})`);
+          case "http.clientProtocol":
+            return finish(`scr_http_client_protocol(${arg(0)})`);
+          case "http.clientHeadersSent":
+            return finish(`scr_http_client_headers_sent(${arg(0)})`);
+          case "http.clientWritableEnded":
+            return finish(`scr_http_client_writable_ended(${arg(0)})`);
           case "http.clientDestroy":
             emitter.line(`scr_http_client_destroy(${arg(0)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
