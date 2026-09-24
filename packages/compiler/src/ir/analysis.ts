@@ -3,6 +3,7 @@ import {
   DYN_HANDLE_KINDS,
   RUNTIME_STREAM_CLASSES,
   type IrExpr,
+  type IrLibFn,
   type IrRecordShape,
   type IrStmt,
   type IrType,
@@ -75,6 +76,16 @@ export function dynDesc(
   }
 }
 
+// These scalar lowerings borrow no references and cannot invoke user code,
+// suspend, or release an owner. Keep this explicit: array folds and future
+// Math operations must not inherit the guarantee from their name alone.
+const BORROW_SAFE_MATH = new Set<IrLibFn>([
+  "math.floor", "math.ceil", "math.trunc", "math.round", "math.abs",
+  "math.min", "math.max", "math.sqrt", "math.pow",
+  "math.sin", "math.cos", "math.tan", "math.asin", "math.acos", "math.atan",
+  "math.atan2", "math.cbrt", "math.sign", "math.exp", "math.log", "math.log2", "math.log10",
+]);
+
 /** Whether an operand preserves a direct receiver binding until its last
  * borrowed use. No user calls or suspension may intervene. This does not
  * prove the operation itself safe to borrow; callers must establish that
@@ -103,6 +114,9 @@ export function isStableReceiverOperand(e: IrExpr, receiverLocalId: string): boo
       return (e.method === "get" || e.method === "length" || e.method === "byteLength") &&
         e.receiver.kind === "varRef" &&
         e.args.every((arg) => isStableReceiverOperand(arg, receiverLocalId));
+    case "libCall":
+      return BORROW_SAFE_MATH.has(e.fn) && e.type.kind === "f64" &&
+        e.args.every((arg) => arg.type.kind === "f64" && isStableReceiverOperand(arg, receiverLocalId));
     default:
       return false;
   }

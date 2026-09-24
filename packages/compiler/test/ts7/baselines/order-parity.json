@@ -6691,6 +6691,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2972-math-receiver-borrow.ts": {
+   "order": [
+    "<repo>/tests/corpus/2972-math-receiver-borrow.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"
