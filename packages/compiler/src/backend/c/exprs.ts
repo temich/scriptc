@@ -3,7 +3,7 @@ import { InternalCompilerError } from "../../errors.js";
  * expression lands in a fresh C temp, with RC ownership tracked on the
  * emitter's frames (see the discipline comment in emitter core). */
 import type { CEmitter, Temp } from "./c-emitter.js";
-import { arrayOf, BOOL, BYTES_U8, bytesOf, canMarshalFuncIntoIsland, CHILDSTREAM_T, CHILDWRITER_T, DYN, F64, IrExpr, IrLibFn, IrRecordShape, IrType, islandPromisePayloadTag, isClassOwnEnumerableFieldName, isDynTypedRefType, isFfiCallbackParam, isFfiContextParam, isFfiReleaseParam, isRefCounted, isUnitType, MAY_THROW_LIB_FNS, RUNTIME_ERROR_CLASSES, STRING, typeEquals, typeKey } from "../../ir/ir.js";
+import { arrayOf, BOOL, BYTES_U8, bytesOf, canMarshalFuncIntoIsland, CHILDSTREAM_T, CHILDWRITER_T, DYN, F64, IrExpr, IrLibFn, IrRecordShape, IrType, islandPromisePayloadTag, isClassOwnEnumerableFieldName, isDynTypedRefType, isFfiCallbackParam, isFfiContextParam, isFfiReleaseParam, isRefCounted, isUnitType, MAY_THROW_LIB_FNS, NETSOCKET_T, RUNTIME_ERROR_CLASSES, STRING, typeEquals, typeKey } from "../../ir/ir.js";
 import { boxAccess, BYTES_NUM_KIND_C, BYTES_NUM_VAR_C, bytesElemKindC, cDecl, cFnPtrCast, cNumberLiteral, cStringLiteral, cType, DV_GET_KIND_C, DV_SET_KIND_C, elemAccess, mapKeyAccess, mapKeyKindC, mapValKindC, releaseCallC, retainCallC, vAdapters } from "./types.js";
 import { mangleClassNew, mangleClassRetain, mangleClassStruct, mangleField, mangleFnClosure, mangleFunction, mangleGlobal, mangleLocal, mangleRecordClone, mangleRecordNew, mangleRecordStruct, mangleVtStruct } from "../mangle.js";
 import { OVERFLOW_MEMBER } from "./shapes.js";
@@ -6672,11 +6672,54 @@ function emitHttpLibCall(state: LibCallState): Temp {
           case "http.resStatusSet":
             emitter.line(`scr_http_res_status_set(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
-          case "http.resStatusMsgGet":
-            return finish(`scr_http_res_status_msg_get(${arg(0)})`);
+          case "http.resStatusMsgGet": {
+            if (e.type.kind !== "union") throw new InternalCompilerError("emitter bug: http.resStatusMsgGet result is not a union");
+            const def = emitter.unionsById.get(e.type.unionId);
+            const strTag = def ? def.arms.findIndex((a) => a.kind === "string") : -1;
+            const undefTag = undefinedArmTag(e.type, emitter.unionsById);
+            if (strTag < 0 || undefTag < 0) throw new InternalCompilerError("emitter bug: http.resStatusMsgGet union lacks its arms");
+            const msg = emitter.newTemp(STRING, `scr_http_res_status_msg_get(${arg(0)})`);
+            emitter.moveTemp(msg);
+            const present = `scr_union_new_ref(${strTag}, ${msg.name}, &scr_str_retain_v, &scr_str_release_v, NULL)`;
+            return emitter.newTemp(e.type, `${msg.name} ? ${present} : ${emitter.unitInstanceRef(e.type.unionId, undefTag)}`);
+          }
           case "http.resStatusMsgSet":
             emitter.line(`scr_http_res_status_msg_set(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
+          case "http.resRequest":
+            return finish(`scr_http_res_request(${arg(0)})`);
+          case "http.resSocket": {
+            if (e.type.kind !== "union") throw new InternalCompilerError("emitter bug: http.resSocket result is not a union");
+            const def = emitter.unionsById.get(e.type.unionId);
+            const socketTag = def ? def.arms.findIndex((a) => a.kind === "netSocket") : -1;
+            const nullTag = def ? def.arms.findIndex((a) => a.kind === "nullT") : -1;
+            if (socketTag < 0 || nullTag < 0) throw new InternalCompilerError("emitter bug: http.resSocket union lacks its arms");
+            const sock = emitter.newTemp(NETSOCKET_T, `scr_http_res_socket(${arg(0)})`);
+            emitter.moveTemp(sock);
+            const present = `scr_union_new_ref(${socketTag}, ${sock.name}, &scr_net_sock_retain_v, &scr_net_sock_release_v, NULL)`;
+            return emitter.newTemp(e.type, `${sock.name} ? ${present} : ${emitter.unitInstanceRef(e.type.unionId, nullTag)}`);
+          }
+          case "http.resWritableFinished":
+            return finish(`scr_http_res_writable_finished(${arg(0)})`);
+          case "http.resSendDateGet":
+            return finish(`scr_http_res_send_date(${arg(0)})`);
+          case "http.resSendDateSet":
+            emitter.line(`scr_http_res_set_send_date(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          case "http.resStrictContentLengthGet":
+            return finish(`scr_http_res_strict_content_length(${arg(0)})`);
+          case "http.resStrictContentLengthSet":
+            emitter.line(`scr_http_res_set_strict_content_length(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          case "http.resSetTimeout":
+            emitter.line(`scr_http_res_set_timeout_plain(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          case "http.resSetTimeoutCb": {
+            const cb = args[2]!;
+            emitter.moveTemp(cb);
+            emitter.line(`scr_http_res_set_timeout(${arg(0)}, ${arg(1)}, ${cb.name});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
           case "http.resGetHeader":
           case "http.clientGetHeader": {
             // string|undefined, exactly the http.reqHeader emission.

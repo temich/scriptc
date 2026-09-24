@@ -976,22 +976,23 @@ export function lowerServerCloseOverrideAssignment(lowerer: Lowerer, left: ts.Ex
   };
 }
 
-/** `res.statusCode = 404` / `res.statusMessage = "Nope"` — Node's
- * writable ServerResponse properties (the implicit head reads them):
- * routed from lower-stmts' property-assignment path beside the
- * close-override hook. Null when the target isn't one of the two. */
+/** Writable ServerResponse properties consulted by the implicit head and
+ * the strict body-length check. Null when the target isn't one of them. */
 export function lowerHttpResPropertyAssignment(lowerer: Lowerer, left: ts.Expression,
   right: ts.Expression, loc: SrcLoc,): IrStmt | null {
   if (!ts.isPropertyAccessExpression(left) || left.questionDotToken) return null;
   const name = left.name.text;
-  if (name !== "statusCode" && name !== "statusMessage") return null;
+  if (name !== "statusCode" && name !== "statusMessage" &&
+      name !== "sendDate" && name !== "strictContentLength") return null;
   if (lowerer.mapTypeOf(lowerer.typeOf(left.expression))?.kind !== "httpRes") return null;
   if (!lowerer.isStdlibMember(left)) return null;
-  const receiver = lowerer.lowerExpr(left.expression);
+  const receiver = coerceToHandle(lowerer, left.expression, HTTPRES_T);
   const value = name === "statusCode"
     ? lowerer.lowerExprExpecting(right, F64)
-    : lowerer.lowerExprExpecting(right, STRING);
-  const fn: IrLibFn = name === "statusCode" ? "http.resStatusSet" : "http.resStatusMsgSet";
+    : lowerer.lowerExprExpecting(right, name === "statusMessage" ? STRING : BOOL);
+  const fn: IrLibFn = name === "statusCode" ? "http.resStatusSet"
+    : name === "statusMessage" ? "http.resStatusMsgSet"
+    : name === "sendDate" ? "http.resSendDateSet" : "http.resStrictContentLengthSet";
   return {
     kind: "exprStmt",
     expr: { kind: "libCall", fn, args: [receiver, value], type: VOID, loc },
@@ -2295,11 +2296,30 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
     return { kind: "libCall", fn: "http.resStatusGet", args: [receiver], type: F64, loc };
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "statusMessage") {
-    // The assigned reason phrase, or the current status code's default
-    // when none was set (Node answers undefined until the head goes out
-    // — divergence: this surface is string-typed, the checker's shape).
+    // Unset until the head is sent; then the assigned or default reason.
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
-    return { kind: "libCall", fn: "http.resStatusMsgGet", args: [receiver], type: STRING, loc };
+    return { kind: "libCall", fn: "http.resStatusMsgGet", args: [receiver], type: lowerer.withUndefinedArm(STRING), loc };
+  }
+  if (recvKind === "httpRes" && lowerer.isStdlibMember(expr)) {
+    const name = expr.name.text;
+    if (name === "req") {
+      const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+      return { kind: "libCall", fn: "http.resRequest", args: [receiver], type: HTTPREQ_T, loc };
+    }
+    if (name === "socket" || name === "connection") {
+      const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+      const type: IrType = { kind: "union", unionId: lowerer.unions.intern([NETSOCKET_T, NULL_T]) };
+      return { kind: "libCall", fn: "http.resSocket", args: [receiver], type, loc };
+    }
+    if (name === "writableFinished") {
+      const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+      return { kind: "libCall", fn: "http.resWritableFinished", args: [receiver], type: BOOL, loc };
+    }
+    if (name === "sendDate" || name === "strictContentLength") {
+      const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+      const fn: IrLibFn = name === "sendDate" ? "http.resSendDateGet" : "http.resStrictContentLengthGet";
+      return { kind: "libCall", fn, args: [receiver], type: BOOL, loc };
+    }
   }
   if (recvKind === "http2Session" && lowerer.isStdlibMember(expr)) {
     const m = expr.name.text;
@@ -4634,6 +4654,20 @@ function lowerHttpResMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "setTimeout") {
+    if (args.length < 1 || args.length > 2) {
+      lowerer.noLowering(`res.setTimeout with ${args.length} arguments`, call, "use setTimeout(milliseconds[, callback])");
+    }
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPRES_T);
+    const ms = lowerer.lowerExprExpecting(args[0]!, F64);
+    const cb = args.length === 2
+      ? lowerCallbackArg(lowerer, args[1]!, "response timeout callbacks", 0, () => false, "use ()", []).cb
+      : null;
+    const fn: IrLibFn = cb === null ? "http.resSetTimeout" : "http.resSetTimeoutCb";
+    const callArgs = cb === null ? [receiver, ms] : [receiver, ms, cb];
+    if (resultIsDiscarded(call)) return { kind: "libCall", fn, args: callArgs, type: VOID, loc };
+    return receiverReturningCall(lowerer, fn, callArgs, HTTPRES_T, loc);
+  }
   if (name === "writeContinue" || name === "writeProcessing" || name === "writeEarlyHints") {
     requireStatementPosition(lowerer, call, `res.${name}(...)`);
     if (lowerer.typeOf(access.expression).getSymbol()?.name === "Http2ServerResponse") {
@@ -4974,7 +5008,7 @@ function lowerHttpResMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   lowerer.noLowering(
     `ServerResponse.${name}`,
     call,
-    "setHeader, getHeader, hasHeader, removeHeader, writeHead, writeContinue, writeProcessing, writeEarlyHints, write, end, destroy, headersSent, statusCode, statusMessage, and on/once of close are the supported ServerResponse members",
+    "setHeader, getHeader, hasHeader, removeHeader, writeHead, writeContinue, writeProcessing, writeEarlyHints, setTimeout, write, end, destroy, response state reads, and on/once of close are the supported ServerResponse members",
     lowerer.checker.getSymbolAtLocation(access.name),
   );
 }

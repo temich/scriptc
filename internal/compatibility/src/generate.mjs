@@ -186,9 +186,10 @@ function featureEntries(compat) {
   return compat.features ?? [];
 }
 
-function featureOf(row, entries) {
+function featureOf(row, entries, parentSignature) {
   return entries.find((entry) =>
     entry.chapter === row.chapter &&
+    (entry.parent === undefined || entry.parent === parentSignature) &&
     ((entry.symbols ?? []).includes(row.apiSymbol) || (entry.signatures ?? []).includes(row.signature))
   );
 }
@@ -320,10 +321,10 @@ function classificationContext() {
   };
 }
 
-function classifyStatic(row, chapter, ctx) {
+function classifyStatic(row, chapter, ctx, parentSignature) {
   if (row.depth === 0) return tier("unreviewed", "", { source: "chapter-summary" });
   if (row.scope === "documentation" || row.scope === "configuration") return tier("not-applicable", "", { source: row.scope });
-  const feature = featureOf(row, ctx.staticFeatures);
+  const feature = featureOf(row, ctx.staticFeatures, parentSignature);
   if (feature) return tier(feature.status, "", { source: `compiler-feature:${row.chapter}.${row.apiSymbol}`, tests: feature.evidence });
   for (const candidate of symbolCandidates(row)) {
     // Dedicated lowering paths are authoritative when an older generic
@@ -354,10 +355,10 @@ function classifyStatic(row, chapter, ctx) {
   return tier("unreviewed", "");
 }
 
-function classifyDynamic(row, chapter, ctx) {
+function classifyDynamic(row, chapter, ctx, parentSignature) {
   if (row.depth === 0) return tier("unreviewed", "", { source: "chapter-summary" });
   if (row.scope === "documentation" || row.scope === "configuration") return tier("not-applicable", "", { source: row.scope });
-  const feature = featureOf(row, ctx.dynamicFeatures);
+  const feature = featureOf(row, ctx.dynamicFeatures, parentSignature);
   if (feature) return tier(feature.status, "", { source: `island-feature:${row.chapter}.${row.apiSymbol}`, tests: feature.evidence });
 
   if (row.chapter === "globals") {
@@ -445,8 +446,9 @@ function flattenChapter(rootNode, chapter, ctx) {
       nodeStability: stability,
     };
     row.scope = scopeOf(row);
-    row.static = classifyStatic(row, chapter, ctx);
-    row.dynamic = classifyDynamic(row, chapter, ctx);
+    const parentSignature = parents.at(-1)?.textRaw ?? parents.at(-1)?.name;
+    row.static = classifyStatic(row, chapter, ctx, parentSignature);
+    row.dynamic = classifyDynamic(row, chapter, ctx, parentSignature);
     rows.push(row);
     for (const field of CHILD_FIELDS) {
       for (const child of node[field] ?? []) walk(child, [...parents, node], depth + 1, stability);
@@ -615,6 +617,9 @@ function publicDetail(tier) {
     }
     if (/^compiler-feature:http\.response\.write(?:Continue|Processing|EarlyHints)$/.test(source)) {
       return "Static HTTP/1.1 informational responses support the tested no-callback forms; Early Hints accepts string-valued fields.";
+    }
+    if (/^compiler-feature:http\.(?:response\.setTimeout|connection|req|sendDate|socket|statusMessage|strictContentLength|writableFinished)$/.test(source)) {
+      return "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.";
     }
     return "Implemented for the documented scriptc module-loader subset.";
   }
@@ -893,11 +898,18 @@ function checkLocal() {
   }
   const ctx = classificationContext();
   if (snapshot.chapters.length !== 62) throw new Error(`expected 62 pinned Node API chapters, found ${snapshot.chapters.length}`);
+  const ancestors = [];
   for (const row of snapshot.rows) {
-    if (row.depth === 0) continue;
+    if (row.depth === 0) {
+      ancestors.length = 1;
+      ancestors[0] = row;
+      continue;
+    }
     const chapter = snapshot.chapters.find((item) => item.slug === row.chapter);
-    const expectedStatic = classifyStatic(row, chapter, ctx);
-    const expectedDynamic = classifyDynamic(row, chapter, ctx);
+    const parentSignature = ancestors[row.depth - 1]?.signature;
+    const expectedStatic = classifyStatic(row, chapter, ctx, parentSignature);
+    const expectedDynamic = classifyDynamic(row, chapter, ctx, parentSignature);
+    ancestors[row.depth] = row;
     if (JSON.stringify(row.static) !== JSON.stringify(expectedStatic) || JSON.stringify(row.dynamic) !== JSON.stringify(expectedDynamic)) {
       throw new Error(`generated classification is stale at ${row.id} (${row.signature}); run 'pnpm node-compat'`);
     }

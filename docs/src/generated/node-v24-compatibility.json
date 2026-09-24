@@ -506,9 +506,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 70,
+        "partial": 78,
         "refused": 0,
-        "not-implemented": 104,
+        "not-implemented": 96,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -47865,9 +47865,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48061,9 +48061,9 @@
         "inherited": false
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48145,9 +48145,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48173,9 +48173,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48201,9 +48201,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48257,9 +48257,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48285,9 +48285,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",
@@ -48341,9 +48341,9 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "detail": "No static compiler lowering is registered for this API yet.",
-        "verification": "registry-gap"
+        "status": "partial",
+        "detail": "Static ServerResponse state, socket access, timeouts, and strict body length checks support the tested HTTP/1.1 forms.",
+        "verification": "test-backed"
       },
       "dynamic": {
         "status": "not-implemented",

@@ -514,8 +514,17 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "net.serverOnListening": { argTypes: [NETSERVER_T, { kind: "func", params: [], ret: VOID }, BOOL], result: VOID },
   "http.resStatusGet": { argTypes: [HTTPRES_T], result: F64 },
   "http.resStatusSet": { argTypes: [HTTPRES_T, F64], result: VOID },
-  "http.resStatusMsgGet": { argTypes: [HTTPRES_T], result: STRING },
+  "http.resStatusMsgGet": { argTypes: [HTTPRES_T], result: VOID },
   "http.resStatusMsgSet": { argTypes: [HTTPRES_T, STRING], result: VOID },
+  "http.resRequest": { argTypes: [HTTPRES_T], result: HTTPREQ_T },
+  "http.resSocket": { argTypes: [HTTPRES_T], result: VOID },
+  "http.resWritableFinished": { argTypes: [HTTPRES_T], result: BOOL },
+  "http.resSendDateGet": { argTypes: [HTTPRES_T], result: BOOL },
+  "http.resSendDateSet": { argTypes: [HTTPRES_T, BOOL], result: VOID },
+  "http.resStrictContentLengthGet": { argTypes: [HTTPRES_T], result: BOOL },
+  "http.resStrictContentLengthSet": { argTypes: [HTTPRES_T, BOOL], result: VOID },
+  "http.resSetTimeout": { argTypes: [HTTPRES_T, F64], result: VOID },
+  "http.resSetTimeoutCb": { argTypes: [HTTPRES_T, F64, { kind: "func", params: [], ret: VOID }], result: VOID },
   // resGetHeader answers the interned `string | undefined` union — the
   // reqHeader/envGet sentinel pattern (VOID here, checked specially).
   "http.resGetHeader": { argTypes: [HTTPRES_T, STRING], result: VOID },
@@ -4240,7 +4249,7 @@ function validateFunction(
           }
           break;
         }
-        if (e.fn === "http.reqStatusMessage") {
+        if (e.fn === "http.reqStatusMessage" || e.fn === "http.resStatusMsgGet") {
           // Result is the interned `string | undefined` union (reqHeader's).
           const def = e.type.kind === "union" ? unions.get(e.type.unionId) : undefined;
           const ok =
@@ -4249,8 +4258,16 @@ function validateFunction(
             def.arms.some((a) => a.kind === "string") &&
             def.arms.some((a) => a.kind === "undefinedT");
           if (!ok) {
-            err(`libCall http.reqStatusMessage must return the 'string | undefined' union`, e.loc);
+            err(`libCall ${e.fn} must return the 'string | undefined' union`, e.loc);
           }
+          break;
+        }
+        if (e.fn === "http.resSocket") {
+          const def = e.type.kind === "union" ? unions.get(e.type.unionId) : undefined;
+          const ok = def && def.arms.length === 2 &&
+            def.arms.some((a) => a.kind === "netSocket") &&
+            def.arms.some((a) => a.kind === "nullT");
+          if (!ok) err(`libCall http.resSocket must return the 'Socket | null' union`, e.loc);
           break;
         }
         if (e.fn === "http.reqH2Stream") {

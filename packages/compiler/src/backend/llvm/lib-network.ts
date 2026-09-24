@@ -1,7 +1,7 @@
 /* Focused LLVM library-call emission extracted from emitter.ts. */
 import { InternalCompilerError } from "../../errors.js";
 import { undefinedArmTag } from "../../ir/analysis.js";
-import { arrayOf, STRING } from "../../ir/ir.js";
+import { arrayOf, NETSOCKET_T, STRING } from "../../ir/ir.js";
 import { mangleRecordNew, mangleRecordStruct } from "../mangle.js";
 import type { LlvmEmitterContext, LibCallExpr, LlValue } from "./expr-context.js";
 import { f64Lit } from "./common.js";
@@ -242,7 +242,19 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       B.line(`${raw} = call ptr @scr_net_sock_read_bytes(ptr ${args[0]!.name}, double ${args[1]!.name}) ; +1 or NULL`);
       return host.wrapNullable(raw, raw, def!.arms[bytesTag]!, bytesTag, e.type, nullTag);
     }
-    if (e.fn === "net.sockRemoteAddress" || e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader" || e.fn === "http.clientGetHeader" || e.fn === "http.reqStatusMessage") {
+    if (e.fn === "http.resSocket") {
+      if (e.type.kind !== "union") throw new InternalCompilerError("llvm emitter bug: http.resSocket result is not a union");
+      const def = host.unionsById.get(e.type.unionId);
+      const socketTag = def ? def.arms.findIndex((a) => a.kind === "netSocket") : -1;
+      const nullTag = def ? def.arms.findIndex((a) => a.kind === "nullT") : -1;
+      if (socketTag < 0 || nullTag < 0) throw new InternalCompilerError("llvm emitter bug: http.resSocket union lacks its arms");
+      const args = e.args.map((a) => host.emitExpr(a));
+      host.declare(`declare ptr @scr_http_res_socket(ptr)`);
+      const raw = B.tmp();
+      B.line(`${raw} = call ptr @scr_http_res_socket(ptr ${args[0]!.name}) ; +1 or NULL`);
+      return host.wrapNullable(raw, raw, NETSOCKET_T, socketTag, e.type, nullTag);
+    }
+    if (e.fn === "net.sockRemoteAddress" || e.fn === "http.reqHeader" || e.fn === "http.reqTrailer" || e.fn === "http.resGetHeader" || e.fn === "http.clientGetHeader" || e.fn === "http.reqStatusMessage" || e.fn === "http.resStatusMsgGet") {
       // string | undefined: +1 or NULL, NULL takes the undefined arm.
       if (e.type.kind !== "union") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} result is not a union`);
       const def = host.unionsById.get(e.type.unionId);
@@ -256,6 +268,7 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
         "http.resGetHeader": "scr_http_res_get_header",
         "http.clientGetHeader": "scr_http_client_get_header",
         "http.reqStatusMessage": "scr_http_req_status_message",
+        "http.resStatusMsgGet": "scr_http_res_status_msg_get",
       }[e.fn]!;
       const args = e.args.map((a) => host.emitExpr(a));
       const argList = args.map((a) => `${host.llType(a.type)} ${a.name}`).join(", ");
@@ -416,6 +429,13 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       host.moveTemp(args[1]!);
       host.declare(`declare void @scr_http_res_on_finish(ptr, ptr)`);
       B.line(`call void @scr_http_res_on_finish(ptr ${args[0]!.name}, ptr ${args[1]!.name})`);
+      return { name: "", type: e.type };
+    }
+    if (e.fn === "http.resSetTimeoutCb") {
+      const args = e.args.map((a) => host.emitExpr(a));
+      host.moveTemp(args[2]!);
+      host.declare(`declare void @scr_http_res_set_timeout(ptr, double, ptr)`);
+      B.line(`call void @scr_http_res_set_timeout(ptr ${args[0]!.name}, double ${args[1]!.name}, ptr ${args[2]!.name})`);
       return { name: "", type: e.type };
     }
     if (e.fn === "net.sockOnFinish") {

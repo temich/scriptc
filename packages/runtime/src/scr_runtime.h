@@ -6116,6 +6116,13 @@ void scr_http_res_write_dynv(ScrHttpRes *r, const ScrDyn *d /*borrowed*/);
 void scr_http_res_end_dynv(ScrHttpRes *r, const ScrDyn *d /*borrowed*/);
 bool scr_http_res_headers_sent(ScrHttpRes *r);
 bool scr_http_res_writable_ended(ScrHttpRes *r);
+bool scr_http_res_send_date(ScrHttpRes *r);
+void scr_http_res_set_send_date(ScrHttpRes *r, bool value);
+bool scr_http_res_strict_content_length(ScrHttpRes *r);
+void scr_http_res_set_strict_content_length(ScrHttpRes *r, bool value);
+ScrHttpReq *scr_http_res_request(ScrHttpRes *r); /* +1 */
+ScrNetSocket *scr_http_res_socket(ScrHttpRes *r); /* +1 or NULL after finish */
+bool scr_http_res_writable_finished(ScrHttpRes *r);
 /* The res member surface: statusCode (200 until assigned; inert once the
  * head went out), statusMessage (the reason phrase — assigned value, or
  * the code's default), the header CRUD trio, and end(cb)'s finish slot
@@ -6177,6 +6184,7 @@ double scr_http_res_writable_corked(ScrHttpRes *r);
 bool scr_http_res_destroyed_flag(ScrHttpRes *r);
 void scr_http_res_set_req(ScrHttpRes *r, ScrHttpReq *req /*borrowed, nullable*/);
 void scr_http_res_set_timeout(ScrHttpRes *r, double ms, ScrClosure *cb /*moves, nullable*/);
+void scr_http_res_set_timeout_plain(ScrHttpRes *r, double ms);
 void scr_http_res_on_write_flush(ScrHttpRes *r, ScrClosure *cb /*moves*/);
 /* req.setEncoding(enc) — the socket twin's contract; may throw. */
 void scr_http_req_set_encoding(ScrHttpReq *r, ScrStr *enc /*borrowed*/);

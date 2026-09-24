@@ -555,9 +555,9 @@
       "apiEntries": 174,
       "static": {
         "supported": 0,
-        "partial": 70,
+        "partial": 78,
         "refused": 0,
-        "not-implemented": 104,
+        "not-implemented": 96,
         "by-design": 0,
         "unreviewed": 0,
         "not-applicable": 0
@@ -62165,6 +62165,7 @@
           "tests/corpus/2954-http-outgoing-headers.ts",
           "tests/corpus/2955-http-static-state.ts",
           "tests/corpus/2956-http-static-informational.ts",
+          "tests/corpus/2957-http-static-response-controls.ts",
           "tests/fixtures/server/cases/http-trailers/main.ts"
         ]
       },
@@ -64847,8 +64848,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.response.setTimeout",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65061,8 +65065,11 @@
         "inherited": false
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.connection",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65145,8 +65152,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.req",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65172,8 +65182,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.sendDate",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65199,8 +65212,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.socket",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65256,8 +65272,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.statusMessage",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65283,8 +65302,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.strictContentLength",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",
@@ -65340,8 +65362,11 @@
         "inherited": true
       },
       "static": {
-        "status": "not-implemented",
-        "evidence": "compiler-unmatched:http"
+        "status": "partial",
+        "evidence": "compiler-feature:http.writableFinished",
+        "tests": [
+          "tests/corpus/2957-http-static-response-controls.ts"
+        ]
       },
       "dynamic": {
         "status": "not-implemented",

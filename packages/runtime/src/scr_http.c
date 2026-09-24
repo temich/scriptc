@@ -813,8 +813,11 @@ struct ScrHttpRes {
   bool chunked;
   bool finished;
   bool no_date; /* res.sendDate = false: suppress the implicit Date header */
+  bool strict_content_length;
+  size_t strict_bytes_written; /* Node counts UTF-8 bytes, not JS characters */
   bool keep_alive; /* the REQUEST's verdict; Connection: close overrides */
   bool destroyed; /* res.destroy()/teardown — res.destroyed (true in 'close') */
+  bool socket_detached; /* finish/close removes the response's socket view */
   /* cork()/uncork(): corked counts the nesting (res.writableCorked);
    * writes while corked coalesce in cork_buf and flush as ONE write when
    * the count reaches zero (or at end()) — Node's coalescing, and the
@@ -871,6 +874,51 @@ void scr_http_res_release_v(void *p) { scr_http_res_release((ScrHttpRes *)p); }
 
 bool scr_http_res_headers_sent(ScrHttpRes *r) { return r->head_sent; }
 bool scr_http_res_writable_ended(ScrHttpRes *r) { return r->finished; }
+bool scr_http_res_send_date(ScrHttpRes *r) { return !r->no_date; }
+void scr_http_res_set_send_date(ScrHttpRes *r, bool value) { r->no_date = !value; }
+bool scr_http_res_strict_content_length(ScrHttpRes *r) { return r->strict_content_length; }
+void scr_http_res_set_strict_content_length(ScrHttpRes *r, bool value) { r->strict_content_length = value; }
+ScrHttpReq *scr_http_res_request(ScrHttpRes *r) { return scr_http_req_retain(r->req_ref); }
+ScrNetSocket *scr_http_res_socket(ScrHttpRes *r) {
+  return r->sock && !r->socket_detached ? scr_net_sock_retain(r->sock) : NULL;
+}
+bool scr_http_res_writable_finished(ScrHttpRes *r) { return r->finished; }
+
+static bool scr_http_res_has_header(ScrHttpRes *r, const char *name);
+
+/* Node checks declared body length only while strictContentLength is true,
+ * with no transfer encoding and a body-bearing response. The stored header
+ * string has already passed setHeader's validation; strtod matches Node's
+ * numeric conversion for the ordinary decimal Content-Length values. */
+static bool scr_http_res_expected_length(ScrHttpRes *r, double *expected) {
+  if (!r->strict_content_length || r->h2_stream || r->chunked ||
+      (r->status >= 100 && r->status < 200) || r->status == 204 || r->status == 304 ||
+      scr_http_res_has_header(r, "transfer-encoding")) return false;
+  if (r->req_ref && r->req_ref->method && r->req_ref->method->len == 4 &&
+      memcmp(r->req_ref->method->data, "HEAD", 4) == 0) return false;
+  for (size_t i = 0; i < r->nheaders; i++) {
+    if (r->hnames[i]->len != 14) continue;
+    bool match = true;
+    for (size_t j = 0; j < 14; j++) {
+      if (tolower((unsigned char)r->hnames[i]->data[j]) != "content-length"[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
+    *expected = strtod(r->hvalues[i]->data, NULL);
+    return true;
+  }
+  return false;
+}
+
+static void scr_http_res_length_mismatch(ScrHttpRes *r, double expected) {
+  char msg[256];
+  int n = snprintf(msg, sizeof msg,
+    "Response body's content-length of %zu byte(s) does not match the content-length of %.15g byte(s) set in header",
+    r->strict_bytes_written, expected);
+  scr_throw_error_msg_code(SCR_ERR_ERROR, msg, (size_t)n, "ERR_HTTP_CONTENT_LENGTH_MISMATCH");
+}
 
 /* res.statusCode: 200 until assigned (Node's fresh-response default);
  * assignment after the head went out is inert (Node throws on the WRITE
@@ -882,11 +930,11 @@ void scr_http_res_status_set(ScrHttpRes *r, double status) {
   r->status = (int)status;
 }
 
-/* res.statusMessage: the assigned reason phrase, or the current status
- * code's default once none was set (Node answers undefined before the
- * head goes out — divergence: this surface is string-typed). */
+/* An unset statusMessage is undefined until the head chooses the status
+ * code's default reason phrase. */
 ScrStr *scr_http_res_status_msg_get(ScrHttpRes *r) {
   if (r->status_msg) return scr_str_retain(r->status_msg);
+  if (!r->head_sent) return NULL;
   const char *reason = scr_http_reason(r->status > 0 ? r->status : 200);
   return scr_str_new(reason, strlen(reason));
 }
@@ -1373,10 +1421,28 @@ static void scr_http_res_write_raw(ScrHttpRes *r, const char *data, size_t len) 
 }
 
 void scr_http_res_write_str(ScrHttpRes *r, ScrStr *data /*borrowed*/) {
+  double expected;
+  if (r->head_sent && scr_http_res_expected_length(r, &expected) &&
+      (double)(r->strict_bytes_written + data->len) > expected) {
+    r->strict_bytes_written += data->len;
+    scr_http_res_length_mismatch(r, expected);
+    r->strict_bytes_written -= data->len;
+    return;
+  }
+  if (r->strict_content_length) r->strict_bytes_written += data->len;
   scr_http_res_write_raw(r, data->data, data->len);
 }
 
 void scr_http_res_write_bytes(ScrHttpRes *r, ScrBytes *data /*borrowed*/) {
+  double expected;
+  if (r->head_sent && scr_http_res_expected_length(r, &expected) &&
+      (double)(r->strict_bytes_written + data->len) > expected) {
+    r->strict_bytes_written += data->len;
+    scr_http_res_length_mismatch(r, expected);
+    r->strict_bytes_written -= data->len;
+    return;
+  }
+  if (r->strict_content_length) r->strict_bytes_written += data->len;
   scr_http_res_write_raw(r, (const char *)data->data, data->len);
 }
 
@@ -1420,6 +1486,10 @@ void scr_http_res_set_timeout(ScrHttpRes *r, double ms, ScrClosure *cb /*moves, 
   if (cb) scr_net_sock_on_timeout(r->sock, cb, true);
 }
 
+void scr_http_res_set_timeout_plain(ScrHttpRes *r, double ms) {
+  scr_http_res_set_timeout(r, ms, NULL);
+}
+
 static void scr_http_conn_response_finished(struct ScrHttpConn *conn, bool keep_alive);
 static void scr_http_queue_res_finish(ScrHttpRes *res);
 
@@ -1437,6 +1507,15 @@ static void scr_http_res_cork_flush(ScrHttpRes *r) {
 
 static void scr_http_res_end_raw(ScrHttpRes *r, const char *data, size_t len) {
   if (r->finished) return;
+  double expected;
+  if (len > 0 && r->head_sent && scr_http_res_expected_length(r, &expected) &&
+      (double)(r->strict_bytes_written + len) != expected) {
+    r->strict_bytes_written += len;
+    scr_http_res_length_mismatch(r, expected);
+    r->strict_bytes_written -= len;
+    return;
+  }
+  if (r->strict_content_length) r->strict_bytes_written += len;
   if (r->corked > 0 || r->cork_len > 0) {
     /* end() flushes every cork level (Node) — the body streamed, so the
      * framing below takes the already-committed streaming path */
@@ -1449,7 +1528,7 @@ static void scr_http_res_end_raw(ScrHttpRes *r, const char *data, size_t len) {
     if (!r->head_sent) scr_http_res_send_head(r, (long long)len);
     scr_http_h2_ops->end(r->h2_stream, data, len);
     r->finished = true;
-    if (r->finish_ls.n > 0) scr_http_queue_res_finish(r);
+    scr_http_queue_res_finish(r);
     return;
   }
   if (!r->head_sent) {
@@ -1466,8 +1545,13 @@ static void scr_http_res_end_raw(ScrHttpRes *r, const char *data, size_t len) {
     scr_http_res_write_raw(r, data, len);
     if (r->chunked && r->sock) scr_http_send_chunk_end(r->sock, &r->trailers);
   }
+  if (scr_http_res_expected_length(r, &expected) &&
+      (double)r->strict_bytes_written != expected) {
+    scr_http_res_length_mismatch(r, expected);
+    return;
+  }
   r->finished = true;
-  if (r->finish_ls.n > 0) scr_http_queue_res_finish(r);
+  scr_http_queue_res_finish(r);
   if (r->conn) scr_http_conn_response_finished(r->conn, r->keep_alive);
 }
 
@@ -1734,6 +1818,7 @@ static void scr_http_proto_sweep(void) {
       if (!res->close_emitted) {
         res->close_emitted = true;
         res->destroyed = true; /* Node: destroyed reads true inside 'close' */
+        res->socket_detached = true;
         scr_net_fire0_this(&res->close_ls, res, SCR_DYNH_HTTP_RES);
         scr_net_ls_drop(&res->close_ls);
       }
@@ -1792,6 +1877,7 @@ static void scr_http_proto_sweep(void) {
     case SCR_HTTP_EMIT_RES_FINISH: {
       ScrHttpRes *res = (ScrHttpRes *)e.h;
       res->finish_queued = false; /* a later end(cb) on the finished res re-queues */
+      res->socket_detached = true;
       scr_net_fire0_this(&res->finish_ls, res, SCR_DYNH_HTTP_RES);
       break;
     }
@@ -4910,6 +4996,7 @@ static ScrDyn *scr_http_dynh_res_get(void *h, const char *key, size_t key_len) {
   if (strcmp(key, "statusCode") == 0) return scr_dyn_new_num(scr_http_res_status_get(r));
   if (strcmp(key, "statusMessage") == 0) {
     ScrStr *s = scr_http_res_status_msg_get(r);
+    if (!s) return scr_dyn_retain(scr_dyn_undefined());
     ScrDyn *d = scr_dyn_new_str(s);
     scr_str_release(s);
     return d;
@@ -4921,8 +5008,11 @@ static ScrDyn *scr_http_dynh_res_get(void *h, const char *key, size_t key_len) {
     return scr_dyn_new_bool(r->finished);
   }
   if (strcmp(key, "socket") == 0 || strcmp(key, "connection") == 0) {
-    if (!r->sock) return scr_dyn_new_null(); /* destroyed: Node nulls it */
-    return scr_dyn_new_handle(r->sock, SCR_DYNH_NET_SOCKET);
+    ScrNetSocket *sock = scr_http_res_socket(r);
+    if (!sock) return scr_dyn_new_null();
+    ScrDyn *view = scr_dyn_new_handle(sock, SCR_DYNH_NET_SOCKET);
+    scr_net_sock_release(sock);
+    return view;
   }
   if (strcmp(key, "req") == 0) {
     if (r->req_cleared || r->req_ref == NULL) return scr_dyn_new_null();

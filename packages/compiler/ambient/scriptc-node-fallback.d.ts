@@ -2390,10 +2390,16 @@ declare module "http" {
   export interface ServerResponse {
     readonly headersSent: boolean;
     readonly writableEnded: boolean;
+    readonly writableFinished: boolean;
     readonly writableCorked: number;
+    readonly req: IncomingMessage;
+    readonly socket: Socket | null;
+    readonly connection: Socket | null;
+    sendDate: boolean;
+    strictContentLength: boolean;
     /* Node's writable head properties: the implicit head reads them. */
     statusCode: number;
-    statusMessage: string;
+    statusMessage: string | undefined;
     setHeader(name: string, value: string | number): void;
     getHeader(name: string): string | undefined;
     getHeaderNames(): string[];
@@ -2413,6 +2419,7 @@ declare module "http" {
     cork(): void;
     uncork(): void;
     addTrailers(headers: OutgoingHttpHeaders | ReadonlyArray<[string, string]>): void;
+    setTimeout(msecs: number, callback?: () => void): this;
     /* end's callback forms fire once the body went out (the 'finish'
      * emit, deferred past the handler's synchronous tail). */
     end(data?: string | Uint8Array, callback?: () => void): void;
