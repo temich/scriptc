@@ -957,32 +957,32 @@ describe.each(EMISSIONS)("K14: determinism fences, %s emission", (emission) => {
 
   test("a manifest-id-keyed teachings entry attaches to that surface's own refusal", async () => {
     const diags = await refusal(
-      `export function f(): number { return Math.acos(1); }\n`,
+      `export function f(): number { return (1.234).toPrecision(2).length; }\n`,
       {
         exports: [{ export: "f", symbol: "kx_f", params: [], returns: "f64" }],
-        determinism: { teachings: { "stdlib.math.acos": "trig runs in the host; request it as an effect" } },
+        determinism: { teachings: { "stdlib.number.toPrecision": "formatting runs in the host; request it as an effect" } },
       },
       emission,
     );
     // The surface's own code, not a fence code: the id key attaches text
     // to the refusal that already fires.
     expect(diags[0]!.code).toBe("SC2012");
-    expect(diags[0]!.message).toContain("Math.acos");
-    expect(diags[0]!.note).toBe("from the 'refusal-fixture' profile: trig runs in the host; request it as an effect");
+    expect(diags[0]!.message).toContain(".toPrecision()");
+    expect(diags[0]!.note).toBe("from the 'refusal-fixture' profile: formatting runs in the host; request it as an effect");
   });
 
   test("fencing a surface the static tier refuses anyway changes only the message", async () => {
     const diags = await refusal(
-      `export function f(): number { return Math.acos(1); }\n`,
+      `export function f(): number { return "abc".replace("a", "b").length; }\n`,
       {
         exports: [{ export: "f", symbol: "kx_f", params: [], returns: "f64" }],
-        determinism: { fences: [{ id: "stdlib.math.acos", teaching: "trig is host math" }] },
+        determinism: { fences: [{ id: "stdlib.string.replace", teaching: "replacement is host work" }] },
       },
       emission,
     );
     // The existing refusal's code survives — the fence never re-codes a
     // surface that already refuses; its teaching rides as the note.
     expect(diags[0]!.code).toBe("SC2012");
-    expect(diags[0]!.note).toBe("from the 'refusal-fixture' profile: trig is host math");
+    expect(diags[0]!.note).toBe("from the 'refusal-fixture' profile: replacement is host work");
   });
 });

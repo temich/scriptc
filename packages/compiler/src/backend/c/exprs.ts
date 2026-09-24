@@ -5125,6 +5125,20 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             return finish(`sin(${arg(0)})`);
           case "math.cos":
             return finish(`cos(${arg(0)})`);
+          case "math.tan":
+            return finish(`tan(${arg(0)})`);
+          case "math.asin":
+            return finish(`asin(${arg(0)})`);
+          case "math.acos":
+            return finish(`acos(${arg(0)})`);
+          case "math.atan":
+            return finish(`atan(${arg(0)})`);
+          case "math.cbrt":
+            return finish(`cbrt(${arg(0)})`);
+          case "math.sign":
+            // Each argument was evaluated into a temp. Returning that temp
+            // for unordered/zero inputs preserves NaN and the sign of zero.
+            return finish(`(${arg(0)} > 0.0 ? 1.0 : (${arg(0)} < 0.0 ? -1.0 : ${arg(0)}))`);
           case "math.exp":
             return finish(`exp(${arg(0)})`);
           case "math.sqrt":

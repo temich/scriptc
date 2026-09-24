@@ -374,11 +374,10 @@ describe("library profile fences", () => {
     const fsIds = r.profile.fences[1]!.surfaces.map((s) => s.id);
     expect(fsIds).toContain("node-builtin.fs.readFileSync");
     expect(fsIds).toContain("node-builtin.fs.promises.readFile");
-    // A fenced dynamic-only surface carries its own refusal code and no
-    // detector: the teaching rides the refusal that already fires.
+    // Math.acos now compiles statically, so its fence must have a detector.
     const acos = r.profile.fences[2]!.surfaces[0]!;
-    expect(acos.code).toBe("SC2012");
-    expect(acos.detector).toBeUndefined();
+    expect(acos.code).toBeUndefined();
+    expect(acos.detector).toBeDefined();
   });
 
   test("a fence remediation feeds the trap-remediation lookup through covered codes", () => {
@@ -388,7 +387,7 @@ describe("library profile fences", () => {
         determinism: {
           remediations: { SC2012: "the explicit map key wins" },
           fences: [
-            { id: "stdlib.math.acos", remediation: "request it as an effect" },
+            { id: "stdlib.string.replace", remediation: "request it as an effect" },
             { id: "node-builtin.crypto.createCipheriv", remediation: "ciphers come from the host" },
           ],
         },

@@ -1,5 +1,5 @@
-// The island-backed ambient surface (Math methods outside the static table,
-// number methods, string-pattern replace/at, the Number statics, ...)
+// The island-backed ambient surface (number methods, string-pattern
+// replace/at, the Number statics, ...)
 // typechecks against real static types but executes in the embedded
 // engine: in a static build every use site is its own SC2012 naming the
 // flag — never an ICE, never a link error. Static Math methods include

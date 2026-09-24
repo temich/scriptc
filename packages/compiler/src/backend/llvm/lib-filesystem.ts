@@ -618,6 +618,18 @@ export function emitPrimitiveLibCall(host: LlvmEmitterContext, e: LibCallExpr): 
       B.line(`${t} = call double @llvm.fabs.f64(double ${v.name})`);
       return { name: t, type: e.type };
     }
+    if (e.fn === "math.sign") {
+      const v = host.emitExpr(e.args[0]!);
+      const positive = B.tmp();
+      B.line(`${positive} = fcmp ogt double ${v.name}, ${f64Lit(0)}`);
+      const negative = B.tmp();
+      B.line(`${negative} = fcmp olt double ${v.name}, ${f64Lit(0)}`);
+      const nonPositive = B.tmp();
+      B.line(`${nonPositive} = select i1 ${negative}, double ${f64Lit(-1)}, double ${v.name}`);
+      const t = B.tmp();
+      B.line(`${t} = select i1 ${positive}, double ${f64Lit(1)}, double ${nonPositive}`);
+      return { name: t, type: e.type };
+    }
     if (e.fn === "num.isNaN") {
       const v = host.emitExpr(e.args[0]!);
       const t = B.tmp();

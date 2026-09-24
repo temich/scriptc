@@ -2683,22 +2683,22 @@
       "id": "stdlib.math.acos",
       "kind": "stdlib",
       "name": "Math.acos",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.asin",
       "kind": "stdlib",
       "name": "Math.asin",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.atan",
       "kind": "stdlib",
       "name": "Math.atan",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.atan2",
@@ -2711,8 +2711,8 @@
       "id": "stdlib.math.cbrt",
       "kind": "stdlib",
       "name": "Math.cbrt",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.ceil",
@@ -2809,8 +2809,8 @@
       "id": "stdlib.math.sign",
       "kind": "stdlib",
       "name": "Math.sign",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.sin",
@@ -2830,8 +2830,8 @@
       "id": "stdlib.math.tan",
       "kind": "stdlib",
       "name": "Math.tan",
-      "status": "dynamic-only",
-      "code": "SC2012"
+      "status": "static",
+      "note": "compiles statically at arity 1; other declared call shapes run only in the embedded dynamic engine (SC2012 without --dynamic)"
     },
     {
       "id": "stdlib.math.trunc",

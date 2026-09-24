@@ -2157,6 +2157,13 @@ export type IrLibFn =
   | "math.ceil"
   | "math.sin"
   | "math.cos"
+  | "math.tan"
+  | "math.asin"
+  | "math.acos"
+  | "math.atan"
+  | "math.cbrt"
+  /** Return -1, +1, or the original NaN/zero. In particular, -0 remains -0. */
+  | "math.sign"
   | "math.exp"
   | "math.sqrt"
   | "math.log"
