@@ -15,7 +15,7 @@ import { cjsClassExprWholeExportOf, cjsExportAssignmentOf, cjsExportDiscardReaso
 import { ARRAY_METHODS, builtinConstLit, builtinFenceHintOf, builtinModuleConstOf, builtinModulesArrayLit, builtinModuleFnOf, COMPOUND_ASSIGN_OPS, CompoundOp, ISLAND_SURFACE, isChildSurfaceMember, MAP_METHODS, NARROW_FIRST, SET_METHODS, STR_METHODS, UNSUPPORTED_EXPR, sideEffectFreeOptionValue, stdlibGlobalNameOf } from "./surfaces.js";
 import { UNSUPPORTED, blockedBindingUseDiag, requiresDynamicPackageDiag, unsupportedDiag } from "../../diagnostics/diagnostic.js";
 import { PoisonError, dynUndefinedExpr, jsFuncNameOf, neverTaintedJsType, nodeThrowExpr, own } from "./lowerer.js";
-import { lowerNpmStaticSafeIndexRead, lowerSafeIndexRead, strCharsCall } from "./lower-containers.js";
+import { lowerNpmStaticSafeIndexRead, lowerSafeIndexRead, strCharsCall, tryLowerNumericIndexRead } from "./lower-containers.js";
 import { arrayValueRead, arrayValueStore } from "./array-values.js";
 import { npmStaticPackageOfPath } from "../npm-static.js";
 import { unsupportedModuleFeatureOf } from "../builtin-modules.js";
@@ -4066,6 +4066,10 @@ export function lowerOptionalNumber(
 ): IrExpr {
   if (operand.type.kind !== "union" || lowerer.armTag(operand.type.unionId, UNDEFINED_T) < 0) return operand;
   const directNumber = lowerer.stripUndefinedArm(operand.type).kind === "f64";
+  if (directNumber) {
+    const scalarRead = tryLowerNumericIndexRead(lowerer, operand, loc);
+    if (scalarRead) return scalarRead;
+  }
   const checkerNumber = narrowedNode !== undefined && lowerer.mapTypeOf(lowerer.typeOf(narrowedNode))?.kind === "f64";
   if (!directNumber && (!checkerNumber || lowerer.armTag(operand.type.unionId, F64) < 0)) return operand;
   const undefTag = lowerer.armTag(operand.type.unionId, UNDEFINED_T);

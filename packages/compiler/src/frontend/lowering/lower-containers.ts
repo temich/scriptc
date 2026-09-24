@@ -1427,28 +1427,25 @@ function arrayUnionHofHelper(
     return { kind: "call", callee: helper, args: [snapshot, fnArg], type: arrayOf(outElem), loc };
   }
 
-/** An OOB-SAFE indexed read: `xs[i]`
-   * answers the interned `elem | undefined` union — the element when `i`
-   * is an integer in [0, len), JS's property-miss undefined otherwise —
-   * instead of the trap divergence 4 documents for program code.
-   * Package JS is inference-typed, guard-style code (`registeredArguments
-   * .slice(-1)[0]`, commander's last-element probe), and the trap would
-   * fire on working Node idioms; program files keep the documented trap
-   * (their annotations can prove bounds). Existing element unions retag
-   * into the canonical union with an added undefined arm. */
+/** An ordinary indexed read: values retain their element type, while
+ * holes, missing properties, and present undefined yield undefined.
+ * Numeric consumption may instead return the scalar ToNumber result,
+ * avoiding a temporary union without changing the array's storage. */
   export function lowerSafeIndexRead(
     lowerer: Lowerer,
     arr: IrExpr & { type: { kind: "array" } },
     index: IrExpr,
     loc: SrcLoc,
+    numeric = false,
   ): IrExpr | null {
     const elem = arr.type.elem;
     if (elem.kind === "void" || elem.kind === "dyn") return null;
-    const resultT = arrayValueType(lowerer, elem);
-    const key = `idxOr:${typeKey(elem)}`;
+    if (numeric && elem.kind !== "f64") throw new InternalCompilerError("numeric index read requires f64 storage");
+    const resultT = numeric ? F64 : arrayValueType(lowerer, elem);
+    const key = `${numeric ? "idxNumber" : "idxOr"}:${typeKey(elem)}`;
     let name = lowerer.arrHofHelpers.get(key);
     if (!name) {
-      name = `%arr.idxOr.${lowerer.arrHofHelpers.size}`;
+      name = `%arr.${numeric ? "idxNumber" : "idxOr"}.${lowerer.arrHofHelpers.size}`;
       lowerer.arrHofHelpers.set(key, name);
       const arrT = arr.type;
       lowerer.liftedFns.push({
@@ -1462,12 +1459,37 @@ function arrayUnionHofHelper(
           { id: "a.0", name: "a", type: arrT, mutable: false },
           { id: "i.0", name: "i", type: F64, mutable: false },
         ],
-        body: [{ kind: "return", value: arrayValueRead(lowerer, varRef("a.0", arrT, loc), varRef("i.0", F64, loc), elem, loc), loc }],
+        body: [{
+          kind: "return",
+          value: numeric ? {
+            kind: "ternary",
+            cond: {
+              kind: "bin", op: "===",
+              left: { kind: "arrayState", arr: varRef("a.0", arrT, loc), index: varRef("i.0", F64, loc), type: F64, loc },
+              right: numLit(1, loc), type: BOOL, loc,
+            },
+            then: { kind: "arrayGet", arr: varRef("a.0", arrT, loc), index: varRef("i.0", F64, loc), type: F64, loc },
+            else_: { kind: "bin", op: "/", left: numLit(0, loc), right: numLit(0, loc), type: F64, loc },
+            type: F64, loc,
+          } : arrayValueRead(lowerer, varRef("a.0", arrT, loc), varRef("i.0", F64, loc), elem, loc),
+          loc,
+        }],
         loc,
       });
     }
     return { kind: "call", callee: name, args: [arr, index], type: resultT, loc };
   }
+
+/** Fuse only our own f64-array read helper with immediate ToNumber.
+ * Reuse its arguments verbatim so the receiver and index still evaluate
+ * exactly once, in order, before the read. Do not specialize user calls,
+ * union-element arrays, or optional values stored in locals. */
+export function tryLowerNumericIndexRead(lowerer: Lowerer, operand: IrExpr, loc: SrcLoc): IrExpr | null {
+  if (operand.kind !== "call" || operand.callee !== lowerer.arrHofHelpers.get(`idxOr:${typeKey(F64)}`)) return null;
+  const [arr, index] = operand.args;
+  if (operand.args.length !== 2 || arr?.type.kind !== "array" || arr.type.elem.kind !== "f64" || index?.type.kind !== "f64") return null;
+  return lowerSafeIndexRead(lowerer, arr as IrExpr & { type: { kind: "array" } }, index, loc, true);
+}
 
   /** Backward-compatible name for the npm-static probe path. */
   export const lowerNpmStaticSafeIndexRead = lowerSafeIndexRead;

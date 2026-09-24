@@ -1,0 +1,46 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, test } from "vitest";
+import { compile, deserializeModule, validateModule } from "../src/index.js";
+
+test("ordinary numeric-array arithmetic has no reachable union allocation", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "scriptc-numeric-array-reads-"));
+  try {
+    const entry = join(dir, "main.ts");
+    const outPath = join(dir, "main.ir.json");
+    await writeFile(entry, [
+      "function blend(a: number[], i: number, j: number): number {",
+      "  return a[i] + (a[j] - a[i]) * 0.5;",
+      "}",
+      "console.log(blend([1, 3], 0, 1));",
+      "",
+    ].join("\n"));
+    const result = await compile(entry, { outDir: dir, outPath, outputKind: "ir" });
+    if (!result.ok) throw new Error(result.diagnostics.map((d) => `${d.code}: ${d.message}`).join("\n"));
+    const mod = deserializeModule(await readFile(outPath, "utf8"));
+    expect(validateModule(mod)).toEqual([]);
+    const visited = new Set<string>();
+    let arrayReads = 0;
+    function visit(value: unknown): void {
+      if (value === null || typeof value !== "object") return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as { kind?: string; callee?: string };
+      expect(node.kind).not.toBe("unionWrap");
+      if (node.kind === "arrayGet") arrayReads++;
+      if (node.kind === "call" && node.callee) visitFunction(node.callee);
+      Object.values(value).forEach(visit);
+    }
+    function visitFunction(name: string): void {
+      if (visited.has(name)) return;
+      visited.add(name);
+      const fn = mod.functions.find((f) => f.name === name);
+      expect(fn, `missing function ${name}`).toBeDefined();
+      visit(fn!.body);
+    }
+    visitFunction(mod.entry);
+    expect(arrayReads).toBeGreaterThan(0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
