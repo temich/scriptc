@@ -12,11 +12,11 @@ import type { Lowerer } from "./lowerer.js";
 import { wasiGuestPath } from "../../wasi-paths.js";
 import { BIGINT_T, BOOL, CAUGHT, DYN, DYN_HANDLE_KINDS, F64, IrExpr, IrFunction, IrJsOp, IrLocal, IrRecordShape, IrStmt, IrType, JSVAL, NULL_T, REF_TRUTHY_KINDS, REGEX, RUNTIME_ERROR_CLASSES, SEARCH_PARAMS_T, STRING, SrcLoc, UNDEFINED_T, VOID, arrayOf, canAdaptDynFuncTo, canBoxFuncIntoDyn, funcOf, isDynTypedRefType, isJsonSafeType, isSupportedArrayElem, isUnitType, jsOpResultKind, shapeHasAccessorSlots, typeEquals, typeKey, unionFuncSetArmsOk } from "../../ir/ir.js";
 import { cjsClassExprWholeExportOf, cjsExportAssignmentOf, cjsExportDiscardReason, isCjsExportTableLiteral, isCjsJsFile, isJsSourceFile, isModuleExportsAccess, isNodeEsmFile, locOf } from "../program.js";
-import { ARRAY_METHODS, builtinConstLit, builtinFenceHintOf, builtinModuleConstOf, builtinModulesArrayLit, builtinModuleFnOf, CompoundOp, ISLAND_SURFACE, isChildSurfaceMember, MAP_METHODS, NARROW_FIRST, SET_METHODS, STR_METHODS, UNSUPPORTED_EXPR, sideEffectFreeOptionValue, stdlibGlobalNameOf } from "./surfaces.js";
+import { ARRAY_METHODS, builtinConstLit, builtinFenceHintOf, builtinModuleConstOf, builtinModulesArrayLit, builtinModuleFnOf, COMPOUND_ASSIGN_OPS, CompoundOp, ISLAND_SURFACE, isChildSurfaceMember, MAP_METHODS, NARROW_FIRST, SET_METHODS, STR_METHODS, UNSUPPORTED_EXPR, sideEffectFreeOptionValue, stdlibGlobalNameOf } from "./surfaces.js";
 import { UNSUPPORTED, blockedBindingUseDiag, requiresDynamicPackageDiag, unsupportedDiag } from "../../diagnostics/diagnostic.js";
 import { PoisonError, dynUndefinedExpr, jsFuncNameOf, neverTaintedJsType, nodeThrowExpr, own } from "./lowerer.js";
 import { lowerNpmStaticSafeIndexRead, lowerSafeIndexRead, strCharsCall } from "./lower-containers.js";
-import { arrayValueStore } from "./array-values.js";
+import { arrayValueRead, arrayValueStore } from "./array-values.js";
 import { npmStaticPackageOfPath } from "../npm-static.js";
 import { unsupportedModuleFeatureOf } from "../builtin-modules.js";
 import { fenceEnumObjectValue, lowerEnumAccess } from "./lower-enums.js";
@@ -4902,6 +4902,75 @@ export function lowerOptionalNumber(
     return Number.isInteger(n) && n >= 0 ? n : null;
   }
 
+/** `a[i] op= rhs` over native arrays and byte views. A compound assignment
+ * evaluates the receiver and index, reads the old element, evaluates rhs,
+ * then writes. Capture each stage so a call in the index or rhs cannot
+ * change the target or the value used by the operator. The expression yields
+ * the computed value before a typed array or Buffer coerces it for storage. */
+export function lowerElementCompound(lowerer: Lowerer, expr: ts.BinaryExpression, op: CompoundOp): IrExpr {
+  const target = expr.left as ts.ElementAccessExpression;
+  fenceNodeModuleMutation(lowerer, target, "assignment");
+  const loc = locOf(expr);
+  const receiverType = lowerer.mapTypeOf(lowerer.typeOf(target.expression));
+  if (receiverType?.kind !== "array" && receiverType?.kind !== "bytes") {
+    lowerer.unsupported("SC1090", target, "compound assignment to non-array elements");
+  }
+  let receiver = lowerer.lowerExpr(target.expression);
+  if (receiver.type.kind === "union" && lowerer.armTag(receiver.type.unionId, UNDEFINED_T) >= 0) {
+    const present = lowerer.stripUndefinedArm(receiver.type);
+    const helper = present.kind === receiverType.kind
+      ? lowerer.narrowedArmHelper(receiver.type.unionId, present, locOf(target.expression))
+      : null;
+    if (helper) receiver = { kind: "call", callee: helper, args: [receiver], type: present, loc: locOf(target.expression) };
+  }
+  if (receiver.type.kind !== receiverType.kind) {
+    lowerer.unsupported("SC1090", target.expression, "compound assignment through a non-native array or byte view");
+  }
+  const index = lowerer.lowerExpr(target.argumentExpression);
+  if (index.type.kind !== "f64") lowerer.unsupported("SC1090", target.argumentExpression, "indexing with non-number keys");
+  const receiverLocal = lowerer.declareHiddenLocal("%compoundArray", receiver.type);
+  const indexLocal = lowerer.declareHiddenLocal("%compoundIndex", F64);
+  const receiverRef = (): IrExpr => varRef(receiverLocal.id, receiver.type, loc);
+  const indexRef = (): IrExpr => varRef(indexLocal.id, F64, loc);
+  const oldValue: IrExpr = receiver.type.kind === "array"
+    ? arrayValueRead(lowerer, receiverRef(), indexRef(), receiver.type.elem, locOf(target))
+    : { kind: "bytesIntrinsic", method: "get", receiver: receiverRef(), args: [indexRef()], type: F64, loc: locOf(target) };
+  const oldLocal = lowerer.declareHiddenLocal("%compoundOld", oldValue.type);
+  const oldRef = (): IrExpr => varRef(oldLocal.id, oldValue.type, loc);
+  const rhs = lowerer.lowerExpr(expr.right);
+  const numericRhs = lowerOptionalNumber(lowerer, rhs, loc);
+  const elementType = receiver.type.kind === "array" ? receiver.type.elem : F64;
+  const valueType = elementType.kind === "union" && lowerer.armTag(elementType.unionId, UNDEFINED_T) >= 0
+    ? lowerer.stripUndefinedArm(elementType)
+    : elementType;
+  let computed: IrExpr;
+  if (op === "+" && valueType.kind === "string") {
+    computed = { kind: "strConcat", left: lowerer.ensureString(oldRef(), target), right: lowerer.ensureString(rhs, expr.right), type: STRING, loc };
+  } else if (valueType.kind === "f64" && numericRhs.type.kind === "f64") {
+    computed = { kind: "bin", op, left: lowerOptionalNumber(lowerer, oldRef(), loc), right: numericRhs, type: F64, loc };
+  } else {
+    lowerer.unsupported("SC1043", expr);
+  }
+  const resultLocal = lowerer.declareHiddenLocal("%compoundResult", computed.type);
+  const resultRef = (): IrExpr => varRef(resultLocal.id, computed.type, loc);
+  const write: IrStmt = receiver.type.kind === "array"
+    ? arrayValueStore(lowerer, receiverRef(), indexRef(), resultRef(), receiver.type.elem, loc)
+    : { kind: "bytesSet", arr: receiverRef(), index: indexRef(), value: resultRef(), loc };
+  return {
+    kind: "seqExpr",
+    stmts: [
+      { kind: "varDecl", localId: receiverLocal.id, init: receiver, loc },
+      { kind: "varDecl", localId: indexLocal.id, init: index, loc },
+      { kind: "varDecl", localId: oldLocal.id, init: oldValue, loc },
+      { kind: "varDecl", localId: resultLocal.id, init: computed, loc },
+      write,
+    ],
+    result: resultRef(),
+    type: computed.type,
+    loc,
+  };
+}
+
 /** `a[i] = v` in statement position → arraySet (element writes, like local
    * assignment, produce no value in our subset). */
   export function lowerElementWrite(lowerer: Lowerer, expr: ts.BinaryExpression): IrStmt {
@@ -5814,8 +5883,9 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
       // globals, captured/boxed included); the RHS coerces into the binding's
       // type exactly like statement position, and the expression's value is
       // the coerced binding-typed value (representation change only — never
-      // observably different from JS's raw-RHS yield). Compound operators,
-      // property/element targets, and destructuring targets stay fenced.
+      // observably different from JS's raw-RHS yield). Indexed compounds
+      // use a sequenced read/modify/write; other member targets and
+      // destructuring targets stay fenced.
       if (op === ts.SyntaxKind.EqualsToken && ts.isIdentifier(expr.left)) {
         const target = lowerer.resolveWritable(expr.left);
         if (!target) {
@@ -5825,6 +5895,10 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
         const runtimeOptionalRoot = lowerer.runtimeOptionalRootOf(target);
         if (lowerer.runtimeOptionalStorageLocals.has(runtimeOptionalRoot)) lowerer.runtimeOptionalLocals.add(runtimeOptionalRoot);
         return { kind: "assignExpr", localId: target.id, value, type: target.type, loc };
+      }
+      const indexedCompound = COMPOUND_ASSIGN_OPS[op];
+      if (indexedCompound !== undefined && ts.isElementAccessExpression(expr.left)) {
+        return lowerElementCompound(lowerer, expr, indexedCompound);
       }
       // `events.defaultMaxListeners = v` — the module-property write
       // Node validates (validateNumber(n, 'defaultMaxListeners', 0)):

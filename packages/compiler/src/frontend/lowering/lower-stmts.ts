@@ -25,7 +25,7 @@ import { lowerStreamUnderscoreAssign, streamClassAliasDecl } from "./lower-strea
 import { lowerHttpResPropertyAssignment, lowerHttpServerTimeoutAssignment, lowerServerCloseOverrideAssignment } from "./lower-server.js";
 import { builtinMemberRequireDecl, builtinNamespaceDestructureModuleOf, createRequireBindingDecl, createRequireCalleeFileOf, createRequireNamespaceDecl, createRequireProgramModuleDecl, createRequireProgramModuleOf, lowerNodeModuleCall, registerBuiltinCallableAlias, textCodecBindingDecl } from "./lower-builtins.js";
 import { lowerEnumDeclaration } from "./lower-enums.js";
-import { abstractPropertyDeclOf, aliasTypeofNarrows, isMatchSliceType, lowerAbsenceProbe, lowerGroupsProjection, lowerOptionalNumber, matchResultNamedGroupsOf, runtimeOptionalTrueIds, symbolFieldInfo, withRuntimeOptionalNarrowed } from "./lower-exprs.js";
+import { abstractPropertyDeclOf, aliasTypeofNarrows, isMatchSliceType, lowerAbsenceProbe, lowerElementCompound, lowerGroupsProjection, lowerOptionalNumber, matchResultNamedGroupsOf, runtimeOptionalTrueIds, symbolFieldInfo, withRuntimeOptionalNarrowed } from "./lower-exprs.js";
 import { isSafeToRepeat } from "./expressions/evaluation-safety.js";
 import { tryLowerExpression } from "./expressions/try-lower-expression.js";
 import { UNSUPPORTED, checkerPanicDiag, isCheckerPanic, requiresDynamicDiag } from "../../diagnostics/diagnostic.js";
@@ -5340,12 +5340,12 @@ function isEsModuleStamp(expr: ts.Expression): boolean {
         // Desugar `x op= e` to `x = x op e` — reads x before e, like JS.
         if (ts.isElementAccessExpression(expr.left)) {
           // `this[kLimit] += v` — a declared symbol-keyed class field is
-          // the dotted compound in element spelling; every other element
-          // target keeps the fence.
+          // the dotted compound in element spelling. Array and byte-view
+          // elements use the sequenced indexed compound path.
           if (symbolFieldInfo(lowerer, expr.left)) {
             return lowerer.lowerFieldCompound(expr.left, compound, expr.right, locOf(expr));
           }
-          lowerer.unsupported("SC1090", expr.left, "compound array-element assignment (a[i] += v)");
+          return { kind: "exprStmt", expr: lowerElementCompound(lowerer, expr, compound), loc: locOf(expr) };
         }
         if (ts.isPropertyAccessExpression(expr.left)) {
           // `N.x += v` — the namespace-qualified spelling of a module-
