@@ -3505,7 +3505,7 @@
       "kind": "stdlib",
       "name": "string.prototype.endsWith",
       "status": "static",
-      "note": "the lowered call form takes exactly 1 argument"
+      "note": "the lowered call form takes 1 to 2 arguments"
     },
     {
       "id": "stdlib.string.includes",
@@ -3582,7 +3582,7 @@
       "kind": "stdlib",
       "name": "string.prototype.startsWith",
       "status": "static",
-      "note": "the lowered call form takes exactly 1 argument"
+      "note": "the lowered call form takes 1 to 2 arguments"
     },
     {
       "id": "stdlib.string.substring",

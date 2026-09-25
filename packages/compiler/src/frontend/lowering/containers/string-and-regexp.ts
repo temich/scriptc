@@ -308,9 +308,8 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     if (receiverIr?.kind !== "string" && !nullableString && !isRequireMainFilename(lowerer, access.expression)) return null;
     if (!lowerer.isStdlibMember(access)) return null;
   }
-  // The lib declares optional parameters beyond the lowered forms
-  // (includes/startsWith/endsWith take a position); fence the unlowered
-  // arities instead of passing arguments the runtime doesn't take.
+  // The lib declares optional parameters beyond some lowered forms; fence
+  // those arities instead of passing arguments the runtime doesn't take.
   if (call.arguments.length < entry.minArgs || call.arguments.length > entry.maxArgs) {
     lowerer.noLowering(
       `.${access.name.text} with ${call.arguments.length} argument${call.arguments.length === 1 ? "" : "s"} on strings`,
@@ -321,6 +320,37 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     ? dynReceiver()
     : lowerMethodReceiver(lowerer, access.expression, STRING, access.name.text);
   const loc = locOf(call);
+  if ((entry.method === "startsWith" || entry.method === "endsWith") && call.arguments.length === 2) {
+    const needle = lowerer.lowerExpr(call.arguments[0]!);
+    const defaultPosition: IrExpr = entry.method === "startsWith"
+      ? numLit(0, loc)
+      : { kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc };
+    const position = lowerStringPositionArgument(lowerer, call.arguments[1], defaultPosition);
+    if (position.type.kind === "f64" || position.type.kind === "jsval") {
+      return { kind: "strIntrinsic", method: entry.method, receiver, args: [needle, position], type: BOOL, loc };
+    }
+    const key = `str.positions:${entry.method}:${typeKey(needle.type)}:${typeKey(position.type)}`;
+    let helper = lowerer.widthHelpers.get(key);
+    if (!helper) {
+      helper = `%str.positions.${lowerer.widthHelpers.size}`;
+      const params = [receiver, needle, position].map((arg, index) => ({ localId: `arg.${index}`, name: `arg${index}`, type: arg.type }));
+      const result: IrExpr = {
+        kind: "strIntrinsic", method: entry.method, receiver: varRef("arg.0", STRING, loc),
+        args: [
+          varRef("arg.1", needle.type, loc),
+          stringPositionNumber(lowerer, varRef("arg.2", position.type, loc), defaultPosition, call.arguments[1]!),
+        ],
+        type: BOOL, loc,
+      };
+      lowerer.widthHelpers.set(key, helper);
+      lowerer.liftedFns.push({
+        name: helper, params, returnType: BOOL,
+        locals: params.map(param => ({ id: param.localId, name: param.name, type: param.type, mutable: false })),
+        body: [{ kind: "return", value: result, loc }], loc,
+      });
+    }
+    return { kind: "call", callee: helper, args: [receiver, needle, position], type: BOOL, loc };
+  }
   if (entry.method === "charAt" || entry.method === "charCodeAt" || entry.method === "slice" || entry.method === "substring") {
     const defaults: IrExpr[] = [numLit(0, loc)];
     if (entry.method === "slice" || entry.method === "substring") {

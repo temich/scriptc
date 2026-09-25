@@ -6901,9 +6901,21 @@
    ],
    "diags": []
   },
-  "<repo>/tests/corpus/3022-string-number-narrow-for-in.ts": {
+  "<repo>/tests/corpus/3022-string-affix-positions.ts": {
    "order": [
-    "<repo>/tests/corpus/3022-string-number-narrow-for-in.ts"
+    "<repo>/tests/corpus/3022-string-affix-positions.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/3023-string-affix-position-coercion.js": {
+   "order": [
+    "<repo>/tests/corpus/3023-string-affix-position-coercion.js"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/3024-string-number-narrow-for-in.ts": {
+   "order": [
+    "<repo>/tests/corpus/3024-string-number-narrow-for-in.ts"
    ],
    "diags": []
   },
