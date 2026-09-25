@@ -315,6 +315,7 @@ export const ARRAY_METHODS = new Set([
   "reduce",
   "reduceRight",
   "indexOf",
+  "lastIndexOf",
   "includes",
   "join",
   "slice",

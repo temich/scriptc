@@ -6,60 +6,11 @@ import type { Lowerer } from "../lowerer.js";
 import { own } from "../lowerer.js";
 import { isRequireMainFilename } from "../expressions/optional-chains.js";
 import { STR_METHODS } from "../surfaces.js";
-import { defaultAfterUndefined, lowerOptionalArgument, lowerStaticallyUndefinedArgument } from "../optional-arguments.js";
+import { defaultAfterUndefined, lowerOptionalArgument, lowerPositionArgument, lowerStaticallyUndefinedArgument, positionNumber } from "../optional-arguments.js";
 
 function lowerSplitLimitArg(lowerer: Lowerer, node: ts.Expression | undefined, loc: SrcLoc): IrExpr {
   const defaultValue: IrExpr = { kind: "numLit", value: 4294967295, type: F64, loc };
   return node ? lowerOptionalArgument(lowerer, node, F64, defaultValue) : defaultValue;
-}
-
-/** Complete unit-valued defaults while retaining argument side effects. */
-function lowerStringPositionArgument(lowerer: Lowerer, node: ts.Expression | undefined, defaultValue: IrExpr): IrExpr {
-  if (!node) return defaultValue;
-  const undefinedArg = lowerStaticallyUndefinedArgument(lowerer, node);
-  if (undefinedArg) return defaultAfterUndefined(undefinedArg, defaultValue);
-  const value = lowerer.lowerExpr(node);
-  if (isUnitType(value.type) || value.type.kind === "void") {
-    return defaultAfterUndefined(value, value.type.kind === "nullT" ? numLit(0, value.loc) : defaultValue);
-  }
-  return value;
-}
-
-/** Convert a helper parameter, after every argument expression has run.
- * Only undefined selects a missing end; null still converts to zero. */
-function stringPositionNumber(lowerer: Lowerer, value: IrExpr, defaultValue: IrExpr, node: ts.Expression): IrExpr {
-  const loc = value.loc;
-  switch (value.type.kind) {
-    case "f64": return value;
-    case "string": return { kind: "libCall", fn: "num.fromString", args: [value], type: F64, loc };
-    case "bool": return { kind: "ternary", cond: value, then: numLit(1, loc), else_: numLit(0, loc), type: F64, loc };
-    case "nullT": return numLit(0, loc);
-    case "undefinedT": return defaultValue;
-    case "jsval": return { kind: "jsExit", value, type: F64, loc };
-    case "union": {
-      const unionId = value.type.unionId;
-      const arms = lowerer.unions.get(unionId)!.arms;
-      let result: IrExpr = defaultValue;
-      for (let tag = arms.length - 1; tag >= 0; tag--) {
-        const narrowed: IrExpr = { kind: "unionNarrow", unionId, tag, value, type: arms[tag]!, loc };
-        const converted = stringPositionNumber(lowerer, narrowed, defaultValue, node);
-        result = tag === arms.length - 1 ? converted : {
-          kind: "ternary",
-          cond: { kind: "unionIsTag", unionId, tag, value, negated: false, type: BOOL, loc },
-          then: converted, else_: result, type: F64, loc,
-        };
-      }
-      return result;
-    }
-    case "dyn": return {
-      kind: "ternary",
-      cond: { kind: "dynTest", test: "undefined", value, type: BOOL, loc },
-      then: defaultValue,
-      else_: { kind: "libCall", fn: "dyn.toNumberCoerce", args: [value], type: F64, loc },
-      type: F64, loc,
-    };
-    default: return lowerer.noLowering(`string position of '${lowerer.fmt(value.type)}' values`, node);
-  }
 }
 
 function lowerRegexSubject(lowerer: Lowerer, node: ts.Expression | undefined, loc: SrcLoc): IrExpr {
@@ -326,7 +277,7 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     const defaultPosition: IrExpr = entry.method === "endsWith"
       ? { kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc }
       : numLit(0, loc);
-    const position = lowerStringPositionArgument(lowerer, call.arguments[1], defaultPosition);
+    const position = lowerPositionArgument(lowerer, call.arguments[1], defaultPosition);
     if (position.type.kind === "f64" || position.type.kind === "jsval") {
       return { kind: "strIntrinsic", method: entry.method, receiver, args: [needle, position], type: entry.result, loc };
     }
@@ -339,7 +290,7 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
         kind: "strIntrinsic", method: entry.method, receiver: varRef("arg.0", STRING, loc),
         args: [
           varRef("arg.1", needle.type, loc),
-          stringPositionNumber(lowerer, varRef("arg.2", position.type, loc), defaultPosition, call.arguments[1]!),
+          positionNumber(lowerer, varRef("arg.2", position.type, loc), defaultPosition, call.arguments[1]!, "string position"),
         ],
         type: entry.result, loc,
       };
@@ -357,7 +308,7 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     if (entry.method === "slice" || entry.method === "substring") {
       defaults.push({ kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc });
     }
-    const args = defaults.map((value, index) => lowerStringPositionArgument(lowerer, call.arguments[index], value));
+    const args = defaults.map((value, index) => lowerPositionArgument(lowerer, call.arguments[index], value));
     // Keep ordinary numeric calls on the direct intrinsic path, including the
     // existing boundary validation for island values in numeric slots.
     if (args.every(arg => arg.type.kind === "f64" || arg.type.kind === "jsval")) {
@@ -373,7 +324,7 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       const params = [receiver, ...args].map((arg, index) => ({ localId: `arg.${index}`, name: `arg${index}`, type: arg.type }));
       const result: IrExpr = {
         kind: "strIntrinsic", method: entry.method, receiver: varRef("arg.0", STRING, loc),
-        args: args.map((arg, index) => stringPositionNumber(lowerer, varRef(`arg.${index + 1}`, arg.type, loc), defaults[index]!, call.arguments[index] ?? call)),
+        args: args.map((arg, index) => positionNumber(lowerer, varRef(`arg.${index + 1}`, arg.type, loc), defaults[index]!, call.arguments[index] ?? call, "string position")),
         type: entry.result, loc,
       };
       lowerer.widthHelpers.set(key, helper);

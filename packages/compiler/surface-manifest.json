@@ -2183,6 +2183,12 @@
       "status": "static"
     },
     {
+      "id": "stdlib.array.lastIndexOf",
+      "kind": "stdlib",
+      "name": "Array.prototype.lastIndexOf",
+      "status": "static"
+    },
+    {
       "id": "stdlib.array.map",
       "kind": "stdlib",
       "name": "Array.prototype.map",

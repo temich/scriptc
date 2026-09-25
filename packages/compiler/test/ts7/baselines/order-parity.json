@@ -6925,6 +6925,18 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3026-array-last-index-of.js": {
+   "order": [
+    "<repo>/tests/corpus/3026-array-last-index-of.js"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/3027-array-last-index-of-records.ts": {
+   "order": [
+    "<repo>/tests/corpus/3027-array-last-index-of-records.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"
