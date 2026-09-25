@@ -320,14 +320,15 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     ? dynReceiver()
     : lowerMethodReceiver(lowerer, access.expression, STRING, access.name.text);
   const loc = locOf(call);
-  if ((entry.method === "startsWith" || entry.method === "endsWith") && call.arguments.length === 2) {
+  if ((entry.method === "indexOf" || entry.method === "includes" ||
+    entry.method === "startsWith" || entry.method === "endsWith") && call.arguments.length === 2) {
     const needle = lowerer.lowerExpr(call.arguments[0]!);
-    const defaultPosition: IrExpr = entry.method === "startsWith"
-      ? numLit(0, loc)
-      : { kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc };
+    const defaultPosition: IrExpr = entry.method === "endsWith"
+      ? { kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc }
+      : numLit(0, loc);
     const position = lowerStringPositionArgument(lowerer, call.arguments[1], defaultPosition);
     if (position.type.kind === "f64" || position.type.kind === "jsval") {
-      return { kind: "strIntrinsic", method: entry.method, receiver, args: [needle, position], type: BOOL, loc };
+      return { kind: "strIntrinsic", method: entry.method, receiver, args: [needle, position], type: entry.result, loc };
     }
     const key = `str.positions:${entry.method}:${typeKey(needle.type)}:${typeKey(position.type)}`;
     let helper = lowerer.widthHelpers.get(key);
@@ -340,16 +341,16 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
           varRef("arg.1", needle.type, loc),
           stringPositionNumber(lowerer, varRef("arg.2", position.type, loc), defaultPosition, call.arguments[1]!),
         ],
-        type: BOOL, loc,
+        type: entry.result, loc,
       };
       lowerer.widthHelpers.set(key, helper);
       lowerer.liftedFns.push({
-        name: helper, params, returnType: BOOL,
+        name: helper, params, returnType: entry.result,
         locals: params.map(param => ({ id: param.localId, name: param.name, type: param.type, mutable: false })),
         body: [{ kind: "return", value: result, loc }], loc,
       });
     }
-    return { kind: "call", callee: helper, args: [receiver, needle, position], type: BOOL, loc };
+    return { kind: "call", callee: helper, args: [receiver, needle, position], type: entry.result, loc };
   }
   if (entry.method === "charAt" || entry.method === "charCodeAt" || entry.method === "slice" || entry.method === "substring") {
     const defaults: IrExpr[] = [numLit(0, loc)];
