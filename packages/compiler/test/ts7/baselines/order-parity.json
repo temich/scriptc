@@ -6871,6 +6871,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3020-string-last-index-position.ts": {
+   "order": [
+    "<repo>/tests/corpus/3020-string-last-index-position.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"
