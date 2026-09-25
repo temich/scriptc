@@ -6697,6 +6697,114 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2973-http-static-agent.ts": {
+   "order": [
+    "<repo>/tests/corpus/2973-http-static-agent.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2974-http-static-module-values.ts": {
+   "order": [
+    "<repo>/tests/corpus/2974-http-static-module-values.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2975-http-static-client-controls.ts": {
+   "order": [
+    "<repo>/tests/corpus/2975-http-static-client-controls.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2976-http-static-incoming-state.ts": {
+   "order": [
+    "<repo>/tests/corpus/2976-http-static-incoming-state.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2977-http-static-incoming-timeout.ts": {
+   "order": [
+    "<repo>/tests/corpus/2977-http-static-incoming-timeout.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2978-http-static-client-timeout.ts": {
+   "order": [
+    "<repo>/tests/corpus/2978-http-static-client-timeout.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2979-http-static-server-timeout.ts": {
+   "order": [
+    "<repo>/tests/corpus/2979-http-static-server-timeout.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2980-http-static-server-timeout-default.ts": {
+   "order": [
+    "<repo>/tests/corpus/2980-http-static-server-timeout-default.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2981-http-static-events.ts": {
+   "order": [
+    "<repo>/tests/corpus/2981-http-static-events.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2982-http-static-close-all.ts": {
+   "order": [
+    "<repo>/tests/corpus/2982-http-static-close-all.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2983-http-static-close-idle.ts": {
+   "order": [
+    "<repo>/tests/corpus/2983-http-static-close-idle.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2984-http-static-close-upgrade.ts": {
+   "order": [
+    "<repo>/tests/corpus/2984-http-static-close-upgrade.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2985-http-static-message-destroy.ts": {
+   "order": [
+    "<repo>/tests/corpus/2985-http-static-message-destroy.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2986-http-static-client-socket-finish.ts": {
+   "order": [
+    "<repo>/tests/corpus/2986-http-static-client-socket-finish.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2987-http-static-timeout-errors.ts": {
+   "order": [
+    "<repo>/tests/corpus/2987-http-static-timeout-errors.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2988-http-static-client-abort.ts": {
+   "order": [
+    "<repo>/tests/corpus/2988-http-static-client-abort.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2989-http-static-response-timeout-handled.ts": {
+   "order": [
+    "<repo>/tests/corpus/2989-http-static-response-timeout-handled.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2990-http-static-request-timeout-handled.ts": {
+   "order": [
+    "<repo>/tests/corpus/2990-http-static-request-timeout-handled.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/300-if-else.ts": {
    "order": [
     "<repo>/tests/corpus/300-if-else.ts"

@@ -5584,6 +5584,7 @@ void scr_net_fire_err_this(ScrNetLs *l, ScrStr *msg, void *self, ScrDynHandleTag
 typedef void (*ScrNetNativeConnFn)(void *ctx, ScrNetSocket *sock);
 typedef void (*ScrNetNativeDataFn)(void *ctx, const char *buf, size_t n);
 typedef void (*ScrNetNativeEventFn)(void *ctx);
+typedef bool (*ScrNetNativeTimeoutHandledFn)(void *ctx);
 typedef bool (*ScrNetNativeErrFn)(void *ctx, ScrStr *msg); /* true = consumed */
 void scr_net_server_set_native_conn(ScrNetServer *s, ScrNetNativeConnFn fn, void *ctx, void (*ctx_free)(void *));
 /* The HTTP-parser ctx ALIAS: scr_http.c stamps its server ctx here so
@@ -5621,6 +5622,7 @@ bool scr_net_sock_destroyed(ScrNetSocket *s); /* socket.destroyed */
 bool scr_net_sock_writable(ScrNetSocket *s);  /* socket.writable */
 bool scr_net_sock_established(ScrNetSocket *s); /* connected, including TLS handshake */
 void scr_net_sock_set_native_events(ScrNetSocket *s, ScrNetNativeEventFn timeout, ScrNetNativeErrFn err);
+void scr_net_sock_set_native_http_timeout(ScrNetSocket *s, ScrNetNativeTimeoutHandledFn fn);
 void scr_net_sock_write_native(ScrNetSocket *s, const char *buf, size_t n);
 /* The protocol layer's deferred-emit hook: `pending` joins the loop's
  * liveness test, `sweep` runs at every net sweep top. */

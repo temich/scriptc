@@ -586,6 +586,7 @@ struct ScrNetSocket {
   ScrNetNativeEventFn native_eof;
   ScrNetNativeEventFn native_closed;
   ScrNetNativeEventFn native_timeout;
+  ScrNetNativeTimeoutHandledFn native_http_timeout; /* HTTP req/res timeout handled */
   ScrNetNativeEventFn native_established; /* client connect completed (the
                                            * h2 session's 'connect' moment;
                                            * fires before conn_ls) */
@@ -2653,6 +2654,7 @@ void scr_net_sock_clear_native_reader(ScrNetSocket *s) {
   s->native_eof = NULL;
   s->native_closed = NULL;
   s->native_idle = NULL; /* upgraded and CONNECT sockets are outside HTTP close sweeps */
+  s->native_http_timeout = NULL;
   scr_net_sock_update_read(s);
 }
 
@@ -2677,6 +2679,10 @@ void scr_net_sock_set_native_events(ScrNetSocket *s, ScrNetNativeEventFn timeout
                                      ScrNetNativeErrFn err) {
   s->native_timeout = timeout;
   s->native_err = err;
+}
+
+void scr_net_sock_set_native_http_timeout(ScrNetSocket *s, ScrNetNativeTimeoutHandledFn fn) {
+  s->native_http_timeout = fn;
 }
 
 /* Client connect completion for the protocol layer (the h2 session's
@@ -3055,14 +3061,16 @@ static void scr_net_dispatch(void) {
             s->native_timeout(s->native_ctx);
             if (scr_exc_pending()) return;
           }
-          scr_net_fire0_this(&s->timeout_ls, s, SCR_DYNH_NET_SOCKET);
-          if (scr_exc_pending()) return;
           if (s->server && s->server->http_timeout_surface &&
-              s->server->http_timeouts[0] > 0) {
+              s->native_http_timeout) {
             ScrNetServer *srv = scr_net_server_retain(s->server);
-            if (srv->timeout_ls.n == 0) {
-              scr_net_sock_destroy(s); /* Node's unhandled server timeout */
-            } else {
+            bool handled = s->native_http_timeout(s->native_ctx);
+            if (scr_exc_pending()) {
+              scr_net_server_release(srv);
+              return;
+            }
+            bool server_handled = srv->timeout_ls.n > 0;
+            if (server_handled) {
               ScrNetL *snap;
               size_t count = scr_net_ls_snapshot(&srv->timeout_ls, &snap);
               scr_dyn_this_push(srv, SCR_DYNH_NET_SERVER);
@@ -3073,9 +3081,14 @@ static void scr_net_dispatch(void) {
               scr_dyn_this_pop();
               free(snap);
             }
+            if (!handled && !server_handled && !scr_exc_pending())
+              scr_net_sock_destroy(s); /* Node's unhandled server timeout */
             scr_net_server_release(srv);
             if (scr_exc_pending()) return;
           }
+          scr_net_fire0_this(&s->timeout_ls, s, SCR_DYNH_NET_SOCKET);
+          if (scr_exc_pending()) return;
+          if (s->fd < 0) continue;
         }
         /* kqueue delivers one direction per event (today's exact order);
          * epoll may coalesce both into one — writes first (connect
@@ -3134,6 +3147,7 @@ static void scr_net_cleanup_atexit(void) {
       s->native_eof = NULL;
       s->native_closed = NULL;
       s->native_timeout = NULL;
+      s->native_http_timeout = NULL;
       s->native_established = NULL;
       s->native_err = NULL;
       ctx_free(ctx);

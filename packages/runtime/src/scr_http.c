@@ -219,7 +219,7 @@ struct ScrHttpReq {
   ScrStr **tvalues;
   size_t ntrailers;
   ScrStr *status_msg; /* client responses' reason phrase; NULL on server requests */
-  ScrNetLs data_ls, end_ls, err_ls, close_ls;
+  ScrNetLs data_ls, end_ls, err_ls, close_ls, timeout_ls;
   /* pipe destinations (req.pipe(...) — one of each kind, +1; released at
    * finish, so a piped destination never outlives the body) */
   ScrHttpRes *pipe_res;
@@ -310,6 +310,7 @@ void scr_http_req_release(ScrHttpReq *r) {
     scr_net_ls_drop(&r->end_ls);
     scr_net_ls_drop(&r->err_ls);
     scr_net_ls_drop(&r->close_ls);
+    scr_net_ls_drop(&r->timeout_ls);
     scr_net_ls_drop(&r->aborted_ls);
     scr_http_res_release(r->pipe_res);
     scr_http_client_release(r->pipe_client);
@@ -636,9 +637,9 @@ void scr_http_req_pause(ScrHttpReq *r) {
   if (!r->ended) r->paused = true;
 }
 
-/* req.setTimeout(ms[, cb]): the underlying socket's idle timer — the cb
- * registers once('timeout') there, Node's delegation. Finished/destroyed
- * messages skip (Node no-ops once the stream is done). */
+/* req.setTimeout(ms[, cb]): Node registers the callback on the message,
+ * then arms the socket's idle timer. An incomplete server request can
+ * handle the timeout and keep its connection alive. */
 void scr_http_req_set_timeout(ScrHttpReq *r, double ms, ScrClosure *cb /*moves, nullable*/) {
   if (!scr_http_timeout_valid(ms)) {
     if (cb) scr_closure_release(cb);
@@ -650,7 +651,10 @@ void scr_http_req_set_timeout(ScrHttpReq *r, double ms, ScrClosure *cb /*moves, 
     return;
   }
   scr_net_sock_set_timeout(r->sock, ms);
-  if (cb) scr_net_sock_on_timeout(r->sock, cb, true);
+  if (cb) {
+    if (r->status < 0 && !r->h2_stream) scr_net_ls_add(&r->timeout_ls, cb, NULL, false);
+    else scr_net_sock_on_timeout(r->sock, cb, true);
+  }
 }
 
 void scr_http_req_set_timeout_plain(ScrHttpReq *r, double ms) {
@@ -901,7 +905,7 @@ struct ScrHttpRes {
    * plain-property write. */
   ScrHttpReq *req_ref;
   bool req_cleared;
-  ScrNetLs close_ls;
+  ScrNetLs close_ls, timeout_ls;
   ScrNetLs finish_ls; /* res.end(cb) — fires deferred once the body went out */
   ScrNetLs wcb_ls;    /* res.write(chunk, cb) — fires from the queue */
   bool finish_queued;
@@ -927,6 +931,7 @@ void scr_http_res_release(ScrHttpRes *r) {
     scr_http_trailers_clear(&r->trailers);
     scr_str_release(r->status_msg);
     scr_net_ls_drop(&r->close_ls);
+    scr_net_ls_drop(&r->timeout_ls);
     scr_net_ls_drop(&r->finish_ls);
     scr_net_ls_drop(&r->wcb_ls);
     free(r->cork_buf);
@@ -1547,14 +1552,18 @@ void scr_http_res_set_req(ScrHttpRes *r, ScrHttpReq *req /*borrowed*/) {
   r->req_ref = req ? scr_http_req_retain(req) : NULL;
 }
 
-/* res.setTimeout(ms[, cb]): the socket's idle timer, Node's delegation. */
+/* res.setTimeout(ms[, cb]): a server response handles its own timeout
+ * event before the server decides whether to destroy the socket. */
 void scr_http_res_set_timeout(ScrHttpRes *r, double ms, ScrClosure *cb /*moves, nullable*/) {
   if (r->finished || r->close_emitted || !r->sock) {
     if (cb) scr_closure_release(cb);
     return;
   }
   scr_net_sock_set_timeout(r->sock, ms);
-  if (cb) scr_net_sock_on_timeout(r->sock, cb, true);
+  if (cb) {
+    if (!r->h2_stream) scr_net_ls_add(&r->timeout_ls, cb, NULL, false);
+    else scr_net_sock_on_timeout(r->sock, cb, true);
+  }
 }
 
 void scr_http_res_set_timeout_plain(ScrHttpRes *r, double ms) {
@@ -1901,6 +1910,7 @@ static void scr_http_proto_sweep(void) {
         res->socket_detached = true;
         scr_net_fire0_this(&res->close_ls, res, SCR_DYNH_HTTP_RES);
         scr_net_ls_drop(&res->close_ls);
+        scr_net_ls_drop(&res->timeout_ls);
       }
       break;
     }
@@ -1918,6 +1928,7 @@ static void scr_http_proto_sweep(void) {
         scr_net_fire0_this(&req->close_ls, req, SCR_DYNH_HTTP_REQ);
         scr_net_ls_drop(&req->err_ls);
         scr_net_ls_drop(&req->close_ls);
+        scr_net_ls_drop(&req->timeout_ls);
         scr_net_ls_drop(&req->aborted_ls);
       }
       break;
@@ -2831,6 +2842,31 @@ static bool scr_http_conn_is_idle(void *ctx) {
          conn->req == NULL && conn->len == 0;
 }
 
+/* Node's server socketOnTimeout emits on an incomplete request, then on
+ * the active response. Listener presence, including a once listener
+ * removed by the emit, prevents the server's unhandled auto-destroy. */
+static bool scr_http_conn_server_timeout(void *ctx) {
+  ScrHttpConn *conn = (ScrHttpConn *)ctx;
+  bool handled = false;
+  if (conn->client_mode) return false;
+  ScrHttpReq *req = conn->req;
+  if (req && !req->ended && !req->destroyed && req->timeout_ls.n > 0) {
+    handled = true;
+    scr_http_req_retain(req);
+    scr_net_fire0_this(&req->timeout_ls, req, SCR_DYNH_HTTP_REQ);
+    scr_http_req_release(req);
+  }
+  if (scr_exc_pending()) return handled;
+  ScrHttpRes *res = conn->res;
+  if (res && !res->close_emitted && res->timeout_ls.n > 0) {
+    handled = true;
+    scr_http_res_retain(res);
+    scr_net_fire0_this(&res->timeout_ls, res, SCR_DYNH_HTTP_RES);
+    scr_http_res_release(res);
+  }
+  return handled;
+}
+
 /* The server's native connection hook: one parser per accepted socket. */
 static void scr_http_on_connection(void *ctx, ScrNetSocket *sock) {
   ScrHttpSrvCtx *srv = (ScrHttpSrvCtx *)ctx;
@@ -2842,6 +2878,7 @@ static void scr_http_on_connection(void *ctx, ScrNetSocket *sock) {
                                   &scr_http_conn_closed, conn, &scr_http_conn_free);
   scr_net_sock_set_native_idle_checker(sock, &scr_http_conn_is_idle);
   scr_net_sock_set_native_events(sock, NULL, &scr_http_conn_err);
+  scr_net_sock_set_native_http_timeout(sock, &scr_http_conn_server_timeout);
 }
 
 /* The unguarded h2-only stream call (`req.stream.on(...)`): stream IS
