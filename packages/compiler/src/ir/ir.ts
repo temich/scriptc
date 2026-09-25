@@ -2752,6 +2752,11 @@ export type IrLibFn =
    * The constructor-option setter takes dyn so explicit undefined remains
    * distinguishable from a numeric value until its Node validation ladder. */
   | "http.serverTimeoutGet"
+  | "http.serverSetTimeout"
+  | "http.serverSetTimeoutCb"
+  | "http.serverOnTimeout"
+  | "http.serverCloseAllConnections"
+  | "http.serverCloseIdleConnections"
   | "http.serverTimeoutSet"
   | "http.serverTimeoutOptionSet"
   /** server.on("listening", cb) — the deferred listen-callback list. */
@@ -3212,17 +3217,33 @@ export type IrLibFn =
   | "http.clientProtocol"
   | "http.clientHeadersSent"
   | "http.clientWritableEnded"
+  | "http.clientWritableFinished"
+  | "http.clientSocket"
+  | "http.clientReusedSocket"
+  | "http.clientSetNoDelay"
+  | "http.clientSetSocketKeepAlive"
+  | "http.clientSetTimeout"
+  | "http.clientSetTimeoutCb"
+  | "http.statusCodes"
+  | "http.methods"
+  | "http.reqSetTimeout"
+  | "http.reqSetTimeoutCb"
   /** request/get with a URL-STRING first argument: the runtime parses it
    * (WHATWG) and dials — throws catchably on an unparsable input or a
    * non-http scheme. */
   | "http.requestUrl"
   | "http.requestUrlCb"
   | "http.clientDestroy"
+  | "http.clientAbort"
+  | "http.clientAborted"
   | "http.clientDestroyed"
   | "http.clientOnResponse"
+  | "http.clientOnSocket"
+  | "http.clientOnFinish"
   | "http.clientOnError"
   | "http.clientOnTimeout"
   | "http.clientOnClose"
+  | "http.clientOnAbort"
   /** fs/promises (scr_lib.c over scr_async.c's settled minting): the SAME
    * sync syscalls, wrapped in an ALREADY-SETTLED promise — failure
    * REJECTS (catchable at the await) instead of throwing, so none of

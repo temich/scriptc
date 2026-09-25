@@ -2247,6 +2247,7 @@ declare module "net" {
     emit(event: "connection", socket: Socket): boolean;
     on(event: "connection" | "secureConnection", listener: (socket: Socket) => void): void;
     on(event: "close" | "listening", listener: () => void): void;
+    on(event: "timeout", listener: (socket: Socket) => void): void;
     on(event: "error", listener: (err: Error) => void): void;
     /* The WebSocket handover: fires INSTEAD of 'request' for
      * Connection: upgrade requests, with the raw socket + head bytes. */
@@ -2257,11 +2258,13 @@ declare module "net" {
     /* addListener IS on (Node aliases them) — the suite spells both. */
     addListener(event: "connection" | "secureConnection", listener: (socket: Socket) => void): void;
     addListener(event: "close" | "listening", listener: () => void): void;
+    addListener(event: "timeout", listener: (socket: Socket) => void): void;
     addListener(event: "error", listener: (err: Error) => void): void;
     addListener(event: "upgrade", listener: (req: import("http").IncomingMessage, socket: Socket, head: Buffer) => void): void;
     addListener(event: "request", listener: (req: import("http").IncomingMessage, res: import("http").ServerResponse) => void): void;
     once(event: "connection" | "secureConnection", listener: (socket: Socket) => void): void;
     once(event: "close" | "listening", listener: () => void): void;
+    once(event: "timeout", listener: (socket: Socket) => void): void;
     once(event: "error", listener: (err: Error) => void): void;
     once(event: "upgrade", listener: (req: import("http").IncomingMessage, socket: Socket, head: Buffer) => void): void;
     once(event: "request", listener: (req: import("http").IncomingMessage, res: import("http").ServerResponse) => void): void;
@@ -2318,8 +2321,14 @@ declare module "node:net" {
  * connection per call (no agent pooling) with Node's exact wire head. */
 declare module "http" {
   import { Server as NetServer, Socket } from "net";
+  export const METHODS: string[];
+  export const STATUS_CODES: { [status: number]: string | undefined };
+  export const maxHeaderSize: number;
   export interface Server extends NetServer {
     timeout: number;
+    setTimeout(msecs: number, callback?: (socket: Socket) => void): this;
+    closeAllConnections(): void;
+    closeIdleConnections(): void;
     keepAliveTimeout: number;
     keepAliveTimeoutBuffer: number;
     headersTimeout: number;
@@ -2359,9 +2368,11 @@ declare module "http" {
     readonly method: string;
     readonly httpVersion: string;
     readonly complete: boolean;
+    readonly aborted: boolean;
     readonly statusCode: number | undefined;
     readonly statusMessage: string | undefined;
     readonly socket: Socket;
+    readonly connection: Socket;
     readonly headers: { [name: string]: string | undefined };
     readonly headersDistinct: { [name: string]: string[] | undefined };
     readonly rawHeaders: string[];
@@ -2370,6 +2381,7 @@ declare module "http" {
     readonly rawTrailers: string[];
     resume(): void;
     destroy(): void;
+    setTimeout(msecs: number, callback?: () => void): this;
     /* setEncoding('utf8'): 'data' delivers strings (other real encodings
      * fence loudly at runtime; unknown names throw ERR_UNKNOWN_ENCODING). */
     setEncoding(encoding: string): void;
@@ -2377,19 +2389,20 @@ declare module "http" {
      * ClientRequest, or a raw Socket; natural end ends the destination. */
     pipe(destination: ServerResponse | import("http2").Http2ServerResponse | ClientRequest | Socket): void;
     on(event: "data", listener: (chunk: any) => void): void;
-    on(event: "end" | "close", listener: () => void): void;
+    on(event: "end" | "close" | "aborted", listener: () => void): void;
     on(event: "error", listener: (err: Error) => void): void;
     /* addListener IS on (Node aliases them) — the suite spells both. */
     addListener(event: "data", listener: (chunk: any) => void): void;
-    addListener(event: "end" | "close", listener: () => void): void;
+    addListener(event: "end" | "close" | "aborted", listener: () => void): void;
     addListener(event: "error", listener: (err: Error) => void): void;
     once(event: "data", listener: (chunk: any) => void): void;
-    once(event: "end" | "close", listener: () => void): void;
+    once(event: "end" | "close" | "aborted", listener: () => void): void;
     once(event: "error", listener: (err: Error) => void): void;
   }
   export interface ServerResponse {
     readonly headersSent: boolean;
     readonly writableEnded: boolean;
+    readonly finished: boolean;
     readonly writableFinished: boolean;
     readonly writableCorked: number;
     readonly req: IncomingMessage;
@@ -2425,10 +2438,10 @@ declare module "http" {
     end(data?: string | Uint8Array, callback?: () => void): void;
     end(callback: () => void): void;
     destroy(): void;
-    on(event: "close", listener: () => void): void;
+    on(event: "close" | "finish", listener: () => void): void;
     /* addListener IS on (Node aliases them) — the suite spells both. */
-    addListener(event: "close", listener: () => void): void;
-    once(event: "close", listener: () => void): void;
+    addListener(event: "close" | "finish", listener: () => void): void;
+    once(event: "close" | "finish", listener: () => void): void;
   }
   /* The CLIENT slice (http.request/http.get): the options-object form
    * with hostname/host, port, path, method, timeout, and headers; the
@@ -2495,6 +2508,9 @@ declare module "http" {
   export const globalAgent: Agent;
   export interface ClientRequest {
     readonly destroyed: boolean;
+    readonly aborted: boolean;
+    readonly socket: Socket;
+    readonly connection: Socket;
     readonly writableCorked: number;
     readonly method: string;
     readonly path: string;
@@ -2502,6 +2518,9 @@ declare module "http" {
     readonly protocol: string;
     readonly headersSent: boolean;
     readonly writableEnded: boolean;
+    readonly writableFinished: boolean;
+    readonly finished: boolean;
+    readonly reusedSocket: boolean;
     setHeader(name: string, value: string): void;
     getHeader(name: string): string | undefined;
     hasHeader(name: string): boolean;
@@ -2513,21 +2532,28 @@ declare module "http" {
     addTrailers(headers: OutgoingHttpHeaders | ReadonlyArray<[string, string]>): void;
     cork(): void;
     uncork(): void;
+    setNoDelay(noDelay?: boolean): void;
+    setSocketKeepAlive(enable?: boolean, initialDelay?: number): void;
+    setTimeout(timeout: number, callback?: () => void): this;
     write(data: string | Uint8Array): void;
     end(data?: string | Uint8Array): void;
     destroy(): void;
+    abort(): void;
     on(event: "response", listener: (res: IncomingMessage) => void): void;
+    on(event: "socket", listener: (socket: Socket) => void): void;
     on(event: "upgrade", listener: (res: IncomingMessage, socket: Socket, head: Buffer) => void): void;
-    on(event: "timeout" | "close", listener: () => void): void;
+    on(event: "timeout" | "close" | "finish" | "abort", listener: () => void): void;
     on(event: "error", listener: (err: Error) => void): void;
     /* addListener IS on (Node aliases them) — the suite spells both. */
     addListener(event: "response", listener: (res: IncomingMessage) => void): void;
+    addListener(event: "socket", listener: (socket: Socket) => void): void;
     addListener(event: "upgrade", listener: (res: IncomingMessage, socket: Socket, head: Buffer) => void): void;
-    addListener(event: "timeout" | "close", listener: () => void): void;
+    addListener(event: "timeout" | "close" | "finish" | "abort", listener: () => void): void;
     addListener(event: "error", listener: (err: Error) => void): void;
     once(event: "response", listener: (res: IncomingMessage) => void): void;
+    once(event: "socket", listener: (socket: Socket) => void): void;
     once(event: "upgrade", listener: (res: IncomingMessage, socket: Socket, head: Buffer) => void): void;
-    once(event: "timeout" | "close", listener: () => void): void;
+    once(event: "timeout" | "close" | "finish" | "abort", listener: () => void): void;
     once(event: "error", listener: (err: Error) => void): void;
   }
   export function createServer(

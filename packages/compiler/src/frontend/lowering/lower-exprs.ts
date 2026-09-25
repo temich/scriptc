@@ -938,6 +938,12 @@ function lowerExprInner(lowerer: Lowerer, expr: ts.Expression): IrExpr {
           if (bi.module === "module" && bi.member === "builtinModules") {
             return builtinModulesArrayLit(loc);
           }
+          if (bi.module === "http" && bi.member === "METHODS") {
+            return { kind: "libCall", fn: "http.methods", args: [], type: arrayOf(STRING), loc };
+          }
+          if (bi.module === "http" && bi.member === "STATUS_CODES") {
+            return { kind: "libCall", fn: "http.statusCodes", args: [], type: DYN, loc };
+          }
           // tls.rootCertificates: a runtime-valued module constant (the
           // cached bundled-CA array) — the one member read that lowers
           // to a libCall instead of a baked literal.

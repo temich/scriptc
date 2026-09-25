@@ -6007,9 +6007,7 @@ function emitNetworkLibCall(state: LibCallState): Temp {
             const cb = args[1]!;
             emitter.moveTemp(cb);
             const adapter = cbT.params.length === 0 ? "scr_net_conn_thunk0" : "scr_net_conn_thunk_sock";
-            const entry = e.fn === "net.serverOnConnection"
-              ? "scr_net_server_on_connection"
-              : "scr_net_server_on_secure_connection";
+            const entry = e.fn === "net.serverOnConnection" ? "scr_net_server_on_connection" : "scr_net_server_on_secure_connection";
             emitter.line(`${entry}(${arg(0)}, ${cb.name}, &${adapter}, ${arg(2)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
           }
@@ -6661,6 +6659,31 @@ function emitHttpLibCall(state: LibCallState): Temp {
           case "http.serverAllowMissingHostHeader":
             emitter.line(`scr_http_server_allow_missing_host_header(${arg(0)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
+          case "http.serverSetTimeout":
+            emitter.line(`scr_net_server_set_timeout_plain(${arg(0)}, ${arg(1)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          case "http.serverCloseAllConnections":
+          case "http.serverCloseIdleConnections": {
+            const entry = e.fn === "http.serverCloseAllConnections"
+              ? "scr_net_server_close_all_connections" : "scr_net_server_close_idle_connections";
+            emitter.line(`${entry}(${arg(0)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
+          case "http.serverOnTimeout":
+          case "http.serverSetTimeoutCb": {
+            const cbIndex = e.fn === "http.serverSetTimeoutCb" ? 2 : 1;
+            const cbT = e.args[cbIndex]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError(`emitter bug: ${e.fn} callback not a func`);
+            const cb = args[cbIndex]!;
+            emitter.moveTemp(cb);
+            const adapter = cbT.params.length === 0 ? "scr_net_conn_thunk0" : "scr_net_conn_thunk_sock";
+            const entry = e.fn === "http.serverOnTimeout" ? "scr_net_server_on_timeout" : "scr_net_server_set_timeout_cb";
+            const callArgs = e.fn === "http.serverOnTimeout"
+              ? `${arg(0)}, ${cb.name}, &${adapter}, ${arg(2)}`
+              : `${arg(0)}, ${arg(1)}, ${cb.name}, &${adapter}`;
+            emitter.line(`${entry}(${callArgs});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
           case "http.serverTimeoutGet":
             return finish(`scr_net_server_timeout_get(${arg(0)}, ${arg(1)})`);
           case "http.serverTimeoutSet":
@@ -6761,6 +6784,14 @@ function emitHttpLibCall(state: LibCallState): Temp {
             return finish(`scr_http_res_write_head_dyn(${arg(0)}, ${arg(1)}, ${arg(2)})`);
           case "http.reqSetEncoding":
             return finish(`scr_http_req_set_encoding(${arg(0)}, ${arg(1)})`);
+          case "http.reqSetTimeout":
+            return finish(`scr_http_req_set_timeout_plain(${arg(0)}, ${arg(1)})`);
+          case "http.reqSetTimeoutCb": {
+            const cb = args[2]!;
+            emitter.moveTemp(cb);
+            emitter.line(`scr_http_req_set_timeout(${arg(0)}, ${arg(1)}, ${cb.name});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
           // node:http, the client slice (scr_http.c over the net client).
           case "http.request":
           case "http.requestCb": {
@@ -6988,9 +7019,36 @@ function emitHttpLibCall(state: LibCallState): Temp {
             return finish(`scr_http_client_headers_sent(${arg(0)})`);
           case "http.clientWritableEnded":
             return finish(`scr_http_client_writable_ended(${arg(0)})`);
+          case "http.clientWritableFinished":
+            return finish(`scr_http_client_writable_finished(${arg(0)})`);
+          case "http.clientSocket":
+            return finish(`scr_http_client_socket(${arg(0)})`);
+          case "http.clientReusedSocket":
+            return finish(`scr_http_client_reused_socket(${arg(0)})`);
+          case "http.clientSetNoDelay":
+            return finish(`scr_http_client_set_nodelay(${arg(0)}, ${arg(1)})`);
+          case "http.clientSetSocketKeepAlive":
+            return finish(`scr_http_client_set_socket_keepalive(${arg(0)}, ${arg(1)}, ${arg(2)})`);
+          case "http.clientSetTimeout":
+            return finish(`scr_http_client_set_timeout(${arg(0)}, ${arg(1)})`);
+          case "http.clientSetTimeoutCb": {
+            const cb = args[2]!;
+            emitter.moveTemp(cb);
+            emitter.line(`scr_http_client_set_timeout_cb(${arg(0)}, ${arg(1)}, ${cb.name});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
+          case "http.statusCodes":
+            return finish("scr_http_status_codes()");
+          case "http.methods":
+            return finish("scr_http_methods()");
           case "http.clientDestroy":
             emitter.line(`scr_http_client_destroy(${arg(0)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
+          case "http.clientAbort":
+            emitter.line(`scr_http_client_abort(${arg(0)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          case "http.clientAborted":
+            return finish(`scr_http_client_aborted(${arg(0)})`);
           case "http.clientDestroyed":
             return finish(`scr_http_client_destroyed(${arg(0)})`);
           case "http.clientOnResponse": {
@@ -7000,6 +7058,15 @@ function emitHttpLibCall(state: LibCallState): Temp {
             emitter.moveTemp(cb);
             const adapter = cbT.params.length === 0 ? "scr_http_resp_thunk0" : "scr_http_resp_thunk_res";
             emitter.line(`scr_http_client_on_response(${arg(0)}, ${cb.name}, &${adapter}, ${arg(2)});${emitter.srcComment(e.loc)}`);
+            return { name: "", type: e.type };
+          }
+          case "http.clientOnSocket": {
+            const cbT = e.args[1]!.type;
+            if (cbT.kind !== "func") throw new InternalCompilerError("emitter bug: http.clientOnSocket callback not a func");
+            const cb = args[1]!;
+            emitter.moveTemp(cb);
+            const adapter = cbT.params.length === 0 ? "scr_net_conn_thunk0" : "scr_net_conn_thunk_sock";
+            emitter.line(`scr_http_client_on_socket(${arg(0)}, ${cb.name}, &${adapter}, ${arg(2)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
           }
           case "http.clientOnError": {
@@ -7012,10 +7079,14 @@ function emitHttpLibCall(state: LibCallState): Temp {
             return { name: "", type: e.type };
           }
           case "http.clientOnTimeout":
-          case "http.clientOnClose": {
+          case "http.clientOnClose":
+          case "http.clientOnFinish":
+          case "http.clientOnAbort": {
             const cb = args[1]!;
             emitter.moveTemp(cb);
-            const fn = e.fn === "http.clientOnTimeout" ? "scr_http_client_on_timeout" : "scr_http_client_on_close";
+            const fn = e.fn === "http.clientOnTimeout" ? "scr_http_client_on_timeout"
+              : e.fn === "http.clientOnClose" ? "scr_http_client_on_close"
+              : e.fn === "http.clientOnAbort" ? "scr_http_client_on_abort" : "scr_http_client_on_finish";
             emitter.line(`${fn}(${arg(0)}, ${cb.name}, ${arg(2)});${emitter.srcComment(e.loc)}`);
             return { name: "", type: e.type };
           }

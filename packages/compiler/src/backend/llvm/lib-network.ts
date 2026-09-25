@@ -167,8 +167,8 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       e.fn === "net.serverOnClose" || e.fn === "net.serverOnListening" ||
       e.fn === "net.sockOnEnd" || e.fn === "net.sockOnClose" || e.fn === "net.sockOnConnect" ||
       e.fn === "net.sockOnTimeout" || e.fn === "net.sockOnReadable" ||
-      e.fn === "http.reqOnEnd" || e.fn === "http.reqOnClose" || e.fn === "http.resOnClose" ||
-      e.fn === "http.clientOnTimeout" || e.fn === "http.clientOnClose"
+      e.fn === "http.reqOnEnd" || e.fn === "http.reqOnClose" || e.fn === "http.reqOnAborted" || e.fn === "http.resOnClose" ||
+      e.fn === "http.clientOnTimeout" || e.fn === "http.clientOnClose" || e.fn === "http.clientOnFinish" || e.fn === "http.clientOnAbort"
     ) {
       // Adapter-free registrations: (recv, cb /moves/, once).
       const entry = {
@@ -181,9 +181,12 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
         "net.sockOnReadable": "scr_net_sock_on_readable",
         "http.reqOnEnd": "scr_http_req_on_end",
         "http.reqOnClose": "scr_http_req_on_close",
+        "http.reqOnAborted": "scr_http_req_on_aborted",
         "http.resOnClose": "scr_http_res_on_close",
         "http.clientOnTimeout": "scr_http_client_on_timeout",
         "http.clientOnClose": "scr_http_client_on_close",
+        "http.clientOnFinish": "scr_http_client_on_finish",
+        "http.clientOnAbort": "scr_http_client_on_abort",
       }[e.fn]!;
       const args = e.args.map((a) => host.emitExpr(a));
       host.moveTemp(args[1]!);
@@ -191,15 +194,23 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       B.line(`call void @${entry}(ptr ${args[0]!.name}, ptr ${args[1]!.name}, i1 ${args[2]!.name})`);
       return { name: "", type: e.type };
     }
-    if (e.fn === "net.serverOnConnection") {
-      const cbT = e.args[1]!.type;
-      if (cbT.kind !== "func") throw new InternalCompilerError("llvm emitter bug: net.serverOnConnection callback not a func");
+    if (e.fn === "net.serverOnConnection" || e.fn === "http.serverOnTimeout" || e.fn === "http.serverSetTimeoutCb" || e.fn === "http.clientOnSocket") {
+      const cbIndex = e.fn === "http.serverSetTimeoutCb" ? 2 : 1;
+      const cbT = e.args[cbIndex]!.type;
+      if (cbT.kind !== "func") throw new InternalCompilerError(`llvm emitter bug: ${e.fn} callback not a func`);
       const args = e.args.map((a) => host.emitExpr(a));
-      host.moveTemp(args[1]!);
+      host.moveTemp(args[cbIndex]!);
       const adapter = cbT.params.length === 0 ? "scr_net_conn_thunk0" : "scr_net_conn_thunk_sock";
       host.declare(`declare void @${adapter}(ptr, ptr)`);
-      host.declare(`declare void @scr_net_server_on_connection(ptr, ptr, ptr, i1 zeroext)`);
-      B.line(`call void @scr_net_server_on_connection(ptr ${args[0]!.name}, ptr ${args[1]!.name}, ptr @${adapter}, i1 ${args[2]!.name})`);
+      if (e.fn === "http.serverSetTimeoutCb") {
+        host.declare("declare void @scr_net_server_set_timeout_cb(ptr, double, ptr, ptr)");
+        B.line(`call void @scr_net_server_set_timeout_cb(ptr ${args[0]!.name}, double ${args[1]!.name}, ptr ${args[2]!.name}, ptr @${adapter})`);
+      } else {
+        const entry = e.fn === "net.serverOnConnection" ? "scr_net_server_on_connection"
+          : e.fn === "http.clientOnSocket" ? "scr_http_client_on_socket" : "scr_net_server_on_timeout";
+        host.declare(`declare void @${entry}(ptr, ptr, ptr, i1 zeroext)`);
+        B.line(`call void @${entry}(ptr ${args[0]!.name}, ptr ${args[1]!.name}, ptr @${adapter}, i1 ${args[2]!.name})`);
+      }
       return { name: "", type: e.type };
     }
     if (e.fn === "net.connect" || e.fn === "net.connectCb") {
@@ -431,11 +442,19 @@ export function emitNetworkHttpLibCall(host: LlvmEmitterContext, e: LibCallExpr)
       B.line(`call void @scr_http_res_on_finish(ptr ${args[0]!.name}, ptr ${args[1]!.name})`);
       return { name: "", type: e.type };
     }
-    if (e.fn === "http.resSetTimeoutCb") {
+    if (e.fn === "http.resSetTimeoutCb" || e.fn === "http.reqSetTimeoutCb") {
       const args = e.args.map((a) => host.emitExpr(a));
       host.moveTemp(args[2]!);
-      host.declare(`declare void @scr_http_res_set_timeout(ptr, double, ptr)`);
-      B.line(`call void @scr_http_res_set_timeout(ptr ${args[0]!.name}, double ${args[1]!.name}, ptr ${args[2]!.name})`);
+      const entry = e.fn === "http.resSetTimeoutCb" ? "scr_http_res_set_timeout" : "scr_http_req_set_timeout";
+      host.declare(`declare void @${entry}(ptr, double, ptr)`);
+      B.line(`call void @${entry}(ptr ${args[0]!.name}, double ${args[1]!.name}, ptr ${args[2]!.name})`);
+      return { name: "", type: e.type };
+    }
+    if (e.fn === "http.clientSetTimeoutCb") {
+      const args = e.args.map((a) => host.emitExpr(a));
+      host.moveTemp(args[2]!);
+      host.declare("declare void @scr_http_client_set_timeout_cb(ptr, double, ptr)");
+      B.line(`call void @scr_http_client_set_timeout_cb(ptr ${args[0]!.name}, double ${args[1]!.name}, ptr ${args[2]!.name})`);
       return { name: "", type: e.type };
     }
     if (e.fn === "net.sockOnFinish") {

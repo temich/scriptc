@@ -509,6 +509,11 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "http.serverJoinDupHeaders": { argTypes: [NETSERVER_T], result: VOID },
   "http.serverAllowMissingHostHeader": { argTypes: [NETSERVER_T], result: VOID },
   "http.serverTimeoutGet": { argTypes: [NETSERVER_T, F64], result: F64 },
+  "http.serverSetTimeout": { argTypes: [NETSERVER_T, F64], result: VOID },
+  "http.serverSetTimeoutCb": { argTypes: [NETSERVER_T, F64, null], result: VOID },
+  "http.serverOnTimeout": { argTypes: [NETSERVER_T, null, BOOL], result: VOID },
+  "http.serverCloseAllConnections": { argTypes: [NETSERVER_T], result: VOID },
+  "http.serverCloseIdleConnections": { argTypes: [NETSERVER_T], result: VOID },
   "http.serverTimeoutSet": { argTypes: [NETSERVER_T, F64, F64], result: VOID },
   "http.serverTimeoutOptionSet": { argTypes: [NETSERVER_T, F64, DYN], result: VOID },
   "net.serverOnListening": { argTypes: [NETSERVER_T, { kind: "func", params: [], ret: VOID }, BOOL], result: VOID },
@@ -785,12 +790,28 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   "http.clientProtocol": { argTypes: [HTTPCLIENTREQ_T], result: STRING },
   "http.clientHeadersSent": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
   "http.clientWritableEnded": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
+  "http.clientWritableFinished": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
+  "http.clientSocket": { argTypes: [HTTPCLIENTREQ_T], result: NETSOCKET_T },
+  "http.clientReusedSocket": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
+  "http.clientSetNoDelay": { argTypes: [HTTPCLIENTREQ_T, BOOL], result: VOID },
+  "http.clientSetSocketKeepAlive": { argTypes: [HTTPCLIENTREQ_T, BOOL, F64], result: VOID },
+  "http.clientSetTimeout": { argTypes: [HTTPCLIENTREQ_T, F64], result: VOID },
+  "http.clientSetTimeoutCb": { argTypes: [HTTPCLIENTREQ_T, F64, { kind: "func", params: [], ret: VOID }], result: VOID },
+  "http.statusCodes": { argTypes: [], result: DYN },
+  "http.methods": { argTypes: [], result: arrayOf(STRING) },
+  "http.reqSetTimeout": { argTypes: [HTTPREQ_T, F64], result: VOID },
+  "http.reqSetTimeoutCb": { argTypes: [HTTPREQ_T, F64, { kind: "func", params: [], ret: VOID }], result: VOID },
   "http.clientDestroy": { argTypes: [HTTPCLIENTREQ_T], result: VOID },
+  "http.clientAbort": { argTypes: [HTTPCLIENTREQ_T], result: VOID },
+  "http.clientAborted": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
   "http.clientDestroyed": { argTypes: [HTTPCLIENTREQ_T], result: BOOL },
   "http.clientOnResponse": { argTypes: [HTTPCLIENTREQ_T, null, BOOL], result: VOID },
+  "http.clientOnSocket": { argTypes: [HTTPCLIENTREQ_T, null, BOOL], result: VOID },
+  "http.clientOnFinish": { argTypes: [HTTPCLIENTREQ_T, { kind: "func", params: [], ret: VOID }, BOOL], result: VOID },
   "http.clientOnError": { argTypes: [HTTPCLIENTREQ_T, null, BOOL], result: VOID },
   "http.clientOnTimeout": { argTypes: [HTTPCLIENTREQ_T, { kind: "func", params: [], ret: VOID }, BOOL], result: VOID },
   "http.clientOnClose": { argTypes: [HTTPCLIENTREQ_T, { kind: "func", params: [], ret: VOID }, BOOL], result: VOID },
+  "http.clientOnAbort": { argTypes: [HTTPCLIENTREQ_T, { kind: "func", params: [], ret: VOID }, BOOL], result: VOID },
   "cp.execSync": {
     argTypes: [STRING, arrayOf(STRING), BOOL, STRING, BOOL, STRING, BOOL, arrayOf(STRING), F64, F64, F64],
     result: STRING,
@@ -4301,13 +4322,15 @@ function validateFunction(
         }
         if (e.fn === "net.createServerCb" || e.fn === "net.serverOnConnection" ||
             e.fn === "net.serverOnSecureConnection" ||
+            e.fn === "http.serverSetTimeoutCb" || e.fn === "http.serverOnTimeout" ||
+            e.fn === "http.clientOnSocket" ||
             e.fn === "net.sockOnData" || e.fn === "net.serverOnError" ||
             e.fn === "net.sockOnError") {
           // The program-dependent listener shapes: a void closure with no
           // params, or exactly the one supported parameter per event
           // (socket handle / data chunk bytes / error %Error). The
           // callback slot is arg 0 for createServerCb, arg 1 otherwise.
-          const cbT = e.args[e.fn === "net.createServerCb" ? 0 : 1]?.type;
+          const cbT = e.args[e.fn === "net.createServerCb" ? 0 : e.fn === "http.serverSetTimeoutCb" ? 2 : 1]?.type;
           let ok = cbT?.kind === "func" && cbT.ret.kind === "void" && cbT.params.length <= 1;
           if (ok && cbT?.kind === "func" && cbT.params.length === 1) {
             const p = cbT.params[0]!;

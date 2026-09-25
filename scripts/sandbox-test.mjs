@@ -383,6 +383,7 @@ const execIn = async (
   workdir = "/workspace",
   idleTimeoutMs = 90_000,
 ) => {
+  const deadline = Date.now() + wallTimeoutMs;
   const envArgs = Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
   const exitMarker = `__SCRIPTC_REMOTE_EXIT_${randomBytes(12).toString("hex")}__`;
   const prepared = sandboxCommand(command, args, exitMarker);
@@ -426,26 +427,40 @@ const execIn = async (
       `scriptc_status=125; test ! -f ${shellQuote(statusPath)} || ` +
       `scriptc_status=$(cat ${shellQuote(statusPath)}); ` +
       `printf '\\n${probeMarker}%s\\n' "$scriptc_status"`;
-    await vercel(
-      [
-        "sandbox",
-        "exec",
-        "--timeout",
-        "1m",
-        "--workdir",
-        workdir,
-        worker.name,
-        "sh",
-        "-c",
-        probeScript,
-      ],
-      {
-        exitMarker: probeMarker,
-        idleTimeoutMs: 30_000,
-        label: `${label} status`,
-        timeoutMs: 60_000,
-      },
-    );
+    let probes = 0;
+    for (;;) {
+      try {
+        await vercel(
+          [
+            "sandbox",
+            "exec",
+            "--timeout",
+            "1m",
+            "--workdir",
+            workdir,
+            worker.name,
+            "sh",
+            "-c",
+            probeScript,
+          ],
+          {
+            exitMarker: probeMarker,
+            idleTimeoutMs: 30_000,
+            label: `${label} status`,
+            timeoutMs: 60_000,
+          },
+        );
+        return;
+      } catch (probeError) {
+        const status = /remote command exited (\d+)$/.exec(String(probeError?.message ?? probeError));
+        if (status && Number(status[1]) !== 125) throw probeError;
+        if (Date.now() >= deadline) {
+          throw new Error(`${label} did not report a remote exit status before its timeout`, { cause: error });
+        }
+        if (probes++ % 6 === 0) console.warn(`[${label}] waiting for the remote exit marker...`);
+        await new Promise((resolve) => setTimeout(resolve, Math.min(5_000, deadline - Date.now())));
+      }
+    }
   }
 };
 

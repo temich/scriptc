@@ -1031,6 +1031,26 @@ function lowerNetServerMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "setTimeout") {
+    if (args.length < 1 || args.length > 2) lowerer.noLowering("server.setTimeout arguments", call, "pass milliseconds and an optional socket callback");
+    const receiver = coerceToHandle(lowerer, access.expression, NETSERVER_T);
+    const ms = lowerer.lowerExprExpecting(args[0]!, F64);
+    const cb = args.length === 2
+      ? lowerCallbackArg(lowerer, args[1]!, "server timeout callbacks", 1,
+          (p) => p.kind === "netSocket", "use (socket) or ()", [NETSOCKET_T]).cb
+      : null;
+    const fn: IrLibFn = cb === null ? "http.serverSetTimeout" : "http.serverSetTimeoutCb";
+    const callArgs = cb === null ? [receiver, ms] : [receiver, ms, cb];
+    if (resultIsDiscarded(call)) return { kind: "libCall", fn, args: callArgs, type: VOID, loc };
+    return receiverReturningCall(lowerer, fn, callArgs, NETSERVER_T, loc);
+  }
+  if (name === "closeAllConnections" || name === "closeIdleConnections") {
+    requireStatementPosition(lowerer, call, `server.${name}()`);
+    if (args.length !== 0) lowerer.noLowering(`server.${name} arguments`, call, `${name}() takes no arguments`);
+    const receiver = coerceToHandle(lowerer, access.expression, NETSERVER_T);
+    const fn: IrLibFn = name === "closeAllConnections" ? "http.serverCloseAllConnections" : "http.serverCloseIdleConnections";
+    return { kind: "libCall", fn, args: [receiver], type: VOID, loc };
+  }
   if (name === "listen") {
     if (args.length < 1 || args.length > 3) {
       lowerer.noLowering(
@@ -1279,6 +1299,11 @@ function lowerNetServerMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     if (event === "close") {
       const { cb } = lowerCallbackArg(lowerer, args[1]!, "close listeners", 0, () => false, "use ()", []);
       return { kind: "libCall", fn: "net.serverOnClose", args: [receiver, cb, once], type: VOID, loc };
+    }
+    if (event === "timeout") {
+      const { cb } = lowerCallbackArg(lowerer, args[1]!, "timeout listeners", 1,
+        (p) => p.kind === "netSocket", "use (socket) or ()", [NETSOCKET_T]);
+      return { kind: "libCall", fn: "http.serverOnTimeout", args: [receiver, cb, once], type: VOID, loc };
     }
     if (event === "listening") {
       // The deferred bind emit — listen(port, cb)'s event twin: fires
@@ -2093,7 +2118,7 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
       const receiver = coerceToHandle(lowerer, expr.expression, HTTPREQ_T);
       return { kind: "libCall", fn: "http.reqStatusCode", args: [receiver], type: lowerer.withUndefinedArm(F64), loc };
     }
-    if (name === "socket") {
+    if (name === "socket" || name === "connection") {
       const receiver = coerceToHandle(lowerer, expr.expression, HTTPREQ_T);
       return { kind: "libCall", fn: "http.reqSocket", args: [receiver], type: NETSOCKET_T, loc };
     }
@@ -2254,6 +2279,11 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
     return { kind: "libCall", fn: "http.clientDestroyed", args: [receiver], type: BOOL, loc };
   }
+  if (recvKind === "httpClientReq" && lowerer.isStdlibMember(expr) &&
+      (expr.name.text === "socket" || expr.name.text === "connection")) {
+    const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
+    return { kind: "libCall", fn: "http.clientSocket", args: [receiver], type: NETSOCKET_T, loc };
+  }
   if (recvKind === "httpClientReq" && lowerer.isStdlibMember(expr) && expr.name.text === "writableCorked") {
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
     return { kind: "libCall", fn: "http.clientWritableCorked", args: [receiver], type: F64, loc };
@@ -2268,8 +2298,11 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
       const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
       return { kind: "libCall", fn: strFn, args: [receiver], type: STRING, loc };
     }
-    const boolFn: IrLibFn | null = name === "headersSent" ? "http.clientHeadersSent"
-      : name === "writableEnded" ? "http.clientWritableEnded" : null;
+    const boolFn: IrLibFn | null = name === "aborted" ? "http.clientAborted"
+      : name === "headersSent" ? "http.clientHeadersSent"
+      : name === "writableEnded" || name === "finished" ? "http.clientWritableEnded"
+      : name === "writableFinished" ? "http.clientWritableFinished"
+      : name === "reusedSocket" ? "http.clientReusedSocket" : null;
     if (boolFn !== null) {
       const receiver = coerceToHandle(lowerer, expr.expression, HTTPCLIENTREQ_T);
       return { kind: "libCall", fn: boolFn, args: [receiver], type: BOOL, loc };
@@ -2290,6 +2323,10 @@ export function lowerServerProperty(lowerer: Lowerer, expr: ts.PropertyAccessExp
     return { kind: "libCall", fn: "http.resHeadersSent", args: [receiver], type: BOOL, loc };
   }
   if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "writableEnded") {
+    const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
+    return { kind: "libCall", fn: "http.resWritableEnded", args: [receiver], type: BOOL, loc };
+  }
+  if (recvKind === "httpRes" && lowerer.isStdlibMember(expr) && expr.name.text === "finished") {
     const receiver = coerceToHandle(lowerer, expr.expression, HTTPRES_T);
     return { kind: "libCall", fn: "http.resWritableEnded", args: [receiver], type: BOOL, loc };
   }
@@ -4341,6 +4378,33 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       : name === "cork" ? "http.clientCork" : "http.clientUncork";
     return { kind: "libCall", fn, args: [receiver], type: VOID, loc };
   }
+  if (name === "setNoDelay") {
+    requireStatementPosition(lowerer, call, "request.setNoDelay(...)");
+    if (args.length > 1) lowerer.noLowering("request.setNoDelay arguments", call, "pass an optional boolean");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const enable = args.length === 0 ? boolLit(true, loc) : lowerer.lowerExprExpecting(args[0]!, BOOL);
+    return { kind: "libCall", fn: "http.clientSetNoDelay", args: [receiver, enable], type: VOID, loc };
+  }
+  if (name === "setSocketKeepAlive") {
+    requireStatementPosition(lowerer, call, "request.setSocketKeepAlive(...)");
+    if (args.length > 2) lowerer.noLowering("request.setSocketKeepAlive arguments", call, "pass an optional boolean and initial delay in milliseconds");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const enable = args.length === 0 ? boolLit(true, loc) : lowerer.lowerExprExpecting(args[0]!, BOOL);
+    const delay = args.length < 2 ? numLit(0, loc) : lowerer.lowerExprExpecting(args[1]!, F64);
+    return { kind: "libCall", fn: "http.clientSetSocketKeepAlive", args: [receiver, enable, delay], type: VOID, loc };
+  }
+  if (name === "setTimeout") {
+    if (args.length < 1 || args.length > 2) lowerer.noLowering("request.setTimeout arguments", call, "pass milliseconds and an optional callback");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPCLIENTREQ_T);
+    const ms = lowerer.lowerExprExpecting(args[0]!, F64);
+    const cb = args.length === 2
+      ? lowerCallbackArg(lowerer, args[1]!, "request timeout callbacks", 0, () => false, "use ()", []).cb
+      : null;
+    const fn: IrLibFn = cb === null ? "http.clientSetTimeout" : "http.clientSetTimeoutCb";
+    const callArgs = cb === null ? [receiver, ms] : [receiver, ms, cb];
+    if (resultIsDiscarded(call)) return { kind: "libCall", fn, args: callArgs, type: VOID, loc };
+    return receiverReturningCall(lowerer, fn, callArgs, HTTPCLIENTREQ_T, loc);
+  }
   if (name === "addTrailers") {
     requireStatementPosition(lowerer, call, "request.addTrailers(...)");
     if (args.length !== 1) lowerer.noLowering("request.addTrailers argument count", call, "pass one trailer object or pair-list literal");
@@ -4378,13 +4442,13 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     }
     lowerer.noLowering(`${name} of '${lowerer.fmt(data.type)}' data`, args[0] ?? call, NARROW_DATA_HINT);
   }
-  if (name === "destroy") {
-    requireStatementPosition(lowerer, call, "request.destroy()");
+  if (name === "destroy" || name === "abort") {
+    requireStatementPosition(lowerer, call, `request.${name}()`);
     if (args.length !== 0) {
-      lowerer.noLowering(`destroy with ${args.length} arguments`, call, "destroy() takes no arguments here");
+      lowerer.noLowering(`${name} with ${args.length} arguments`, call, `${name}() takes no arguments here`);
     }
     const receiver = lowerer.lowerExpr(access.expression);
-    return { kind: "libCall", fn: "http.clientDestroy", args: [receiver], type: VOID, loc };
+    return { kind: "libCall", fn: name === "destroy" ? "http.clientDestroy" : "http.clientAbort", args: [receiver], type: VOID, loc };
   }
   if ((name === "on" || name === "once" || name === "addListener") && args.length === 2) {
     requireStatementPosition(lowerer, call, `request.${name}(...)`);
@@ -4401,6 +4465,11 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       );
       return { kind: "libCall", fn: "http.clientOnResponse", args: [receiver, cb, once], type: VOID, loc };
     }
+    if (event === "socket") {
+      const { cb } = lowerCallbackArg(lowerer, args[1]!, "socket listeners", 1,
+        (p) => p.kind === "netSocket", "use (socket) or ()", [NETSOCKET_T]);
+      return { kind: "libCall", fn: "http.clientOnSocket", args: [receiver, cb, once], type: VOID, loc };
+    }
     if (event === "error") {
       const { cb } = lowerCallbackArg(
         lowerer, args[1]!, "error listeners", 1,
@@ -4410,9 +4479,11 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       );
       return { kind: "libCall", fn: "http.clientOnError", args: [receiver, cb, once], type: VOID, loc };
     }
-    if (event === "timeout" || event === "close") {
+    if (event === "timeout" || event === "close" || event === "finish" || event === "abort") {
       const { cb } = lowerCallbackArg(lowerer, args[1]!, `${event} listeners`, 0, () => false, "use ()", []);
-      const fn: IrLibFn = event === "timeout" ? "http.clientOnTimeout" : "http.clientOnClose";
+      const fn: IrLibFn = event === "timeout" ? "http.clientOnTimeout"
+        : event === "close" ? "http.clientOnClose"
+        : event === "abort" ? "http.clientOnAbort" : "http.clientOnFinish";
       return { kind: "libCall", fn, args: [receiver, cb, once], type: VOID, loc };
     }
     if (event === "upgrade") {
@@ -4451,7 +4522,7 @@ function lowerHttpClientMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     lowerer.noLowering(
       `request.${name}(${event === null ? "non-literal event" : `"${event}"`}, ...)`,
       args[0]!,
-      '"response", "upgrade", "error", "timeout", and "close" are the supported request events (as literals)',
+      '"response", "socket", "upgrade", "error", "timeout", "finish", "abort", and "close" are the supported request events (as literals)',
     );
   }
   lowerer.noLowering(
@@ -4556,6 +4627,15 @@ function lowerHttpReqMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const name = access.name.text;
   const loc = locOf(call);
   const args = call.arguments;
+  if (name === "setTimeout") {
+    requireStatementPosition(lowerer, call, "message.setTimeout(...)");
+    if (args.length < 1 || args.length > 2) lowerer.noLowering("message.setTimeout arguments", call, "pass milliseconds and an optional callback");
+    const receiver = coerceToHandle(lowerer, access.expression, HTTPREQ_T);
+    const ms = lowerer.lowerExprExpecting(args[0]!, F64);
+    if (args.length === 1) return { kind: "libCall", fn: "http.reqSetTimeout", args: [receiver, ms], type: VOID, loc };
+    const { cb } = lowerCallbackArg(lowerer, args[1]!, "message timeout callbacks", 0, () => false, "use ()", []);
+    return { kind: "libCall", fn: "http.reqSetTimeoutCb", args: [receiver, ms, cb], type: VOID, loc };
+  }
   if (name === "resume" || name === "destroy") {
     requireStatementPosition(lowerer, call, `req.${name}()`);
     if (args.length !== 0) {
@@ -5007,10 +5087,14 @@ function lowerHttpResMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       const { cb } = lowerCallbackArg(lowerer, args[1]!, "close listeners", 0, () => false, "use ()", []);
       return { kind: "libCall", fn: "http.resOnClose", args: [receiver, cb, once], type: VOID, loc };
     }
+    if (event === "finish") {
+      const { cb } = lowerCallbackArg(lowerer, args[1]!, "finish listeners", 0, () => false, "use ()", []);
+      return { kind: "libCall", fn: "http.resOnFinish", args: [receiver, cb], type: VOID, loc };
+    }
     lowerer.noLowering(
       `res.${name}(${event === null ? "non-literal event" : `"${event}"`}, ...)`,
       args[0]!,
-      '"close" is the supported response event (as a literal)',
+      '"close" and "finish" are the supported response events (as literals)',
     );
   }
   lowerer.noLowering(

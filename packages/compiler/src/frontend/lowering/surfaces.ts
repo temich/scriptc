@@ -938,6 +938,7 @@ export const BUILTIN_MODULE_FNS: Record<string, Record<string, BuiltinModuleFn |
  * thread machinery) and never runs as a cluster worker (cluster forks the
  * node binary itself) — Node's own answers for a directly-run script. */
 export const BUILTIN_MODULE_CONSTS: Record<string, Record<string, string | number | boolean | undefined> | undefined> = {
+  http: { maxHeaderSize: 16384 },
   path: { sep: "/", delimiter: ":" },
   "path/posix": { sep: "/", delimiter: ":" },
   "path/win32": { sep: "\\", delimiter: ";" },

@@ -5607,6 +5607,7 @@ bool scr_net_server_settled(ScrNetServer *s); /* 'close' already emitted */
  * event the http layer does not model (the caller fences loudly). */
 void scr_net_set_dynh_http_on(bool (*fn)(ScrNetServer *, const char *, const ScrDyn *, bool));
 void scr_net_sock_set_native_reader(ScrNetSocket *s, ScrNetNativeDataFn data, ScrNetNativeEventFn eof, ScrNetNativeEventFn closed, void *ctx, void (*ctx_free)(void *));
+void scr_net_sock_set_native_idle_checker(ScrNetSocket *s, bool (*fn)(void *));
 /* The upgrade handover: clear the reader's fn pointers, keep the ctx. */
 void scr_net_sock_clear_native_reader(ScrNetSocket *s);
 /* The accepting server (BORROWED; NULL on client sockets) — the protocol
@@ -5618,6 +5619,7 @@ ScrNetServer *scr_net_sock_server(ScrNetSocket *s);
 void scr_net_sock_set_encoding(ScrNetSocket *s, ScrStr *enc /*borrowed*/);
 bool scr_net_sock_destroyed(ScrNetSocket *s); /* socket.destroyed */
 bool scr_net_sock_writable(ScrNetSocket *s);  /* socket.writable */
+bool scr_net_sock_established(ScrNetSocket *s); /* connected, including TLS handshake */
 void scr_net_sock_set_native_events(ScrNetSocket *s, ScrNetNativeEventFn timeout, ScrNetNativeErrFn err);
 void scr_net_sock_write_native(ScrNetSocket *s, const char *buf, size_t n);
 /* The protocol layer's deferred-emit hook: `pending` joins the loop's
@@ -5656,6 +5658,9 @@ bool scr_net_server_listening(ScrNetServer *s);
  * a non-number in the ordinary JS property slot. */
 double scr_net_server_timeout_get(ScrNetServer *s, double field);
 void scr_net_server_timeout_set(ScrNetServer *s, double field, double value);
+void scr_net_server_set_timeout_plain(ScrNetServer *s, double ms);
+void scr_net_server_set_timeout_cb(ScrNetServer *s, double ms, ScrClosure *cb /*moves*/, ScrNetConnFn fn);
+void scr_net_server_on_timeout(ScrNetServer *s, ScrClosure *cb /*moves*/, ScrNetConnFn fn, bool once);
 /* Marks the shared net-server handle as an HTTP/1 or HTTPS server. The
  * dynamic handle uses this to keep HTTP-only fields off net/TLS/H2. */
 void scr_net_server_enable_http_timeout_surface(ScrNetServer *s);
@@ -5667,6 +5672,8 @@ void scr_net_server_timeout_option_set(ScrNetServer *s, double field, const stru
 ScrStr *scr_net_server_addr_ip(ScrNetServer *s);     /* +1 — address().address */
 ScrStr *scr_net_server_addr_family(ScrNetServer *s); /* +1 — address().family */
 void scr_net_server_close(ScrNetServer *s, ScrClosure *cb /*moves, nullable*/);
+void scr_net_server_close_all_connections(ScrNetServer *s);
+void scr_net_server_close_idle_connections(ScrNetServer *s);
 /* The REAL close behind `wrapper.close.bind(wrapper)` — never consults
  * the override (the proxy-through idiom cannot recurse). */
 void scr_net_server_close_direct(ScrNetServer *s, ScrClosure *cb /*moves, nullable*/);
@@ -5727,6 +5734,7 @@ void scr_net_sock_destroy(ScrNetSocket *s);
 ScrNetSocket *scr_net_sock_pause(ScrNetSocket *s);            /* +1: chaining */
 ScrNetSocket *scr_net_sock_resume(ScrNetSocket *s);           /* +1: chaining */
 ScrNetSocket *scr_net_sock_set_nodelay(ScrNetSocket *s, bool enable); /* +1: chaining */
+void scr_net_sock_set_keepalive(ScrNetSocket *s, bool enable, double delay_ms);
 void scr_net_sock_destroy_soon(ScrNetSocket *s);
 void scr_net_sock_on_finish(ScrNetSocket *s, ScrClosure *cb /*moves*/);
 void scr_net_sock_on_write_flush(ScrNetSocket *s, ScrClosure *cb /*moves*/);
@@ -6061,6 +6069,8 @@ bool scr_http_req_complete(ScrHttpReq *r);
 void scr_http_dyn_install(void);
 void scr_http_validate_header_name(ScrStr *name /*borrowed*/, ScrStr *label /*borrowed*/);
 void scr_http_validate_header_value(ScrStr *name /*borrowed*/, const ScrDyn *value /*borrowed*/);
+ScrDyn *scr_http_status_codes(void); /* +1, shared mutable Node v24 table */
+ScrArr *scr_http_methods(void); /* +1, shared mutable Node v24 array */
 
 ScrNetServer *scr_http_create_server(ScrClosure *handler /*moves, nullable*/, ScrHttpReqFn fn); /* +1 */
 /* The unguarded h2-only stream call: throws Node's exact catchable
@@ -6173,6 +6183,7 @@ void scr_http_req_resume(ScrHttpReq *r);
  * socket's idle timer; the flags back req.destroyed/req.readable. */
 void scr_http_req_pause(ScrHttpReq *r);
 void scr_http_req_set_timeout(ScrHttpReq *r, double ms, ScrClosure *cb /*moves, nullable*/);
+void scr_http_req_set_timeout_plain(ScrHttpReq *r, double ms);
 bool scr_http_req_destroyed_flag(ScrHttpReq *r);
 bool scr_http_req_readable(ScrHttpReq *r);
 /* flushHeaders/cork/uncork/writableCorked, the res.req backref, the
@@ -6231,6 +6242,12 @@ ScrStr *scr_http_client_host(ScrHttpClientReq *c); /* +1 */
 ScrStr *scr_http_client_protocol(ScrHttpClientReq *c); /* +1 */
 bool scr_http_client_headers_sent(ScrHttpClientReq *c);
 bool scr_http_client_writable_ended(ScrHttpClientReq *c);
+bool scr_http_client_writable_finished(ScrHttpClientReq *c);
+ScrNetSocket *scr_http_client_socket(ScrHttpClientReq *c); /* +1 */
+bool scr_http_client_reused_socket(ScrHttpClientReq *c);
+void scr_http_client_set_nodelay(ScrHttpClientReq *c, bool enable);
+void scr_http_client_set_socket_keepalive(ScrHttpClientReq *c, bool enable, double delay_ms);
+void scr_http_client_set_timeout_cb(ScrHttpClientReq *c, double ms, ScrClosure *cb /*moves*/);
 void scr_http_client_add_trailers(ScrHttpClientReq *c, ScrArr *pairs /*borrowed*/);
 void scr_http_client_cork(ScrHttpClientReq *c);
 void scr_http_client_uncork(ScrHttpClientReq *c);
@@ -6240,8 +6257,13 @@ void scr_http_client_write_dynv(ScrHttpClientReq *c, const ScrDyn *d /*borrowed*
 void scr_http_client_end_dynv(ScrHttpClientReq *c, const ScrDyn *d /*borrowed*/);
 void scr_http_client_set_timeout(ScrHttpClientReq *c, double ms);
 void scr_http_client_destroy(ScrHttpClientReq *c);
+void scr_http_client_abort(ScrHttpClientReq *c);
+bool scr_http_client_aborted(ScrHttpClientReq *c);
 bool scr_http_client_destroyed(ScrHttpClientReq *c);
 void scr_http_client_on_response(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, ScrHttpRespFn fn, bool once);
+void scr_http_client_on_socket(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, ScrNetConnFn fn, bool once);
+void scr_http_client_on_finish(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, bool once);
+void scr_http_client_on_abort(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, bool once);
 void scr_http_client_on_error(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, ScrChildErrFn fn, bool once);
 void scr_http_client_on_timeout(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, bool once);
 void scr_http_client_on_close(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, bool once);

@@ -1124,6 +1124,13 @@
       "note": "recognized module (bare and node:-prefixed specifiers)"
     },
     {
+      "id": "node-builtin.http.maxHeaderSize",
+      "kind": "node-builtin",
+      "name": "http.maxHeaderSize",
+      "status": "static",
+      "note": "constant value read"
+    },
+    {
       "id": "node-builtin.http2",
       "kind": "node-builtin",
       "name": "http2",

@@ -66,44 +66,107 @@ static void scr_http_oom(void) {
   abort();
 }
 
-/* Node's STATUS_CODES reason phrases (the slice's subset; everything the
- * fixtures and portless's handlers send, plus the common neighbors). */
+static bool scr_http_timeout_valid(double ms) {
+  if (isfinite(ms) && ms >= 0) return true;
+  char recv[48], msg[176];
+  scr_num_received(ms, recv);
+  int len = snprintf(msg, sizeof msg,
+                     "The value of \"msecs\" is out of range. It must be a non-negative finite number. Received %s", recv);
+  scr_throw_error_msg_code(SCR_ERR_RANGE, msg, (size_t)len, "ERR_OUT_OF_RANGE");
+  return false;
+}
+
+/* Node v24.15.0's STATUS_CODES table, shared by the module export and the
+ * default ServerResponse reason phrase. */
+static const struct { int code; const char *reason; } scr_http_status_codes_table[] = {
+  {100, "Continue"}, {101, "Switching Protocols"}, {102, "Processing"},
+  {103, "Early Hints"}, {200, "OK"}, {201, "Created"}, {202, "Accepted"},
+  {203, "Non-Authoritative Information"}, {204, "No Content"},
+  {205, "Reset Content"}, {206, "Partial Content"}, {207, "Multi-Status"},
+  {208, "Already Reported"}, {226, "IM Used"}, {300, "Multiple Choices"},
+  {301, "Moved Permanently"}, {302, "Found"}, {303, "See Other"},
+  {304, "Not Modified"}, {305, "Use Proxy"}, {307, "Temporary Redirect"},
+  {308, "Permanent Redirect"}, {400, "Bad Request"}, {401, "Unauthorized"},
+  {402, "Payment Required"}, {403, "Forbidden"}, {404, "Not Found"},
+  {405, "Method Not Allowed"}, {406, "Not Acceptable"},
+  {407, "Proxy Authentication Required"}, {408, "Request Timeout"},
+  {409, "Conflict"}, {410, "Gone"}, {411, "Length Required"},
+  {412, "Precondition Failed"}, {413, "Payload Too Large"},
+  {414, "URI Too Long"}, {415, "Unsupported Media Type"},
+  {416, "Range Not Satisfiable"}, {417, "Expectation Failed"},
+  {418, "I'm a Teapot"}, {421, "Misdirected Request"},
+  {422, "Unprocessable Entity"}, {423, "Locked"},
+  {424, "Failed Dependency"}, {425, "Too Early"},
+  {426, "Upgrade Required"}, {428, "Precondition Required"},
+  {429, "Too Many Requests"}, {431, "Request Header Fields Too Large"},
+  {451, "Unavailable For Legal Reasons"}, {500, "Internal Server Error"},
+  {501, "Not Implemented"}, {502, "Bad Gateway"},
+  {503, "Service Unavailable"}, {504, "Gateway Timeout"},
+  {505, "HTTP Version Not Supported"}, {506, "Variant Also Negotiates"},
+  {507, "Insufficient Storage"}, {508, "Loop Detected"},
+  {509, "Bandwidth Limit Exceeded"}, {510, "Not Extended"},
+  {511, "Network Authentication Required"},
+};
+
 static const char *scr_http_reason(int code) {
-  switch (code) {
-  case 100: return "Continue";
-  case 101: return "Switching Protocols";
-  case 200: return "OK";
-  case 201: return "Created";
-  case 202: return "Accepted";
-  case 204: return "No Content";
-  case 206: return "Partial Content";
-  case 301: return "Moved Permanently";
-  case 302: return "Found";
-  case 303: return "See Other";
-  case 304: return "Not Modified";
-  case 307: return "Temporary Redirect";
-  case 308: return "Permanent Redirect";
-  case 400: return "Bad Request";
-  case 401: return "Unauthorized";
-  case 403: return "Forbidden";
-  case 404: return "Not Found";
-  case 405: return "Method Not Allowed";
-  case 408: return "Request Timeout";
-  case 409: return "Conflict";
-  case 410: return "Gone";
-  case 413: return "Payload Too Large";
-  case 414: return "URI Too Long";
-  case 415: return "Unsupported Media Type";
-  case 429: return "Too Many Requests";
-  case 431: return "Request Header Fields Too Large";
-  case 500: return "Internal Server Error";
-  case 501: return "Not Implemented";
-  case 502: return "Bad Gateway";
-  case 503: return "Service Unavailable";
-  case 504: return "Gateway Timeout";
-  case 508: return "Loop Detected";
-  default: return "unknown";
+  for (size_t i = 0; i < sizeof scr_http_status_codes_table / sizeof scr_http_status_codes_table[0]; i++) {
+    if (scr_http_status_codes_table[i].code == code) return scr_http_status_codes_table[i].reason;
   }
+  return "unknown";
+}
+
+static ScrDyn *scr_http_status_codes_value;
+
+static void scr_http_status_codes_cleanup(void) {
+  scr_dyn_release(scr_http_status_codes_value);
+  scr_http_status_codes_value = NULL;
+}
+
+ScrDyn *scr_http_status_codes(void) {
+  if (!scr_http_status_codes_value) {
+    ScrDyn *codes = scr_dyn_new_obj();
+    for (size_t i = 0; i < sizeof scr_http_status_codes_table / sizeof scr_http_status_codes_table[0]; i++) {
+      const int code = scr_http_status_codes_table[i].code;
+      const char *reason = scr_http_status_codes_table[i].reason;
+      char key[4];
+      const int key_len = snprintf(key, sizeof key, "%d", code);
+      ScrStr *value = scr_str_new(reason, strlen(reason));
+      scr_dyn_obj_set(codes, key, (size_t)key_len, scr_dyn_new_str(value));
+      scr_str_release(value);
+    }
+    scr_http_status_codes_value = codes;
+    atexit(scr_http_status_codes_cleanup);
+  }
+  return scr_dyn_retain(scr_http_status_codes_value);
+}
+
+static const char *const scr_http_methods_table[] = {
+  "ACL", "BIND", "CHECKOUT", "CONNECT", "COPY", "DELETE", "GET", "HEAD",
+  "LINK", "LOCK", "M-SEARCH", "MERGE", "MKACTIVITY", "MKCALENDAR",
+  "MKCOL", "MOVE", "NOTIFY", "OPTIONS", "PATCH", "POST", "PROPFIND",
+  "PROPPATCH", "PURGE", "PUT", "QUERY", "REBIND", "REPORT", "SEARCH",
+  "SOURCE", "SUBSCRIBE", "TRACE", "UNBIND", "UNLINK", "UNLOCK", "UNSUBSCRIBE",
+};
+
+static ScrArr *scr_http_methods_value;
+
+static void scr_http_methods_cleanup(void) {
+  scr_arr_release(scr_http_methods_value);
+  scr_http_methods_value = NULL;
+}
+
+ScrArr *scr_http_methods(void) {
+  if (!scr_http_methods_value) {
+    const size_t n = sizeof scr_http_methods_table / sizeof scr_http_methods_table[0];
+    ScrArr *methods = scr_arr_new(SCR_ELEM_STR, n);
+    for (size_t i = 0; i < n; i++) {
+      const char *name = scr_http_methods_table[i];
+      scr_arr_push_ref(methods, scr_str_new(name, strlen(name)));
+    }
+    scr_http_methods_value = methods;
+    atexit(scr_http_methods_cleanup);
+  }
+  return scr_arr_retain(scr_http_methods_value);
 }
 
 /* ── the h2 compat transport seam ────────────────────────────────────────
@@ -577,6 +640,10 @@ void scr_http_req_pause(ScrHttpReq *r) {
  * registers once('timeout') there, Node's delegation. Finished/destroyed
  * messages skip (Node no-ops once the stream is done). */
 void scr_http_req_set_timeout(ScrHttpReq *r, double ms, ScrClosure *cb /*moves, nullable*/) {
+  if (!scr_http_timeout_valid(ms)) {
+    if (cb) scr_closure_release(cb);
+    return;
+  }
   if (r->ended || r->destroyed || r->close_emitted || !r->sock) {
     /* the message is done — Node no-ops there (never arms, never fires) */
     if (cb) scr_closure_release(cb);
@@ -584,6 +651,10 @@ void scr_http_req_set_timeout(ScrHttpReq *r, double ms, ScrClosure *cb /*moves, 
   }
   scr_net_sock_set_timeout(r->sock, ms);
   if (cb) scr_net_sock_on_timeout(r->sock, cb, true);
+}
+
+void scr_http_req_set_timeout_plain(ScrHttpReq *r, double ms) {
+  scr_http_req_set_timeout(r, ms, NULL);
 }
 
 bool scr_http_req_destroyed_flag(ScrHttpReq *r) { return r->destroyed; }
@@ -1699,7 +1770,10 @@ enum {
   SCR_HTTP_EMIT_CLIENT_CLOSE = 4, /* ScrHttpClientReq */
   SCR_HTTP_EMIT_RES_FINISH = 5,  /* ScrHttpRes: the end(cb) callbacks */
   SCR_HTTP_EMIT_REQ_DRAIN = SCR_HTTP_EMIT_REQ_DRAIN_K, /* ScrHttpReq: resume()'s drain */
-  SCR_HTTP_EMIT_RES_WCB = 7      /* ScrHttpRes: write(chunk, cb) callbacks */
+  SCR_HTTP_EMIT_RES_WCB = 7,     /* ScrHttpRes: write(chunk, cb) callbacks */
+  SCR_HTTP_EMIT_CLIENT_SOCKET = 8, /* ScrHttpClientReq: assigned socket */
+  SCR_HTTP_EMIT_CLIENT_FINISH = 9, /* ScrHttpClientReq: outgoing body flushed */
+  SCR_HTTP_EMIT_CLIENT_ABORT = 10 /* ScrHttpClientReq: abort() notification */
 };
 
 typedef struct {
@@ -1712,6 +1786,9 @@ static size_t scr_http_emits_head = 0, scr_http_emits_len = 0, scr_http_emits_ca
 
 static void scr_http_client_release_internal(struct ScrHttpClientReq *c);
 static void scr_http_client_settle(struct ScrHttpClientReq *c);
+static void scr_http_client_emit_socket(struct ScrHttpClientReq *c);
+static void scr_http_client_emit_finish(struct ScrHttpClientReq *c);
+static void scr_http_client_emit_abort(struct ScrHttpClientReq *c);
 
 /* Exit-time flag (set by the atexit cleanup, which runs BEFORE the net
  * unit's — atexit LIFO, http installs after net): once the emits queue
@@ -1756,6 +1833,9 @@ static void scr_http_emit_release(ScrHttpEmit *e) {
   case SCR_HTTP_EMIT_REQ_DRAIN:
   case SCR_HTTP_EMIT_REQ_ABORTED: scr_http_req_release((ScrHttpReq *)e->h); break;
   case SCR_HTTP_EMIT_CLIENT_CLOSE:
+  case SCR_HTTP_EMIT_CLIENT_SOCKET:
+  case SCR_HTTP_EMIT_CLIENT_FINISH:
+  case SCR_HTTP_EMIT_CLIENT_ABORT:
     scr_http_client_release_internal((struct ScrHttpClientReq *)e->h);
     break;
   }
@@ -1873,6 +1953,15 @@ static void scr_http_proto_sweep(void) {
     }
     case SCR_HTTP_EMIT_CLIENT_CLOSE:
       scr_http_client_settle((struct ScrHttpClientReq *)e.h);
+      break;
+    case SCR_HTTP_EMIT_CLIENT_SOCKET:
+      scr_http_client_emit_socket((struct ScrHttpClientReq *)e.h);
+      break;
+    case SCR_HTTP_EMIT_CLIENT_FINISH:
+      scr_http_client_emit_finish((struct ScrHttpClientReq *)e.h);
+      break;
+    case SCR_HTTP_EMIT_CLIENT_ABORT:
+      scr_http_client_emit_abort((struct ScrHttpClientReq *)e.h);
       break;
     case SCR_HTTP_EMIT_RES_FINISH: {
       ScrHttpRes *res = (ScrHttpRes *)e.h;
@@ -2736,6 +2825,12 @@ static void scr_http_conn_free(void *ctx) {
   free(conn);
 }
 
+static bool scr_http_conn_is_idle(void *ctx) {
+  ScrHttpConn *conn = (ScrHttpConn *)ctx;
+  return !conn->client_mode && conn->state == SCR_HTTP_HEAD &&
+         conn->req == NULL && conn->len == 0;
+}
+
 /* The server's native connection hook: one parser per accepted socket. */
 static void scr_http_on_connection(void *ctx, ScrNetSocket *sock) {
   ScrHttpSrvCtx *srv = (ScrHttpSrvCtx *)ctx;
@@ -2745,6 +2840,7 @@ static void scr_http_on_connection(void *ctx, ScrNetSocket *sock) {
   conn->srv = scr_http_srv_ctx_retain(srv);
   scr_net_sock_set_native_reader(sock, &scr_http_conn_data, &scr_http_conn_eof,
                                   &scr_http_conn_closed, conn, &scr_http_conn_free);
+  scr_net_sock_set_native_idle_checker(sock, &scr_http_conn_is_idle);
   scr_net_sock_set_native_events(sock, NULL, &scr_http_conn_err);
 }
 
@@ -2886,7 +2982,7 @@ ScrStr *scr_http_req_http_version(ScrHttpReq *r) {
 double scr_http_req_http_version_major(ScrHttpReq *r) { return r->http2 ? 2 : 1; }
 double scr_http_req_http_version_minor(ScrHttpReq *r) { return r->http2 || r->http10 ? 0 : 1; }
 bool scr_http_req_aborted_flag(ScrHttpReq *r) { return r->aborted; }
-bool scr_http_req_complete(ScrHttpReq *r) { return r->ended; }
+bool scr_http_req_complete(ScrHttpReq *r) { return r->ended && !r->aborted; }
 
 /* The stream died with the response side open: 'aborted' fires NOW (the
  * teardown macrotask, Node's position), then the close rides the sweep. */
@@ -3033,13 +3129,19 @@ struct ScrHttpClientReq {
   size_t cork_len, cork_cap;
   bool ended;
   bool destroyed;
+  bool aborted;
+  bool abort_emitted;
+  bool sock_ready;
+  bool socket_emitted;
+  bool finish_queued;
+  bool writable_finished;
   bool response_started; /* head parsed, res exists */
   bool response_done;
   bool had_error;
   bool close_queued;
   bool close_emitted; /* settled: listeners dropped, off the registry */
   ScrHttpReq *res; /* +1 once the head parses */
-  ScrNetLs resp_ls, err_ls, timeout_ls, close_ls, upgrade_ls;
+  ScrNetLs resp_ls, err_ls, timeout_ls, close_ls, upgrade_ls, socket_ls, finish_ls, abort_ls;
   /* the owning Agent (+1; the agent's entry holds this client +1 too —
    * the cycle breaks at settle, or at the atexit agent sweep) */
   struct ScrHttpAgent *agent;
@@ -3062,6 +3164,9 @@ void scr_http_client_release(ScrHttpClientReq *c) {
     scr_net_ls_drop(&c->timeout_ls);
     scr_net_ls_drop(&c->close_ls);
     scr_net_ls_drop(&c->upgrade_ls);
+    scr_net_ls_drop(&c->socket_ls);
+    scr_net_ls_drop(&c->finish_ls);
+    scr_net_ls_drop(&c->abort_ls);
     scr_str_release(c->host);
     scr_str_release(c->path);
     scr_str_release(c->method);
@@ -3128,6 +3233,8 @@ static void scr_http_client_settle(struct ScrHttpClientReq *c) {
   scr_net_ls_drop(&c->err_ls);
   scr_net_ls_drop(&c->timeout_ls);
   scr_net_ls_drop(&c->close_ls);
+  scr_net_ls_drop(&c->socket_ls);
+  scr_net_ls_drop(&c->finish_ls);
   scr_http_client_unregister(c);
 }
 
@@ -3135,6 +3242,45 @@ static void scr_http_client_queue_close(ScrHttpClientReq *c) {
   if (c->close_queued || c->close_emitted) return;
   c->close_queued = true;
   scr_http_emit_push(SCR_HTTP_EMIT_CLIENT_CLOSE, scr_http_client_retain(c));
+}
+
+static void scr_http_client_queue_finish(ScrHttpClientReq *c) {
+  if (!c->ended || !c->sock_ready || c->destroyed || c->close_emitted || c->finish_queued || c->writable_finished) return;
+  c->finish_queued = true;
+  scr_http_emit_push(SCR_HTTP_EMIT_CLIENT_FINISH, scr_http_client_retain(c));
+}
+
+static void scr_http_client_emit_socket(ScrHttpClientReq *c) {
+  if (c->socket_emitted) return;
+  if (c->destroyed) {
+    scr_net_ls_drop(&c->socket_ls);
+    return;
+  }
+  c->socket_emitted = true;
+  ScrNetL *snap;
+  size_t count = scr_net_ls_snapshot(&c->socket_ls, &snap);
+  scr_dyn_this_push(c, SCR_DYNH_HTTP_CLIENT);
+  for (size_t i = 0; i < count; i++) {
+    if (!scr_exc_pending()) ((ScrNetConnFn)snap[i].fn)(snap[i].cb, scr_net_sock_retain(c->sock));
+    scr_closure_release(snap[i].cb);
+  }
+  scr_dyn_this_pop();
+  free(snap);
+  scr_net_ls_drop(&c->socket_ls);
+}
+
+static void scr_http_client_emit_finish(ScrHttpClientReq *c) {
+  c->finish_queued = false;
+  if (c->destroyed || c->close_emitted || !c->ended || !c->sock_ready || c->writable_finished) return;
+  c->writable_finished = true;
+  scr_net_fire0_this(&c->finish_ls, c, SCR_DYNH_HTTP_CLIENT);
+  scr_net_ls_drop(&c->finish_ls);
+}
+
+static void scr_http_client_emit_abort(ScrHttpClientReq *c) {
+  c->abort_emitted = true;
+  scr_net_fire0_this(&c->abort_ls, c, SCR_DYNH_HTTP_CLIENT);
+  scr_net_ls_drop(&c->abort_ls);
 }
 
 /* 'error' on the request handle: fires NOW (the callers sit in the net
@@ -3202,6 +3348,17 @@ ScrStr *scr_http_client_protocol(ScrHttpClientReq *c) {
 }
 bool scr_http_client_headers_sent(ScrHttpClientReq *c) { return c->head_sent; }
 bool scr_http_client_writable_ended(ScrHttpClientReq *c) { return c->ended; }
+bool scr_http_client_writable_finished(ScrHttpClientReq *c) { return c->writable_finished; }
+ScrNetSocket *scr_http_client_socket(ScrHttpClientReq *c) { return scr_net_sock_retain(c->sock); }
+bool scr_http_client_reused_socket(ScrHttpClientReq *c) { (void)c; return false; }
+void scr_http_client_set_nodelay(ScrHttpClientReq *c, bool enable) {
+  if (!c->sock) return;
+  scr_net_sock_release(scr_net_sock_set_nodelay(c->sock, enable));
+}
+void scr_http_client_set_socket_keepalive(ScrHttpClientReq *c, bool enable, double delay_ms) {
+  if (!c->sock) return;
+  scr_net_sock_set_keepalive(c->sock, enable, delay_ms);
+}
 
 static bool scr_http_client_header_mutable(ScrHttpClientReq *c, const char *op) {
   if (!c->head_sent) return true;
@@ -3404,6 +3561,7 @@ static void scr_http_client_end_raw(ScrHttpClientReq *c, const char *data, size_
     if (c->chunked && c->sock) scr_http_send_chunk_end(c->sock, &c->trailers);
   }
   c->ended = true;
+  scr_http_client_queue_finish(c);
 }
 
 void scr_http_client_end(ScrHttpClientReq *c) { scr_http_client_end_raw(c, "", 0); }
@@ -3428,7 +3586,17 @@ void scr_http_client_add_trailers(ScrHttpClientReq *c, ScrArr *pairs /*borrowed*
 /* req.setTimeout(ms) after construction (the island bridge's late arm —
  * the constructor's timeout_ms is the static lane's route). */
 void scr_http_client_set_timeout(ScrHttpClientReq *c, double ms) {
+  if (!scr_http_timeout_valid(ms)) return;
   if (c->sock) scr_net_sock_set_timeout(c->sock, ms);
+}
+
+void scr_http_client_set_timeout_cb(ScrHttpClientReq *c, double ms, ScrClosure *cb /*moves*/) {
+  scr_http_client_set_timeout(c, ms);
+  if (scr_exc_pending()) {
+    scr_closure_release(cb);
+    return;
+  }
+  scr_http_client_on_timeout(c, cb, false);
 }
 
 /* destroy(): tears the connection down NOW. A destroy after the response
@@ -3441,6 +3609,24 @@ void scr_http_client_destroy(ScrHttpClientReq *c) {
   if (c->sock) scr_net_sock_destroy(c->sock);
 }
 
+void scr_http_client_abort(ScrHttpClientReq *c) {
+  if (c->aborted) return;
+  c->aborted = true;
+  bool early_or_complete = !c->socket_emitted || c->response_done;
+  /* A request whose socket was already handed to JS emits abort before
+   * teardown; an early abort reports close first. The queued emits keep
+   * both paths off the caller's stack. */
+  if (!early_or_complete)
+    scr_http_emit_push(SCR_HTTP_EMIT_CLIENT_ABORT, scr_http_client_retain(c));
+  scr_http_client_destroy(c);
+  if (early_or_complete) {
+    scr_http_client_queue_close(c);
+    scr_http_emit_push(SCR_HTTP_EMIT_CLIENT_ABORT, scr_http_client_retain(c));
+  }
+}
+
+bool scr_http_client_aborted(ScrHttpClientReq *c) { return c->aborted; }
+
 bool scr_http_client_destroyed(ScrHttpClientReq *c) {
   return c->destroyed || c->close_emitted;
 }
@@ -3452,6 +3638,30 @@ void scr_http_client_on_response(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, 
     return;
   }
   scr_net_ls_add(&c->resp_ls, cb, (void *)fn, once);
+}
+
+void scr_http_client_on_socket(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, ScrNetConnFn fn, bool once) {
+  if (c->socket_emitted || c->close_emitted) {
+    scr_closure_release(cb);
+    return;
+  }
+  scr_net_ls_add(&c->socket_ls, cb, (void *)fn, once);
+}
+
+void scr_http_client_on_finish(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, bool once) {
+  if (c->writable_finished || c->close_emitted) {
+    scr_closure_release(cb);
+    return;
+  }
+  scr_net_ls_add(&c->finish_ls, cb, NULL, once);
+}
+
+void scr_http_client_on_abort(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, bool once) {
+  if (c->abort_emitted) {
+    scr_closure_release(cb);
+    return;
+  }
+  scr_net_ls_add(&c->abort_ls, cb, NULL, once);
 }
 
 void scr_http_client_on_error(ScrHttpClientReq *c, ScrClosure *cb /*moves*/, ScrChildErrFn fn, bool once) {
@@ -3713,7 +3923,7 @@ static void scr_http_client_premature(ScrHttpConn *conn) {
   if (!c || c->response_done || c->close_emitted) return;
   c->response_done = true; /* the exchange is over, one way or another */
   if (!c->response_started) {
-    if (!c->had_error) {
+    if (!c->had_error && (!c->aborted || c->socket_emitted)) {
       ScrStr *msg = scr_str_new("socket hang up", 14);
       scr_http_client_error(c, msg);
       scr_str_release(msg);
@@ -3721,12 +3931,14 @@ static void scr_http_client_premature(ScrHttpConn *conn) {
     }
     scr_http_client_queue_close(c);
   } else {
-    /* mid-head-to-body death: req close, then 'aborted' on the res, then
-     * res close (the queue preserves push order) */
+    /* An incomplete client response fires 'aborted' before 'close'. A
+     * caller-initiated response.destroy() does not emit an 'error'; a
+     * premature peer close still does. */
     scr_http_client_queue_close(c);
     if (conn->req) {
       ScrHttpReq *res = conn->req;
-      scr_http_queue_req_aborted(res);
+      scr_http_h2_req_aborted(res);
+      if (!res->destroyed) scr_http_queue_req_aborted(res);
       scr_http_queue_req_close(res);
       scr_http_req_finish(res, false); /* body never completes */
       conn->req = NULL; /* break the res→sock→ctx→res cycle */
@@ -3772,7 +3984,7 @@ static void scr_http_client_closed(ScrHttpConn *conn) {
 static bool scr_http_client_sock_err(ScrHttpConn *conn, ScrStr *msg) {
   ScrHttpClientReq *c = conn->client;
   if (!c) return true;
-  if (c->response_done || c->close_emitted) return true; /* teardown noise */
+  if (c->response_done || c->close_emitted || (c->aborted && !c->socket_emitted)) return true; /* teardown noise */
   if (!c->response_started) {
     /* connect/read failure before any response: the socket's message IS
      * Node's ('connect ECONNREFUSED ip:port') — fire it on the request */
@@ -3801,6 +4013,14 @@ static void scr_http_client_sock_timeout(void *ctx) {
   ScrHttpClientReq *c = conn->client;
   if (!c || c->response_done || c->close_emitted) return;
   scr_net_fire0(&c->timeout_ls);
+}
+
+static void scr_http_client_sock_established(void *ctx) {
+  ScrHttpConn *conn = (ScrHttpConn *)ctx;
+  ScrHttpClientReq *c = conn->client;
+  if (!c) return;
+  c->sock_ready = true;
+  scr_http_client_queue_finish(c);
 }
 
 static void scr_http_client_conn_free(ScrHttpConn *conn) {
@@ -3929,8 +4149,11 @@ static ScrHttpClientReq *scr_http_request_impl(ScrStr *host /*borrowed*/, double
   /* the transport (scr_tls.c's https) wraps the dialed socket before any
    * bytes go out — everything below buffers until its handshake ends */
   if (wrap) wrap(c->sock, wrap_ctx);
+  scr_net_sock_set_native_established(c->sock, &scr_http_client_sock_established);
+  c->sock_ready = scr_net_sock_established(c->sock);
   if (timeout_ms > 0) scr_net_sock_set_timeout(c->sock, timeout_ms);
   scr_http_client_register(c);
+  scr_http_emit_push(SCR_HTTP_EMIT_CLIENT_SOCKET, scr_http_client_retain(c));
   if (auto_end) scr_http_client_end(c);
   return c;
 }

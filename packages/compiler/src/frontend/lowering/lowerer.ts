@@ -10136,6 +10136,12 @@ export class Lowerer {
     if (bi.module === "module" && bi.member === "builtinModules") {
       return builtinModulesArrayLit(loc);
     }
+    if (bi.module === "http" && bi.member === "METHODS") {
+      return { kind: "libCall", fn: "http.methods", args: [], type: arrayOf(STRING), loc };
+    }
+    if (bi.module === "http" && bi.member === "STATUS_CODES") {
+      return { kind: "libCall", fn: "http.statusCodes", args: [], type: DYN, loc };
+    }
     // tls.rootCertificates through the namespace: the same runtime-valued
     // constant the named-import read lowers to.
     {
