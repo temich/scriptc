@@ -7557,6 +7557,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/917-record-array-index-dot.ts": {
+   "order": [
+    "<repo>/tests/corpus/917-record-array-index-dot.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/950-modules-basic/main.ts": {
    "order": [
     "<repo>/tests/corpus/950-modules-basic/util.ts",
