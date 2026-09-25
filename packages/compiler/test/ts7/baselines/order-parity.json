@@ -6943,6 +6943,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3029-string-search-union-needle.js": {
+   "order": [
+    "<repo>/tests/corpus/3029-string-search-union-needle.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"

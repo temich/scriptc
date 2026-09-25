@@ -274,7 +274,8 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   if ((entry.method === "indexOf" || entry.method === "includes" ||
     entry.method === "startsWith" || entry.method === "endsWith") && call.arguments.length === 2) {
     const needle = lowerer.lowerExpr(call.arguments[0]!);
-    if (needle.type.kind !== "string" && needle.type.kind !== "dyn") {
+    const optionalNeedle = needle.type.kind === "union" && lowerer.runtimeOptionalWidening(needle.type, STRING) !== null;
+    if (needle.type.kind !== "string" && needle.type.kind !== "dyn" && !optionalNeedle) {
       lowerer.noLowering(`.${entry.method} with '${lowerer.fmt(needle.type)}' search values`, call);
     }
     const defaultPosition: IrExpr = entry.method === "endsWith"
@@ -289,8 +290,8 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     if (!helper) {
       helper = `%str.positions.${lowerer.widthHelpers.size}`;
       const params = [receiver, needle, position].map((arg, index) => ({ localId: `arg.${index}`, name: `arg${index}`, type: arg.type }));
-      const dynamicNeedle = needle.type.kind === "dyn";
-      const search: IrExpr = dynamicNeedle ? varRef("search.0", STRING, loc) : varRef("arg.1", STRING, loc);
+      const coerceNeedle = needle.type.kind !== "string";
+      const search: IrExpr = coerceNeedle ? varRef("search.0", STRING, loc) : varRef("arg.1", STRING, loc);
       const result: IrExpr = {
         kind: "strIntrinsic", method: entry.method, receiver: varRef("arg.0", STRING, loc),
         args: [
@@ -301,11 +302,13 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       };
       const locals = params.map(param => ({ id: param.localId, name: param.name, type: param.type, mutable: false }));
       const body: IrStmt[] = [];
-      if (dynamicNeedle) {
+      if (coerceNeedle) {
+        const value = varRef("arg.1", needle.type, loc);
+        const init: IrExpr = needle.type.kind === "dyn"
+          ? { kind: "libCall", fn: "dyn.toStringCoerce", args: [value], type: STRING, loc }
+          : lowerer.ensureString(value, call.arguments[0]!);
         locals.push({ id: "search.0", name: "search", type: STRING, mutable: false });
-        body.push({ kind: "varDecl", localId: "search.0", init: {
-          kind: "libCall", fn: "dyn.toStringCoerce", args: [varRef("arg.1", needle.type, loc)], type: STRING, loc,
-        }, loc });
+        body.push({ kind: "varDecl", localId: "search.0", init, loc });
       }
       body.push({ kind: "return", value: result, loc });
       lowerer.widthHelpers.set(key, helper);
