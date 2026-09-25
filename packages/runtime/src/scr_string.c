@@ -951,6 +951,36 @@ bool scr_str_ends_with(ScrStr *s, ScrStr *needle) {
                 needle->len) == 0;
 }
 
+static size_t scr_str_clamp_u16_position(double position, size_t len16) {
+  double pos = scr_to_integer_or_infinity(position);
+  return pos <= 0 ? 0 : pos >= (double)len16 ? len16 : (size_t)pos;
+}
+
+bool scr_str_starts_with_from(ScrStr *s, ScrStr *needle, double position) {
+  ScrSidx *e = scr_sidx(s);
+  size_t len16 = scr_sidx_len(s, e);
+  size_t start16 = scr_str_clamp_u16_position(position, len16);
+  if (needle->len == 0) return true;
+  bool mid;
+  size_t start_byte = scr_u16_to_byte_c(s, e, start16, &mid);
+  return !mid && needle->len <= s->len - start_byte &&
+         memcmp(s->data + start_byte, needle->data, needle->len) == 0;
+}
+
+bool scr_str_ends_with_from(ScrStr *s, ScrStr *needle, double end_position) {
+  ScrSidx *e = scr_sidx(s);
+  size_t len16 = scr_sidx_len(s, e);
+  size_t end16 = scr_str_clamp_u16_position(end_position, len16);
+  size_t needle16 = scr_sidx_len(needle, scr_sidx(needle));
+  if (needle16 == 0) return true;
+  if (needle16 > end16) return false;
+  bool start_mid, end_mid;
+  size_t start_byte = scr_u16_to_byte_c(s, e, end16 - needle16, &start_mid);
+  size_t end_byte = scr_u16_to_byte_c(s, e, end16, &end_mid);
+  return !start_mid && !end_mid && end_byte - start_byte == needle->len &&
+         memcmp(s->data + start_byte, needle->data, needle->len) == 0;
+}
+
 /* Resolve one slice() boundary: negatives are relative to the end, then
  * clamp to [0, len16]. Handles ±Infinity (already through
  * ToIntegerOrInfinity). */

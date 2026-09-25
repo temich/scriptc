@@ -1489,9 +1489,13 @@ function emitStringExpr(
             }
             return emitter.newTemp(e.type, `scr_str_includes(${r.name}, ${args[0]!.name})`);
           case "startsWith":
-            return emitter.newTemp(e.type, `scr_str_starts_with(${r.name}, ${args[0]!.name})`);
+            return emitter.newTemp(e.type, args[1]
+              ? `scr_str_starts_with_from(${r.name}, ${args[0]!.name}, ${args[1].name})`
+              : `scr_str_starts_with(${r.name}, ${args[0]!.name})`);
           case "endsWith":
-            return emitter.newTemp(e.type, `scr_str_ends_with(${r.name}, ${args[0]!.name})`);
+            return emitter.newTemp(e.type, args[1]
+              ? `scr_str_ends_with_from(${r.name}, ${args[0]!.name}, ${args[1].name})`
+              : `scr_str_ends_with(${r.name}, ${args[0]!.name})`);
           case "slice":
             return emitter.newTemp(
               e.type,
