@@ -6901,6 +6901,18 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3022-string-affix-positions.ts": {
+   "order": [
+    "<repo>/tests/corpus/3022-string-affix-positions.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/3023-string-affix-position-coercion.js": {
+   "order": [
+    "<repo>/tests/corpus/3023-string-affix-position-coercion.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"
