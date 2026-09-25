@@ -1,11 +1,15 @@
 import * as http from "node:http";
 
-let releaseResponse: (() => void) | undefined;
-let timedOut = false;
+let sendLate = () => {};
 const server = http.createServer((_incoming, outgoing) => {
-  const fallback = setTimeout(() => { outgoing.end("late"); }, 2000);
-  releaseResponse = () => { clearTimeout(fallback); outgoing.end("late"); };
-  if (timedOut) releaseResponse();
+  let sent = false;
+  const finish = () => {
+    if (sent) return;
+    sent = true;
+    outgoing.end("late");
+  };
+  const fallback = setTimeout(finish, 2000);
+  sendLate = () => { clearTimeout(fallback); finish(); };
 });
 
 server.listen(0, "127.0.0.1", () => {
@@ -22,8 +26,7 @@ server.listen(0, "127.0.0.1", () => {
   client.setTimeout(1000);
   console.log("same request", client.setTimeout(20, () => {
     console.log("timeout");
-    timedOut = true;
-    if (releaseResponse) releaseResponse();
+    sendLate();
   }) === client);
   client.end();
 });

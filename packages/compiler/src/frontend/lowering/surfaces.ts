@@ -379,8 +379,8 @@ export const STR_METHODS: Record<
   string,
   { method: IrStrIntrinsicMethod; result: IrType; minArgs: number; maxArgs: number }
 > = {
-  charCodeAt: { method: "charCodeAt", result: F64, minArgs: 1, maxArgs: 1 },
-  charAt: { method: "charAt", result: STRING, minArgs: 1, maxArgs: 1 },
+  charCodeAt: { method: "charCodeAt", result: F64, minArgs: 0, maxArgs: 1 },
+  charAt: { method: "charAt", result: STRING, minArgs: 0, maxArgs: 1 },
   indexOf: { method: "indexOf", result: F64, minArgs: 1, maxArgs: 2 },
   // includes with a position argument is indexOf's clamp exactly (the
   // spec routes both through StringIndexOf) — the emitter composes
@@ -391,7 +391,7 @@ export const STR_METHODS: Record<
   slice: { method: "slice", result: STRING, minArgs: 0, maxArgs: 2 },
   // substring: slice's clamp-and-swap sibling (negatives clamp to 0
   // instead of counting from the end; start > end swaps).
-  substring: { method: "substring", result: STRING, minArgs: 1, maxArgs: 2 },
+  substring: { method: "substring", result: STRING, minArgs: 0, maxArgs: 2 },
   repeat: { method: "repeat", result: STRING, minArgs: 1, maxArgs: 1 },
   trim: { method: "trim", result: STRING, minArgs: 0, maxArgs: 0 },
   trimStart: { method: "trimStart", result: STRING, minArgs: 0, maxArgs: 0 },
