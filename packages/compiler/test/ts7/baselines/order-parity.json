@@ -6937,6 +6937,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3028-string-search-dynamic-needle.js": {
+   "order": [
+    "<repo>/tests/corpus/3028-string-search-dynamic-needle.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"

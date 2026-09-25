@@ -274,11 +274,14 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   if ((entry.method === "indexOf" || entry.method === "includes" ||
     entry.method === "startsWith" || entry.method === "endsWith") && call.arguments.length === 2) {
     const needle = lowerer.lowerExpr(call.arguments[0]!);
+    if (needle.type.kind !== "string" && needle.type.kind !== "dyn") {
+      lowerer.noLowering(`.${entry.method} with '${lowerer.fmt(needle.type)}' search values`, call);
+    }
     const defaultPosition: IrExpr = entry.method === "endsWith"
       ? { kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc }
       : numLit(0, loc);
     const position = lowerPositionArgument(lowerer, call.arguments[1], defaultPosition);
-    if (position.type.kind === "f64" || position.type.kind === "jsval") {
+    if (needle.type.kind === "string" && (position.type.kind === "f64" || position.type.kind === "jsval")) {
       return { kind: "strIntrinsic", method: entry.method, receiver, args: [needle, position], type: entry.result, loc };
     }
     const key = `str.positions:${entry.method}:${typeKey(needle.type)}:${typeKey(position.type)}`;
@@ -286,19 +289,29 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
     if (!helper) {
       helper = `%str.positions.${lowerer.widthHelpers.size}`;
       const params = [receiver, needle, position].map((arg, index) => ({ localId: `arg.${index}`, name: `arg${index}`, type: arg.type }));
+      const dynamicNeedle = needle.type.kind === "dyn";
+      const search: IrExpr = dynamicNeedle ? varRef("search.0", STRING, loc) : varRef("arg.1", STRING, loc);
       const result: IrExpr = {
         kind: "strIntrinsic", method: entry.method, receiver: varRef("arg.0", STRING, loc),
         args: [
-          varRef("arg.1", needle.type, loc),
+          search,
           positionNumber(lowerer, varRef("arg.2", position.type, loc), defaultPosition, call.arguments[1]!, "string position"),
         ],
         type: entry.result, loc,
       };
+      const locals = params.map(param => ({ id: param.localId, name: param.name, type: param.type, mutable: false }));
+      const body: IrStmt[] = [];
+      if (dynamicNeedle) {
+        locals.push({ id: "search.0", name: "search", type: STRING, mutable: false });
+        body.push({ kind: "varDecl", localId: "search.0", init: {
+          kind: "libCall", fn: "dyn.toStringCoerce", args: [varRef("arg.1", needle.type, loc)], type: STRING, loc,
+        }, loc });
+      }
+      body.push({ kind: "return", value: result, loc });
       lowerer.widthHelpers.set(key, helper);
       lowerer.liftedFns.push({
         name: helper, params, returnType: entry.result,
-        locals: params.map(param => ({ id: param.localId, name: param.name, type: param.type, mutable: false })),
-        body: [{ kind: "return", value: result, loc }], loc,
+        locals, body, loc,
       });
     }
     return { kind: "call", callee: helper, args: [receiver, needle, position], type: entry.result, loc };
