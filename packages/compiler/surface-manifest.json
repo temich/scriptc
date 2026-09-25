@@ -3491,14 +3491,14 @@
       "kind": "stdlib",
       "name": "string.prototype.charAt",
       "status": "static",
-      "note": "the lowered call form takes exactly 1 argument"
+      "note": "the lowered call form takes 0 to 1 arguments"
     },
     {
       "id": "stdlib.string.charCodeAt",
       "kind": "stdlib",
       "name": "string.prototype.charCodeAt",
       "status": "static",
-      "note": "the lowered call form takes exactly 1 argument"
+      "note": "the lowered call form takes 0 to 1 arguments"
     },
     {
       "id": "stdlib.string.endsWith",
@@ -3589,7 +3589,7 @@
       "kind": "stdlib",
       "name": "string.prototype.substring",
       "status": "static",
-      "note": "the lowered call form takes 1 to 2 arguments"
+      "note": "the lowered call form takes 0 to 2 arguments"
     },
     {
       "id": "stdlib.string.toLowerCase",

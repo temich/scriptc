@@ -195,9 +195,7 @@ export interface CompileBaseOptions {
   outPath: string;
   /** Where generated intermediates and compatibility side artifacts land. */
   outDir: string;
-  /** True only when outPath was selected by scriptc's default-path policy.
-   * This authorizes cleanup of stale generated siblings; explicit paths must
-   * leave neighboring caller-owned files untouched. */
+  /** @deprecated This option no longer controls output cleanup; sibling artifacts are retained. */
   defaultOutputPath?: boolean;
   /** Compatibility-only additive IR side artifact for executable builds.
    * The CLI's deprecated --emit-ir flag supplies this option. */
@@ -1424,10 +1422,6 @@ async function compileTracked(
       throw new InternalCompilerError("executable cache hit without executable cache options");
     }
     const executableCacheOptions = earlyCacheOptions;
-    if (!opts.emitIr) {
-      const stem = basename(entryPath).replace(/\.(ts|mts|cts|js|mjs|cjs)$/, "");
-      await rm(join(opts.outDir, `${stem}.ir.json`), { force: true });
-    }
     // Route/proof metadata is independently evictable. A full-compiler
     // fallback that still finds the validated payload repairs that lightweight
     // index so the next identical CLI invocation can avoid this module graph.
@@ -1615,42 +1609,17 @@ async function compileTracked(
     ir: join(opts.outDir, `${stem}.ir.json`),
     c: join(opts.outDir, `${stem}.c`),
     llvm: join(opts.outDir, `${stem}.ll`),
-    asm: join(opts.outDir, `${stem}.s`),
-    obj: join(opts.outDir, `${stem}.o`),
   } as const;
-  const defaultExecutablePaths = [
-    join(opts.outDir, stem),
-    join(opts.outDir, `${stem}.exe`),
-    join(opts.outDir, `${stem}.wasm`),
-  ];
-  const removeStaleSourceArtifacts = async (keep: readonly string[]): Promise<void> => {
-    const kept = new Set(keep.map((path) => resolve(path)));
-    const candidates = outputKind === "exe"
-      // Executable builds can generate only these compatibility/translation
-      // unit siblings. Assembly and object outputs are independent primary
-      // artifacts, so an executable build must never claim or delete them.
-      ? [defaultSourcePaths.ir, defaultSourcePaths.c, defaultSourcePaths.llvm]
-      : opts.defaultOutputPath === true
-        ? [...Object.values(defaultSourcePaths), ...defaultExecutablePaths]
-        : [];
-    await Promise.all(
-      candidates
-        .filter((path) => !kept.has(resolve(path)))
-        .map((path) => rm(path, { force: true })),
-    );
-  };
 
   if (outputKind === "ir") {
     await mkdir(dirname(opts.outPath), { recursive: true });
     await writeFile(opts.outPath, serializeModule(lowered.module));
-    await removeStaleSourceArtifacts([opts.outPath]);
     return { ok: true, artifact: { kind: "ir", path: opts.outPath } };
   }
 
   if (outputKind === "c") {
     await mkdir(dirname(opts.outPath), { recursive: true });
     await writeFile(opts.outPath, emitCModule(lowered.module, entryText));
-    await removeStaleSourceArtifacts([opts.outPath]);
     return { ok: true, artifact: { kind: "c", path: opts.outPath } };
   }
 
@@ -1688,7 +1657,6 @@ async function compileTracked(
         };
       }
     }
-    await removeStaleSourceArtifacts([opts.outPath]);
     if (outputKind === "obj" && opts.nativeLinkInfo === true) {
       const target = nativeCodegenTarget();
       if (target === null) {
@@ -1753,19 +1721,11 @@ async function compileTracked(
   if (backend === "c") {
     await writeFile(cPath, emitCModule(lowered.module!, entryText));
   }
-  // Kept-TU honesty: outDir persists across builds (the CLI's .scriptc/),
-  // so a lane change would leave the PREVIOUS lane's TU beside the fresh
-  // one — remove the loser so the surviving TU is always the one the
-  // binary below was linked from.
   let irPath: string | undefined;
   if (opts.emitIr) {
     irPath = defaultSourcePaths.ir;
     await writeFile(irPath, serializeModule(lowered.module));
   }
-  await removeStaleSourceArtifacts([
-    cPath,
-    ...(irPath === undefined ? [] : [irPath]),
-  ]);
 
   const nativeFeatures = executableNativeFeatures(
     lowered.module,
@@ -2442,7 +2402,6 @@ async function emitSemanticLibraryHit(
     await writeFile(cPath, translationUnit);
   }
   timing("semantic-tu-restore", { output_bytes: Buffer.byteLength(translationUnit) });
-  await rm(join(opts.outDir, `${stem}.lib.${profile.emission === "llvm" ? "c" : "ll"}`), { force: true });
   let irPath: string | undefined;
   if (opts.emitIr) {
     irPath = join(opts.outDir, `${stem}.lib.ir.json`);
@@ -2911,7 +2870,6 @@ async function compileLibraryTracked(
     cPath = join(opts.outDir, `${stem}.lib.c`);
     await writeFile(cPath, emitCModule(mod, entryText));
   }
-  await rm(join(opts.outDir, `${stem}.lib.${profile.emission === "llvm" ? "c" : "ll"}`), { force: true });
 
   let irPath: string | undefined;
   if (opts.emitIr) {

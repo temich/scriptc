@@ -6793,15 +6793,33 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2980-string-position-arguments.js": {
+   "order": [
+    "<repo>/tests/corpus/2980-string-position-arguments.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2981-http-static-events.ts": {
    "order": [
     "<repo>/tests/corpus/2981-http-static-events.ts"
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2981-string-optional-positions.ts": {
+   "order": [
+    "<repo>/tests/corpus/2981-string-optional-positions.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2982-http-static-close-all.ts": {
    "order": [
     "<repo>/tests/corpus/2982-http-static-close-all.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2982-string-position-coercion-order.js": {
+   "order": [
+    "<repo>/tests/corpus/2982-string-position-coercion-order.js"
    ],
    "diags": []
   },

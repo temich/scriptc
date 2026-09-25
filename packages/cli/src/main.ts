@@ -269,7 +269,7 @@ async function main(): Promise<number> {
   if (windowsSubsystem !== undefined && sourceTargetPlatform() !== "win32") {
     fail(`--windows-subsystem requires a Windows executable target\n\n${USAGE}`);
   }
-  const { outDir, outPath, defaultOutputPath } = selectOutputPaths(input, output.cliOutputKind, values.out);
+  const { outDir, outPath } = selectOutputPaths(input, output.cliOutputKind, values.out);
 
   // SCRIPTC_CC remains a migration escape hatch for explicit C, sanitizer,
   // and comparison builds. The normal LLVM executable route is controlled by
@@ -303,7 +303,6 @@ async function main(): Promise<number> {
       outPath,
       outDir,
       outputKind: output.outputKind,
-      defaultOutputPath,
       emitIr: output.emitIr,
       sanitize: values.sanitize,
       dynamic: values.dynamic,
