@@ -325,7 +325,7 @@ function fenceProducedArrayElem(lowerer: Lowerer, node: ts.Node, producer: strin
     // included — Node returns the unchanged length); reduce/reduceRight
     // lower both declared forms (with and without an initial value).
     const arity = {
-      push: [0, Number.MAX_SAFE_INTEGER], unshift: [0, Number.MAX_SAFE_INTEGER], pop: [0, 0], indexOf: [1, 2], lastIndexOf: [1, 2], includes: [1, 2], join: [1, 1],
+      push: [0, Number.MAX_SAFE_INTEGER], unshift: [0, Number.MAX_SAFE_INTEGER], pop: [0, 0], indexOf: [1, 2], lastIndexOf: [1, 2], includes: [0, 2], join: [1, 1],
       concat: [0, Number.MAX_SAFE_INTEGER],
       slice: [0, 2], shift: [0, 0], splice: [1, 2], at: [1, 1],
       map: [1, 1], filter: [1, 1], forEach: [1, 1], find: [1, 1], findIndex: [1, 1], some: [1, 1],
@@ -611,9 +611,11 @@ function lowerArraySearchCall(
 ): IrExpr {
   const loc = locOf(call);
   const receiver = lowerer.lowerExpr(access.expression);
-  const argNode = call.arguments[0]!;
+  const argNode = call.arguments[0] ?? call;
   if (call.arguments.some(ts.isSpreadElement)) lowerer.noLowering(`.${method} with spread arguments`, call);
-  let needle = lowerer.lowerExpr(argNode);
+  let needle: IrExpr = call.arguments[0]
+    ? lowerer.lowerExpr(call.arguments[0])
+    : { kind: "unitLit", unit: "undefined", type: UNDEFINED_T, loc };
   const fromIndex: IrExpr = call.arguments[1]
     ? lowerPositionArgument(lowerer, call.arguments[1], numLit(0, loc))
     : method === "lastIndexOf"

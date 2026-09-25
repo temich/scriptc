@@ -6955,6 +6955,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3030-array-search-no-arg.js": {
+   "order": [
+    "<repo>/tests/corpus/3030-array-search-no-arg.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/304-compound-incdec.ts": {
    "order": [
     "<repo>/tests/corpus/304-compound-incdec.ts"

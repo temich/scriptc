@@ -6,6 +6,7 @@
   "snapshotSha256": "584d260eaa9aef0c42d18b6b03e8b3755ecd54bdf43e01701f5b3eca3043c4c3",
   "testFiles": 53597,
   "tests": [
+    "test/built-ins/Array/prototype/includes/no-arg.js",
     "test/built-ins/Array/prototype/indexOf/15.4.4.14-4-1.js",
     "test/built-ins/Array/prototype/indexOf/15.4.4.14-5-13.js",
     "test/built-ins/Array/prototype/indexOf/15.4.4.14-5-14.js",
@@ -95,6 +96,7 @@
     "LICENSE": "4dd9244dfe8197c75348c4b24ab53d29d3b1cfad143ac76b5a3d8942aa354ce0",
     "harness/assert.js": "206e274ca325eb8a652e3911c3fbd090e2480d11ed7579dc17a5d17a2360ed48",
     "harness/sta.js": "1930c54af79455c484799f43e9a28e2b2f15c40d0917c9941ca54e26db243f35",
+    "test/built-ins/Array/prototype/includes/no-arg.js": "e38e7db529094b08ac13cc8a53cdbf59b5b2537711922af9bf8b1178f615e511",
     "test/built-ins/Array/prototype/indexOf/15.4.4.14-4-1.js": "ef762d69cbdf878821a6f998064590c2c19aa9e3db297968a5db02a6f5cd455a",
     "test/built-ins/Array/prototype/indexOf/15.4.4.14-5-13.js": "3c1ebd36e0e4657c42abbb76a707546a7b46ad954d3e569a84b796695d10da02",
     "test/built-ins/Array/prototype/indexOf/15.4.4.14-5-14.js": "7bb87d45a34bffcc61b39131c30289d6da7b51cd6b2a3db4af38674864fbd15e",
