@@ -6913,9 +6913,15 @@
    ],
    "diags": []
   },
-  "<repo>/tests/corpus/3024-string-search-position-coercion.js": {
+  "<repo>/tests/corpus/3024-string-number-narrow-for-in.ts": {
    "order": [
-    "<repo>/tests/corpus/3024-string-search-position-coercion.js"
+    "<repo>/tests/corpus/3024-string-number-narrow-for-in.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/3025-string-search-position-coercion.js": {
+   "order": [
+    "<repo>/tests/corpus/3025-string-search-position-coercion.js"
    ],
    "diags": []
   },

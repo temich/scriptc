@@ -5393,6 +5393,24 @@ export function ensureString(lowerer: Lowerer, e: IrExpr, node: ts.Node): IrExpr
       if (stringable) {
         return { kind: "toString", operand: e, type: STRING, loc: e.loc };
       }
+      // Runtime-optional locals can retain their stored union after the
+      // checker has narrowed this use to a primitive arm. Validate that
+      // arm before converting it; an unguarded object arm stays fenced.
+      const narrowed = lowerer.mapTypeOf(lowerer.typeOf(node));
+      if (
+        narrowed &&
+        (narrowed.kind === "string" || narrowed.kind === "f64" ||
+          narrowed.kind === "bool" || narrowed.kind === "bigint")
+      ) {
+        const helper = lowerer.narrowedArmHelper(e.type.unionId, narrowed, e.loc);
+        if (helper) {
+          return ensureString(
+            lowerer,
+            { kind: "call", callee: helper, args: [e], type: narrowed, loc: e.loc },
+            node,
+          );
+        }
+      }
       lowerer.unsupported(
         "SC1090",
         node,
