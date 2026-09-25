@@ -3578,8 +3578,7 @@ static const char isl_modules_bootstrap[] =
      * (warnings are not emitted), eventNames/rawListeners, Node's
      * unhandled-'error' throw, and the once/getEventListeners statics. */
     "  builtins.events = memo(() => {\n"
-    "    class EventEmitter {\n"
-    "      constructor() { this._events = Object.create(null); this._maxListeners = undefined; }\n"
+    "    class EventEmitterMethods {\n"
     "      _add(n, f, prepend) {\n"
     "        if (typeof f !== 'function') {\n"
     "          const e = new TypeError('The \"listener\" argument must be of type function. Received ' + (f === null ? 'null' : typeof f));\n"
@@ -3648,6 +3647,19 @@ static const char isl_modules_bootstrap[] =
     "      rawListeners(n) { const a = this._events[n]; return a ? a.slice() : []; }\n"
     "      eventNames() { return Object.keys(this._events); }\n"
     "    }\n"
+    /* Node's EventEmitter is a plain constructor function, and packages
+     * written before classes inherit from it by calling it on their own
+     * instance — `EventEmitter.call(this)` (ioredis, util.inherits-era
+     * code) — which a class constructor refuses. The methods keep their
+     * class definition; the constructor is a function, as in Node, and
+     * EventEmitter.init leaves an instance's own listeners in place. */
+    "    function EventEmitter() { EventEmitter.init.call(this); }\n"
+    "    EventEmitter.init = function () {\n"
+    "      if (this._events === undefined || this._events === Object.getPrototypeOf(this)._events) this._events = Object.create(null);\n"
+    "      this._maxListeners = this._maxListeners || undefined;\n"
+    "    };\n"
+    "    EventEmitter.prototype = EventEmitterMethods.prototype;\n"
+    "    Object.defineProperty(EventEmitter.prototype, 'constructor', { value: EventEmitter, writable: true, configurable: true });\n"
     "    EventEmitter.defaultMaxListeners = 10;\n"
     "    EventEmitter.errorMonitor = Symbol('events.errorMonitor');\n"
     "    EventEmitter.captureRejectionSymbol = Symbol.for('nodejs.rejection');\n"
@@ -8226,6 +8238,17 @@ static const char isl_modules_bootstrap[] =
     "      throw fenceErr(what);\n"
     "    };\n"
     "    const pFence = (what) => (...args) => Promise.reject(fenceErr(what));\n"
+    "    const resolverMethods = ['resolve', 'resolve4', 'resolve6', 'resolveCname', 'resolveMx', 'resolveNs', 'resolveSrv', 'resolveTxt', 'reverse'];\n"
+    "    const resolverClass = (fence) => {\n"
+    "      class Resolver {\n"
+    "        constructor() {}\n"
+    "        getServers() { return []; }\n"
+    "        setServers() {}\n"
+    "      }\n"
+    "      for (const m of resolverMethods) Resolver.prototype[m] = fence(m);\n"
+    "      return Resolver;\n"
+    "    };\n"
+    "    const Resolver = resolverClass(cbFence);\n"
     "    const promises = {\n"
     "      lookup: pFence('lookup'), lookupService: pFence('lookupService'),\n"
     "      resolve: pFence('resolve'), resolve4: pFence('resolve4'), resolve6: pFence('resolve6'),\n"
@@ -8233,15 +8256,8 @@ static const char isl_modules_bootstrap[] =
     "      resolveNs: pFence('resolveNs'), resolveSrv: pFence('resolveSrv'),\n"
     "      resolveTxt: pFence('resolveTxt'), reverse: pFence('reverse'),\n"
     "      getServers: () => [], setServers: () => {},\n"
+    "      Resolver: resolverClass(pFence),\n"
     "    };\n"
-    "    class Resolver {\n"
-    "      constructor() {}\n"
-    "      getServers() { return []; }\n"
-    "      setServers() {}\n"
-    "    }\n"
-    "    for (const m of ['resolve', 'resolve4', 'resolve6', 'resolveCname', 'resolveMx', 'resolveNs', 'resolveSrv', 'resolveTxt', 'reverse']) {\n"
-    "      Resolver.prototype[m] = cbFence(m);\n"
-    "    }\n"
     "    const d = {\n"
     "      lookup: cbFence('lookup'), lookupService: cbFence('lookupService'),\n"
     "      resolve: cbFence('resolve'), resolve4: cbFence('resolve4'), resolve6: cbFence('resolve6'),\n"
@@ -8256,6 +8272,14 @@ static const char isl_modules_bootstrap[] =
     "    };\n"
     "    d.default = d;\n"
     "    return d;\n"
+    "  });\n"
+    /* node:dns/promises — the same promise members as dns.promises,
+     * loadable on its own: @redis/client requires it at load, so a
+     * missing module failed the whole package before any lookup. */
+    "  builtins['dns/promises'] = memo(() => {\n"
+    "    const p = { ...builtins.dns().promises };\n"
+    "    p.default = p;\n"
+    "    return p;\n"
     "  });\n"
     /* node:readline — createInterface over any Readable-ish input
      * (data-event line splitting, question/line/close, async
