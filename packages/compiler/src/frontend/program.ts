@@ -499,7 +499,9 @@ function loadProgram7(
   // just resolved) — without maxNodeModuleJsDepth, node_modules JS types as
   // an implicit-any module (TS7016) and nothing infers. Only flagged
   // compiles pay this; flagless builds keep the exact historical options.
-  if (npmStaticActive()) options.maxNodeModuleJsDepth = 4;
+  // Eight levels retain package-internal re-export chains such as Effect's;
+  // the former four-level cap left valid bindings outside the checker graph.
+  if (npmStaticActive()) options.maxNodeModuleJsDepth = 8;
   // --provenance-sources: the registered entries become tsconfig "paths"
   // so tsgo's OWN resolution of the bare specifiers lands on the same
   // source files the preflight resolver answers — the checker types the

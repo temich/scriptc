@@ -233,9 +233,11 @@ export type IrType =
    * island host callback. An absent `restAbi` is the legacy checked-dynamic
    * JS form: `params` stays the declared non-rest list and the lifted
    * function has one hidden trailing ScrDyn array filled by its boxed call
-   * thunk. The backends therefore still see one fixed native closure ABI;
+   * thunk. `argumentsAll` keeps that hidden ABI but fills it with every
+   * actual argument, including named positions. The backends therefore
+   * still see one fixed native closure ABI;
    * only the frontend's call completion observes variadic source arity. */
-  | { kind: "func"; params: IrType[]; ret: IrType; rest?: true; restAbi?: "jsval" | "typed" }
+  | { kind: "func"; params: IrType[]; ret: IrType; rest?: true; restAbi?: "jsval" | "typed"; argumentsAll?: true }
   | { kind: "object"; className: string } // heap, refcounted class instance
   /** The class STATIC side as a value — `typeof C`, the type of the class
    * name itself and of `new (…) => T` constructor-typed slots. Runtime
@@ -737,7 +739,7 @@ export function typeKey(t: IrType): string {
     case "set":
       return `set<${typeKey(t.elem)}>`;
     case "func":
-      return `func(${[...t.params.map(typeKey), ...(t.rest ? [t.restAbi === "jsval" ? "...jsval[]" : t.restAbi === "typed" ? "...typed[]" : "...dyn[]"] : [])].join(",")})=>${typeKey(t.ret)}`;
+      return `func(${[...t.params.map(typeKey), ...(t.rest ? [t.restAbi === "jsval" ? "...jsval[]" : t.restAbi === "typed" ? "...typed[]" : t.argumentsAll ? "arguments[]" : "...dyn[]"] : [])].join(",")})=>${typeKey(t.ret)}`;
     case "object":
       return `object:${t.className}`;
     case "classval":
@@ -773,6 +775,7 @@ export function typeEquals(a: IrType, b: IrType): boolean {
       a.params.length === b.params.length &&
       (a.rest === true) === (b.rest === true) &&
       a.restAbi === b.restAbi &&
+      a.argumentsAll === b.argumentsAll &&
       a.params.every((p, i) => typeEquals(p, b.params[i]!)) &&
       typeEquals(a.ret, b.ret)
     );

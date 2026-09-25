@@ -322,7 +322,17 @@ export function lowerStringMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   const loc = locOf(call);
   if ((entry.method === "indexOf" || entry.method === "includes" ||
     entry.method === "startsWith" || entry.method === "endsWith") && call.arguments.length === 2) {
-    const needle = lowerer.lowerExpr(call.arguments[0]!);
+    const rawNeedle = lowerer.lowerExpr(call.arguments[0]!);
+    // indexOf ToString-coerces the search value before converting the
+    // position. The other search methods must also reject RegExp values,
+    // so keep their non-string inputs fenced until IsRegExp is lowered.
+    const needle = rawNeedle.type.kind === "string"
+      ? rawNeedle
+      : entry.method === "indexOf" && rawNeedle.type.kind === "dyn"
+        ? { kind: "libCall", fn: "dyn.toStringCoerce", args: [rawNeedle], type: STRING, loc: rawNeedle.loc } satisfies IrExpr
+        : entry.method === "indexOf"
+          ? lowerer.ensureString(rawNeedle, call.arguments[0]!)
+          : lowerer.noLowering(`.${entry.method} with a non-string search value`, call.arguments[0]!);
     const defaultPosition: IrExpr = entry.method === "endsWith"
       ? { kind: "bin", op: "/", left: numLit(1, loc), right: numLit(0, loc), type: F64, loc }
       : numLit(0, loc);

@@ -2996,7 +2996,7 @@ export class LlDyn {
       B.line(`${rest} = call ptr @scr_dyn_new_arr()`);
       const riSlot = B.slot();
       B.entryAllocas.push(`${riSlot} = alloca ${host.sizeType}`);
-      B.line(`store ${host.sizeType} ${t.params.length}, ptr ${riSlot}`);
+      B.line(`store ${host.sizeType} ${t.argumentsAll ? 0 : t.params.length}, ptr ${riSlot}`);
       const lc = B.newLabel("dfk.rc");
       const lb = B.newLabel("dfk.rb");
       const le = B.newLabel("dfk.re");

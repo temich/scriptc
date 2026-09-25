@@ -6925,6 +6925,18 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3026-string-search-needle-coercion.js": {
+   "order": [
+    "<repo>/tests/corpus/3026-string-search-needle-coercion.js"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/3027-arguments-with-parameters.js": {
+   "order": [
+    "<repo>/tests/corpus/3027-arguments-with-parameters.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"

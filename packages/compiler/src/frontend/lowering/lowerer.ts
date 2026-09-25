@@ -936,6 +936,27 @@ function jsFallbackFunctionType(lowerer: Lowerer, node: ts.Node, t: ts.Type): Ir
   return { kind: "func", params, ret };
 }
 
+/** A JavaScript `arguments` reader has the spelled parameters plus a hidden
+ * array of all supplied arguments in the native ABI. Recover that ABI from
+ * the implementation when the function flows through a value binding. */
+function jsArgumentsFunctionType(lowerer: Lowerer, t: ts.Type): IrType | null {
+  if (!(t.flags & ts.TypeFlags.Object)) return null;
+  const sigs = lowerer.checker.getCallSignatures(t);
+  if (sigs.length !== 1 || sigs[0]!.getTypeParameters().length !== 0 || lowerer.checker.getConstructSignatures(t).length !== 0 || lowerer.checker.getPropertiesOfType(t).length !== 0) return null;
+  const decl = lowerer.checker.signatureDeclaration(sigs[0]!);
+  if (
+    decl === undefined || !(ts.isFunctionDeclaration(decl) || ts.isFunctionExpression(decl)) ||
+    !isJsSourceFile(decl.getSourceFile()) || !isNodeEsmFile(decl.getSourceFile()) ||
+    decl.parameters.length === 0 ||
+    decl.parameters.some((p) => p.dotDotDotToken !== undefined) ||
+    !bodyReadsArguments(decl as { body?: ts.Node })
+  ) return null;
+  const shapes = paramShapes(lowerer, decl.parameters);
+  const retType = lowerer.checker.getReturnTypeOfSignature(sigs[0]!);
+  const ret = retType.flags & ts.TypeFlags.Void ? VOID : lowerer.mapTypeOf(retType) ?? DYN;
+  return funcTypeFromParamShapes([...shapes, { type: DYN, mode: "arguments" }], ret);
+}
+
 /** The one call signature of a PURE function type — single signature, no
  * properties, no construct signatures, no type parameters, no rest params
  * (declared or synthesized from an `arguments` read). Null for every
@@ -1315,7 +1336,7 @@ export class Lowerer {
           if (sig) {
             return {
               ...fallback,
-              params: sig.params.filter((p) => p.mode !== "dynRest").map((p) => p.type),
+              params: sig.params.filter((p) => p.mode !== "dynRest" && p.mode !== "arguments").map((p) => p.type),
               ret: sig.returnType,
             };
           }
@@ -4747,7 +4768,8 @@ export class Lowerer {
   /** mapType with this Lowerer's registries and (while a generic instance
    * body lowers) type-parameter bindings threaded through. */
   mapTypeOf(t: ts.Type): IrType | null {
-    return mapType(t, this.typeCtx);
+    const mapped = mapType(t, this.typeCtx);
+    return mapped?.kind === "func" ? jsArgumentsFunctionType(this, t) ?? mapped : mapped;
   }
 
   /** The one position where a contextual UNION must not be adopted over the
@@ -4938,6 +4960,8 @@ export class Lowerer {
     // answers instead.
     const mapped = neverTaintedJsType(this, node, t) ? null : this.mapTypeOf(t);
     if (!mapped) {
+      const argumentsType = jsArgumentsFunctionType(this, t);
+      if (argumentsType !== null) return argumentsType;
       // The checked-dynamic declaration fallback (dynFallbackType): a
       // JAVASCRIPT binding of any inference residue, or a TypeScript
       // binding of genuine checker-`any`, becomes the checked-dynamic

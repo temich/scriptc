@@ -8,7 +8,7 @@ import type { Lowerer } from "./lowerer.js";
 import { lowerGenMethodCall } from "./lower-generators.js";
 import { BIGINT_T, BOOL, CAUGHT, DYN, F64, IrExpr, IrFunction, IrLocal, IrParam, IrStmt, IrType, JSVAL, STRING, SYMBOL_T, SrcLoc, UNDEFINED_T, VOID, arrayOf, canBoxFuncIntoDyn, canConvertToDyn, canDynCheckTo, canMarshalTypedFuncIntoIsland, ffiClassType, ffiSourceParamTypes, funcOf, isFfiCallbackParam, isFfiContextParam, isFfiReleaseParam, isUnitType, shapeHasAccessorSlots, typeEquals } from "../../ir/ir.js";
 import type { IrFfiCallbackParam, IrFfiCallbackParamClass, IrFfiImport, IrFfiReleaseParam } from "../../ir/ir.js";
-import { isJsSourceFile, locOf } from "../program.js";
+import { isJsSourceFile, isNodeEsmFile, locOf } from "../program.js";
 import { genResultRecord, isGenericCallableMemberType, typeKey } from "../type-mapper.js";
 import { PoisonError, dynFallbackType, dynUndefinedExpr, importCallHandleType, jsFuncNameOf, newFnCtx, nodeThrowExpr, staticImportNamespaceType } from "./lowerer.js";
 import { enforceLibBoundary } from "./lib-boundary.js";
@@ -43,8 +43,9 @@ import { lowerOptionalArgument } from "./optional-arguments.js";
  * `omittable` params (declared `x?: T` or `x: T = e`) may be omitted by a
  * trailing-suffix call, and the frontend appends the interned undefined arm;
  * `rest` (always last) receives the surplus arguments packed into one array
- * literal at each call site. */
-export type ParamMode = "required" | "omittable" | "rest" | "dynRest" | "islandRest";
+ * literal at each call site. `arguments` is a hidden slot containing every
+ * actual argument, including those bound to named parameters. */
+export type ParamMode = "required" | "omittable" | "rest" | "dynRest" | "islandRest" | "arguments";
 
 /** One parameter of a signature, as call sites and callee prologues see it.
  * `type` is the ABI type — what the emitted C parameter carries: the
@@ -86,12 +87,14 @@ export function funcTypeFromParamShapes(
 ): IrType & { kind: "func" } {
   const typedRest = shapes.some((shape) => shape.mode === "rest");
   const dynRest = shapes.some((shape) => shape.mode === "dynRest");
+  const argumentsAll = shapes.some((shape) => shape.mode === "arguments");
   const islandRest = shapes.some((shape) => shape.mode === "islandRest");
   return {
     kind: "func",
-    params: shapes.filter((shape) => shape.mode !== "dynRest").map((shape) => shape.type),
+    params: shapes.filter((shape) => shape.mode !== "dynRest" && shape.mode !== "arguments").map((shape) => shape.type),
     ret,
-    ...(typedRest || dynRest || islandRest ? { rest: true as const } : {}),
+    ...(typedRest || dynRest || islandRest || argumentsAll ? { rest: true as const } : {}),
+    ...(argumentsAll ? { argumentsAll: true as const } : {}),
     ...(typedRest
       ? { restAbi: "typed" as const }
       : islandRest
@@ -543,8 +546,39 @@ export interface GenericInstance {
         });
       });
     }
-    const restAt = shapes.findIndex((s) => s.mode === "rest" || s.mode === "dynRest" || s.mode === "islandRest");
+    const restAt = shapes.findIndex((s) => s.mode === "rest" || s.mode === "dynRest" || s.mode === "islandRest" || s.mode === "arguments");
     const positional = restAt >= 0 ? shapes.slice(0, restAt) : [...shapes];
+    if (restAt >= 0 && shapes[restAt]!.mode === "arguments") {
+      // JS `arguments` contains every supplied value, including fixed
+      // parameters. Store each call expression once, in source order, so
+      // both the native parameter slots and the full array read it.
+      const stmts: IrStmt[] = [];
+      const passed: IrExpr[] = sources.map((source, i) => {
+        if (!isIr(source) && ts.isSpreadElement(source)) {
+          lowerer.unsupported("SC1090", source, "spread arguments into fixed parameter positions (a spread can only fill a rest parameter)");
+        }
+        const slotType = i < restAt ? positional[i]!.type : DYN;
+        const value = isIr(source)
+          ? lowerer.coerceInto(blame, source.ir, slotType)
+          : lowerer.lowerExprExpecting(source, slotType);
+        const saved = lowerer.declareHiddenLocal("%callArg", slotType);
+        stmts.push({ kind: "varDecl", localId: saved.id, init: value, loc: value.loc });
+        return { kind: "varRef", localId: saved.id, type: slotType, loc: value.loc };
+      });
+      const fixed = positional.map((shape, i): IrExpr => {
+        if (i < passed.length) return passed[i]!;
+        if (shape.mode === "omittable") return shape.callDefault ?? lowerer.undefinedArgFor(shape.type, loc, blame);
+        if (shape.type.kind === "dyn") return { kind: "dynFrom", value: { kind: "unitLit", unit: "undefined", type: UNDEFINED_T, loc }, type: DYN, loc };
+        lowerer.unsupported("SC1090", blame, "this call form");
+      });
+      const elems = passed.map((value) => lowerer.coerceInto(blame, value, DYN));
+      const full: IrExpr = { kind: "dynArrLit", elems, type: DYN, loc };
+      const out = [...fixed, full];
+      if (stmts.length > 0) {
+        out[0] = { kind: "seqExpr", stmts, result: out[0]!, type: out[0]!.type, loc };
+      }
+      return out;
+    }
     const out: IrExpr[] = positional.map((shape, i) => {
       const src = sources[i];
       if (isIr(src)) return lowerer.coerceInto(blame, src.ir, shape.type);
@@ -796,6 +830,7 @@ function completeFuncValueArgs(
         (s) =>
           s.mode === "required" ||
           s.mode === "dynRest" ||
+          s.mode === "arguments" ||
           s.mode === "islandRest" ||
           (s.mode === "omittable" && (s.type.kind === "dyn" || s.type.kind === "jsval")),
       )
@@ -1120,24 +1155,18 @@ export function collectSignatureInner(lowerer: Lowerer, decl: ts.FunctionDeclara
     }
 
     const params = lowerer.paramShapes(decl.parameters);
-    // The VARIADIC `arguments` form on a DECLARED function: same rule as
-    // lambdas (lambdaSignature) — zero declared params, the body reads
-    // `arguments`, a synthetic trailing dynRest shape carries the call's
-    // arguments (completeArgs packs direct calls; the boxed thunk packs
-    // indirect ones; lowerFunction declares the `arguments` local).
+    // A declared function reading `arguments` receives a hidden dyn array.
+    // The zero-parameter form uses the existing rest pack; named parameters
+    // use the full argument pack for both direct and boxed calls.
     if (
-      !params.some((sh) => sh.mode === "dynRest") &&
+      !params.some((sh) => sh.mode === "rest" || sh.mode === "dynRest" || sh.mode === "islandRest") &&
       isJsSourceFile(decl.getSourceFile()) &&
       bodyReadsArguments(decl)
     ) {
-      if (decl.parameters.length > 0) {
-        lowerer.unsupported(
-          "SC1090",
-          decl,
-          "'arguments' in functions with declared parameters (use a rest parameter: (...args))",
-        );
+      if (decl.parameters.length > 0 && !isNodeEsmFile(decl.getSourceFile())) {
+        lowerer.unsupported("SC1090", decl, "parameterized 'arguments' outside an ES module (sloppy-mode parameter aliases)");
       }
-      params.push({ type: DYN, mode: "dynRest" });
+      params.push({ type: DYN, mode: decl.parameters.length > 0 ? "arguments" : "dynRest" });
     }
     const nameBlame: ts.Node = decl.name ?? decl;
     const returnType = lowerer.declaredReturnType(decl, nameBlame);
@@ -6432,31 +6461,24 @@ function loweredTemplateStrings(
         ret = VOID;
       }
     }
-    // VARIADIC JS functions: a dynRest param (above), or a plain function
-    // whose body reads `arguments` (test/common's mustCall wrapper —
-    // `function() { ...; return fn.apply(this, arguments); }`). Both mark
-    // the func type `rest`: the lifted body takes one trailing dyn-array
-    // param, filled by the boxed call thunk with the call's arguments
-    // from index params.length on. `arguments` is only claimed in
-    // ZERO-param functions (there it IS the surplus array); alongside
-    // declared params the alias story has no model — the fence says to
-    // use a rest parameter. Arrows never claim it (JS: an arrow's
-    // `arguments` is the enclosing function's).
-    const hasDynRest = shapes.some((s) => s.mode === "dynRest");
+    // A plain JS function reading `arguments` receives one hidden dyn
+    // array. With named parameters, the array contains every actual
+    // argument and only ES modules are admitted: sloppy-mode arguments
+    // alias named parameters. Arrows inherit the enclosing `arguments`.
+    const hasRest = shapes.some((s) => s.mode === "rest" || s.mode === "dynRest" || s.mode === "islandRest");
     const usesArguments =
-      !hasDynRest &&
-      !ts.isArrowFunction(node) &&
+      !hasRest &&
+      (ts.isFunctionExpression(node) || ts.isFunctionDeclaration(node)) &&
       isJsSourceFile(node.getSourceFile()) &&
       bodyReadsArguments(node);
     if (usesArguments && node.parameters.length > 0) {
-      lowerer.unsupported(
-        "SC1090",
-        node,
-        "'arguments' in functions with declared parameters (use a rest parameter: (...args))",
-      );
+      if (!isNodeEsmFile(node.getSourceFile())) {
+        lowerer.unsupported("SC1090", node, "parameterized 'arguments' outside an ES module (sloppy-mode parameter aliases)");
+      }
+      shapes.push({ type: DYN, mode: "arguments" });
     }
     const funcType = funcTypeFromParamShapes(shapes, ret);
-    if (usesArguments && !hasDynRest) funcType.rest = true;
+    if (usesArguments) funcType.rest = true;
     return { shapes, funcType };
   }
 
@@ -6544,9 +6566,9 @@ function loweredTemplateStrings(
     lowerer.fnStack.push(fnCtx);
     try {
       const { params, prologue } = lowerer.declareParams(node.parameters, shapes);
-      // The VARIADIC `arguments` form (rest-marked with no declared rest
-      // param): a synthetic trailing dyn-array param carries the call's
-      // arguments; `arguments` reads resolve to it (identifier lowering).
+      // The synthetic trailing dyn-array param carries `arguments`.
+      // Parameterized functions receive all actual arguments; zero-param
+      // functions receive the same array through their rest ABI.
       if (funcType.rest && !shapes.some((s) => s.mode === "dynRest" || s.mode === "islandRest")) {
         const argsLocal = lowerer.declareHiddenLocal("%arguments", DYN);
         params.push({ localId: argsLocal.id, name: "%arguments", type: DYN });
@@ -8751,10 +8773,9 @@ export function lowerFunction(lowerer: Lowerer, decl: ts.FunctionDeclaration): I
     lowerer.fnStack.push(ctx);
     try {
       const { params, prologue } = lowerer.declareParams(decl.parameters, sig.params);
-      // The synthetic `arguments` slot (a dynRest shape BEYOND the declared
-      // parameters — collectSignatureInner appended it): one trailing
-      // dyn-array param, resolved by `arguments` reads.
-      if (sig.params.length > decl.parameters.length && sig.params[sig.params.length - 1]!.mode === "dynRest") {
+      // The synthetic `arguments` slot follows the declared parameters;
+      // reads resolve to this dyn array.
+      if (sig.params.length > decl.parameters.length && (sig.params[sig.params.length - 1]!.mode === "dynRest" || sig.params[sig.params.length - 1]!.mode === "arguments")) {
         const argsLocal = lowerer.declareHiddenLocal("%arguments", DYN);
         params.push({ localId: argsLocal.id, name: "%arguments", type: DYN });
         ctx.argumentsLocal = argsLocal;

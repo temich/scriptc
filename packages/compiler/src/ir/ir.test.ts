@@ -28,4 +28,11 @@ describe("IR kind sets", () => {
     expect(typeEquals(typedRest, fixed)).toBe(false);
     expect(typeKey(typedRest)).toBe("func(array<string>,...typed[])=>string");
   });
+
+  test("distinguishes full arguments from surplus rest closure ABIs", () => {
+    const full = { kind: "func" as const, params: [STRING], ret: STRING, rest: true as const, argumentsAll: true as const };
+    const surplus = { kind: "func" as const, params: [STRING], ret: STRING, rest: true as const };
+    expect(typeEquals(full, surplus)).toBe(false);
+    expect(typeKey(full)).toBe("func(string,arguments[])=>string");
+  });
 });
