@@ -9316,7 +9316,24 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
     // construction), typed as the index value armed with undefined under
     // noUncheckedIndexedAccess (mirroring lowerRecordKeyRead).
     if (target.container === "recordOvf") {
-      let t: IrType = target.fieldType;
+      let obj = target.obj;
+      if (obj.type.kind === "union" && ts.isPropertyAccessExpression(blame)) {
+        const present = lowerer.stripUndefinedArm(obj.type);
+        if (present.kind === "record") {
+          obj = lowerer.runtimeOptionalPropertyReceiver(
+            blame.expression,
+            obj,
+            present,
+            target.field,
+          ) ?? obj;
+        }
+      }
+      if (obj.type.kind !== "record") {
+        lowerer.unsupported("SC1090", blame, `reading '${target.field}' on a non-record receiver (narrow first)`);
+      }
+      const shape = lowerer.shapes.get(obj.type.shapeId);
+      if (!shape?.indexValue) lowerer.unsupported("SC1090", blame, `reading '${target.field}' on a record without an index signature`);
+      let t: IrType = shape.indexValue;
       if (lowerer.program.getCompilerOptions().noUncheckedIndexedAccess) {
         const armed = lowerer.withUndefinedArmOf(t);
         if (!armed) lowerer.badType(blame, lowerer.typeOf(blame));
@@ -9324,8 +9341,8 @@ export function lowerBinary(lowerer: Lowerer, expr: ts.BinaryExpression): IrExpr
       }
       return {
         kind: "recordKeyGet",
-        obj: target.obj,
-        shapeId: target.shapeId,
+        obj,
+        shapeId: obj.type.shapeId,
         key: { kind: "strLit", value: target.field, type: STRING, loc },
         overflowOnly: true,
         type: t,
