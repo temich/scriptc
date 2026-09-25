@@ -55,10 +55,12 @@ test("C and LLVM are exact primary artifacts and never create an executable", as
   expect((await readdir(outDir)).sort()).toEqual(["exact.llvm-output", "exact.output"]);
 });
 
-test("switching default source output kinds removes stale generated siblings", async () => {
+test("switching default source output kinds preserves earlier generated siblings", async () => {
   const { entry, outDir } = await fixture();
   await mkdir(outDir, { recursive: true });
-  await writeFile(join(outDir, process.platform === "win32" ? "main.exe" : "main"), "stale executable");
+  const executable = process.platform === "win32" ? "main.exe" : "main";
+  await writeFile(join(outDir, executable), "saved executable");
+  const artifacts = [executable];
   for (const [kind, name] of [
     ["c", "main.c"],
     ["llvm", "main.ll"],
@@ -71,8 +73,10 @@ test("switching default source output kinds removes stale generated siblings", a
       defaultOutputPath: true,
     });
     if (!result.ok) throw new Error(`${kind} emission failed`);
-    expect(await readdir(outDir)).toEqual([name]);
+    artifacts.push(name);
+    expect((await readdir(outDir)).sort()).toEqual([...artifacts].sort());
   }
+  expect(await readFile(join(outDir, executable), "utf8")).toBe("saved executable");
 });
 
 test("an explicit source path never deletes same-stem sibling files", async () => {

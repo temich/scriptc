@@ -388,7 +388,6 @@ export async function readEarlyExecutableCache(
     if (!(await fileMatches(paths.cPath, stamp.files.translationUnit.digest))) {
       await installBytes(translationUnit, paths.cPath);
     }
-    await rm(paths.staleCPath, { force: true });
     if (
       ir !== null && stamp.files.ir !== null &&
       !(await fileMatches(paths.irPath, stamp.files.ir.digest))

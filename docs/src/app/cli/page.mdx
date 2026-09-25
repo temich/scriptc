@@ -36,16 +36,28 @@ fib.ir.json
 $ scriptc build fib.ts --emit=c >/dev/null
 $ ls .scriptc/
 fib.c
+fib.ir.json
 $ scriptc build fib.ts --emit=llvm >/dev/null
 $ ls .scriptc/
+fib.c
+fib.ir.json
 fib.ll
 $ scriptc build fib.ts --emit=asm >/dev/null
 $ ls .scriptc/
+fib.c
+fib.ir.json
+fib.ll
 fib.s
 $ scriptc build fib.ts --emit=obj >/dev/null
 $ ls .scriptc/
+fib.c
+fib.ir.json
+fib.ll
 fib.o
+fib.s
 ```
+
+Different output kinds accumulate in `.scriptc/`; rebuilding a kind updates its file.
 
 The three source outputs require only Node. On macOS 15+ arm64, assembly and object
 outputs use the matching native helper installed with scriptc and do not
