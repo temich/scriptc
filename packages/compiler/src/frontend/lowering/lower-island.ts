@@ -1452,7 +1452,12 @@ export function fenceStaticHeadersIteration(
   node: ts.Node,
 ): void {
   if (lowerer.dynamic) return;
-  const value = ts.isExpression(node) ? requestInitValueExpr(node) : node;
+  // The initializer is the value being iterated. Asking for the binding
+  // pattern's synthesized tuple type can panic in TypeScript serialization.
+  const source = ts.isArrayBindingPattern(node) && ts.isVariableDeclaration(node.parent) && node.parent.initializer
+    ? node.parent.initializer
+    : node;
+  const value = ts.isExpression(source) ? requestInitValueExpr(source) : source;
   const sym = isStdlibFetchInterface(lowerer, value, "Headers");
   if (!sym) return;
   lowerer.noLowering(

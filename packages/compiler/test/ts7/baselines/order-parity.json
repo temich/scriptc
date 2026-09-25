@@ -6697,9 +6697,45 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/2974-array-search-from-index.ts": {
+   "order": [
+    "<repo>/tests/corpus/2974-array-search-from-index.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/2974-numeric-remainder.ts": {
    "order": [
     "<repo>/tests/corpus/2974-numeric-remainder.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2975-bigint-default-radix.ts": {
+   "order": [
+    "<repo>/tests/corpus/2975-bigint-default-radix.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2976-json-stringify-no-arguments.js": {
+   "order": [
+    "<repo>/tests/corpus/2976-json-stringify-no-arguments.js"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2977-nested-array-binding-defaults.js": {
+   "order": [
+    "<repo>/tests/corpus/2977-nested-array-binding-defaults.js"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2978-regexp-optional-subject.js": {
+   "order": [
+    "<repo>/tests/corpus/2978-regexp-optional-subject.js"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/corpus/2979-array-search-mixed-needles.js": {
+   "order": [
+    "<repo>/tests/corpus/2979-array-search-mixed-needles.js"
    ],
    "diags": []
   },
@@ -7936,6 +7972,12 @@
   "<repo>/tests/diagnostics/dataview.ts": {
    "order": [
     "<repo>/tests/diagnostics/dataview.ts"
+   ],
+   "diags": []
+  },
+  "<repo>/tests/diagnostics/date-formatters.ts": {
+   "order": [
+    "<repo>/tests/diagnostics/date-formatters.ts"
    ],
    "diags": []
   },

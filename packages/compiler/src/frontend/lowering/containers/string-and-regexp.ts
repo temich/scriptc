@@ -6,11 +6,21 @@ import type { Lowerer } from "../lowerer.js";
 import { own } from "../lowerer.js";
 import { isRequireMainFilename } from "../expressions/optional-chains.js";
 import { STR_METHODS } from "../surfaces.js";
-import { lowerOptionalArgument } from "../optional-arguments.js";
+import { defaultAfterUndefined, lowerOptionalArgument, lowerStaticallyUndefinedArgument } from "../optional-arguments.js";
 
 function lowerSplitLimitArg(lowerer: Lowerer, node: ts.Expression | undefined, loc: SrcLoc): IrExpr {
   const defaultValue: IrExpr = { kind: "numLit", value: 4294967295, type: F64, loc };
   return node ? lowerOptionalArgument(lowerer, node, F64, defaultValue) : defaultValue;
+}
+
+function lowerRegexSubject(lowerer: Lowerer, node: ts.Expression | undefined, loc: SrcLoc): IrExpr {
+  const absent: IrExpr = { kind: "strLit", value: "undefined", type: STRING, loc };
+  if (!node) return absent;
+  const undefinedArg = lowerStaticallyUndefinedArgument(lowerer, node);
+  if (undefinedArg) return defaultAfterUndefined(undefinedArg, absent);
+  const value = lowerer.lowerExpr(node);
+  if (value.kind === "unitLit") return { kind: "strLit", value: value.unit, type: STRING, loc };
+  return lowerer.ensureString(value, node);
 }
 
 /** Extract the checker-proven receiver arm from a runtime-optional property
@@ -56,6 +66,9 @@ export function lowerRegexMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   };
   const loc = locOf(call);
   if (receiverKind === "regex" && name === "test") {
+    if (call.arguments.length > 1 || call.arguments.some(ts.isSpreadElement)) {
+      lowerer.noLowering("RegExp.prototype.test with surplus or spread arguments", call);
+    }
     // The statefulness fence, at compile time where the flags are
     // visible: a literal receiver (possibly parenthesized). Values that
     // flow through variables hit the same fence at runtime.
@@ -68,7 +81,7 @@ export function lowerRegexMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       }
     }
     const receiver = lowerReceiver();
-    const args = call.arguments.map((a) => lowerer.ensureString(lowerer.lowerExpr(a), a));
+    const args = [lowerRegexSubject(lowerer, call.arguments[0], loc)];
     return { kind: "regexIntrinsic", method: "test", receiver, args, type: BOOL, loc };
   }
   // `re.exec(s)` for non-g/y regexes: spec-identical to `s.match(re)`
@@ -79,7 +92,7 @@ export function lowerRegexMethodCall(lowerer: Lowerer, call: ts.CallExpression,
   // compile time on literal receivers, exactly test()'s stance; values
   // reaching the runtime with those flags abort there.
   if (receiverKind === "regex" && name === "exec") {
-    if (call.arguments.length !== 1) return null; // exec takes exactly the subject
+    if (call.arguments.length > 1 || call.arguments.some(ts.isSpreadElement)) return null;
     let recv: ts.Expression = access.expression;
     while (ts.isParenthesizedExpression(recv)) recv = recv.expression;
     if (ts.isRegularExpressionLiteral(recv)) {
@@ -89,9 +102,13 @@ export function lowerRegexMethodCall(lowerer: Lowerer, call: ts.CallExpression,
       }
     }
     const re = lowerReceiver();
-    const subject = lowerer.lowerExprExpecting(call.arguments[0]!, STRING);
+    const subject = lowerRegexSubject(lowerer, call.arguments[0], loc);
     const resultT: IrType = { kind: "union", unionId: lowerer.unions.intern([arrayOf(STRING), { kind: "nullT" }]) };
-    return { kind: "regexIntrinsic", method: "match", receiver: subject, args: [re], type: resultT, loc };
+    // The shared match intrinsic takes the string first; preserve exec's
+    // receiver-before-subject evaluation order before swapping operands.
+    const saved = lowerer.declareHiddenLocal("%execReceiver", re.type);
+    const result: IrExpr = { kind: "regexIntrinsic", method: "match", receiver: subject, args: [varRef(saved.id, re.type, loc)], type: resultT, loc };
+    return { kind: "seqExpr", stmts: [{ kind: "varDecl", localId: saved.id, init: re, loc }], result, type: resultT, loc };
   }
   // `s.match(re)` for non-g/y regexes: Node's exec-shaped result reduced
   // to the honest slice — the `string[] | null` union holding

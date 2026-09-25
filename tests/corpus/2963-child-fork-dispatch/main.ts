@@ -32,6 +32,8 @@ child.once("message", () => {
     sent++;
   });
 });
-child.once("exit", (code) => {
+// Exit can precede delivery of the last IPC message. Close waits for the
+// channel to drain before observing the completed exchange.
+child.once("close", (code) => {
   console.log("replies", replies, "sent", sent, "disconnected", disconnected, "exit", code);
 });

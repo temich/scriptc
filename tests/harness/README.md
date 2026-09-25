@@ -1,6 +1,6 @@
 # Test harness
 
-Two lanes over the same suite: plain (`pnpm test`) and sanitized (`SCRIPTC_SAN=1 pnpm test`, ASan + the runtime RC audit). Node is the oracle everywhere — corpus programs run under Node and as compiled binaries, and outputs must agree byte-for-byte. Both lanes must be green before a commit.
+Two lanes over the same suite: plain (`pnpm test`) and sanitized (`SCRIPTC_SAN=1 pnpm test`, ASan + the runtime RC audit). Corpus programs use Node as the oracle: they run under Node and as compiled binaries, and outputs must match exactly. The Test262 profile uses upstream assertions as its oracle. Both lanes must be green before a commit.
 
 One deliberate exception to raw byte-compare: `node:test` programs (tests/harness/node-test.test.ts over tests/fixtures/node-test) cannot live in the corpus because Node's spec reporter embeds a real duration in EVERY result line — no node:test program has deterministic stdout, under Node itself included. Those fixtures still run both lanes against the Node oracle, but with one documented normalization applied to both sides (durations, stack frames, the inspect property block); everything else — symbols, indentation, directives, summary counts, the failing-section "test at" locations and error messages — must match byte-exactly, plus exit-code parity against the fixture's `// @exit:` line. Fixtures never console.log inside test bodies: Node's reporter stream lags console output racily, so mixed programs aren't byte-comparable against any oracle.
 
@@ -86,3 +86,7 @@ Compiler environment variables that can resolve mutable compilation inputs (`CPA
 `pnpm test:cache-identity` (optionally `--san`) is the acceptance artifact: it runs the full suite uncached, cache-populating, and cached, then diffs every test's name/status/failure output between the cached and uncached passes and exits nonzero on any drift.
 
 `pnpm build` is incremental (tsbuildinfo under `node_modules/.cache/scriptc-tsc/`); `pnpm build:fresh` is the clean-build escape.
+
+## Test262
+
+The default static compiler has a pinned Test262 regression profile and a separate full-snapshot survey runner. See [tests/test262/README.md](../test262/README.md) for commands, outcome reporting, and the current strict-script and scalar-assertion limits. Both plain and sanitized Sandbox lanes run the regression profile; dynamic islands are disabled.

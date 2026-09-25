@@ -23,7 +23,7 @@ import {
   filterExistingWorktreePaths,
   workspaceResetCommand,
 } from "./worktree-files.mjs";
-import { sandboxCommand, shellQuote } from "./sandbox-command.mjs";
+import { REMOTE_COMMAND_PENDING, sandboxCommand, sandboxStatusCommand, shellQuote } from "./sandbox-command.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const laneCaseShardedFiles = [
@@ -31,6 +31,7 @@ const laneCaseShardedFiles = [
   "tests/harness/llvm-differential.test.ts",
   "tests/harness/npm.test.ts",
   "tests/harness/server.test.ts",
+  "tests/harness/test262.test.ts",
 ];
 // Coverage analysis is frontend-only: SCRIPTC_SAN cannot change its result.
 // It still case-shards across the selected lane so every corpus entry is
@@ -357,7 +358,7 @@ function run(
       } else if (exitMarker && remoteExitCode === undefined) {
         reject(new Error(`${label ?? command} did not report its remote exit status`));
       } else if (remoteExitCode !== undefined && remoteExitCode !== 0) {
-        reject(new Error(`${label ?? command} remote command exited ${remoteExitCode}`));
+        reject(Object.assign(new Error(`${label ?? command} remote command exited ${remoteExitCode}`), { remoteExitCode }));
       } else {
         resolve();
       }
@@ -412,6 +413,7 @@ const execIn = async (
     worker.name,
     ...prepared.argv,
   ];
+  const deadline = Date.now() + wallTimeoutMs;
   try {
     await vercel(commandArgs, {
       exitMarker,
@@ -420,32 +422,29 @@ const execIn = async (
       timeoutMs: wallTimeoutMs,
     });
   } catch (error) {
+    if (error.remoteExitCode !== undefined) throw error;
     console.warn(`[${label}] CLI completion was not confirmed (${error.message}); checking the remote command status...`);
-    const probeMarker = `__SCRIPTC_REMOTE_PROBE_${randomBytes(12).toString("hex")}__`;
-    const probeScript =
-      `scriptc_status=125; test ! -f ${shellQuote(statusPath)} || ` +
-      `scriptc_status=$(cat ${shellQuote(statusPath)}); ` +
-      `printf '\\n${probeMarker}%s\\n' "$scriptc_status"`;
-    await vercel(
-      [
-        "sandbox",
-        "exec",
-        "--timeout",
-        "1m",
-        "--workdir",
-        workdir,
-        worker.name,
-        "sh",
-        "-c",
-        probeScript,
-      ],
-      {
-        exitMarker: probeMarker,
-        idleTimeoutMs: 30_000,
-        label: `${label} status`,
-        timeoutMs: 60_000,
-      },
-    );
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error(`${label} did not confirm completion before its timeout`, { cause: error });
+      const probeMarker = `__SCRIPTC_REMOTE_PROBE_${randomBytes(12).toString("hex")}__`;
+      const probeScript = sandboxStatusCommand(statusPath, probeMarker, Math.min(20, Math.floor(remaining / 1000)));
+      try {
+        await vercel(
+          ["sandbox", "exec", "--timeout", "1m", "--workdir", workdir, worker.name, "sh", "-c", probeScript],
+          {
+            exitMarker: probeMarker,
+            idleTimeoutMs: 30_000,
+            label: `${label} status`,
+            timeoutMs: Math.min(60_000, remaining),
+          },
+        );
+        return;
+      } catch (probeError) {
+        if (probeError.remoteExitCode !== REMOTE_COMMAND_PENDING) throw probeError;
+        console.log(`[${label}] remote command has not recorded completion; waiting...`);
+      }
+    }
   }
 };
 
