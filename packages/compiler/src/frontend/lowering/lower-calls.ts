@@ -4621,7 +4621,7 @@ export function lowerCall(lowerer: Lowerer, expr: ts.CallExpression): IrExpr {
         // Typed-array/Buffer receivers and the Buffer statics — before the
         // island path (bytes never cross the boundary).
         lowerer.lowerBytesMethodCall(expr, expr.expression) ??
-        lowerBufferStaticCallWithOptionalArg(lowerer, expr, expr.expression) ??
+        lowerBufferStaticCallWithNarrowedArg(lowerer, expr, expr.expression) ??
         // URL.revokeObjectURL's zero-argument contract (the one-argument
         // form keeps the fence — createObjectURL does too).
         lowerUrlStaticCall(lowerer, expr, expr.expression) ??
@@ -4914,25 +4914,34 @@ function optionalCallValue(lowerer: Lowerer, node: ts.Expression): IrExpr | null
   return lowerer.runtimeOptionalIdentifierValue(node)?.value ?? lowerAbsenceProbe(lowerer, node);
 }
 
-function lowerBufferStaticCallWithOptionalArg(
+function lowerBufferStaticCallWithNarrowedArg(
   lowerer: Lowerer,
   call: ts.CallExpression,
   access: ts.PropertyAccessExpression,
 ): IrExpr | null {
   const lowered = lowerer.lowerBufferStaticCall(call, access);
   if (lowered?.kind !== "bytesNew" || !lowered.source || lowered.source.type.kind !== "union") return lowered;
-  const present = lowerer.stripUndefinedArm(lowered.source.type);
-  const validSource =
-    (present.kind === "array" && present.elem.kind === "f64") ||
-    (present.kind === "bytes" && present.elem === "u8");
-  if (!validSource) return lowered;
-  const helper = lowerer.narrowedArmHelper(lowered.source.type.unionId, present, lowered.source.loc);
-  return helper
-    ? {
-        ...lowered,
-        source: { kind: "call", callee: helper, args: [lowered.source], type: present, loc: lowered.source.loc },
-      }
-    : lowered;
+  // A callback can store a wider union than the checker sees at this use
+  // (including an added undefined arm). Extract the exact arm proven by
+  // control-flow narrowing, not merely the union with undefined removed.
+  const narrowed = lowerer.mapTypeOf(lowerer.typeOf(call.arguments[0]!));
+  if (
+    !narrowed ||
+    !(narrowed.kind === "f64" ||
+      (narrowed.kind === "array" && narrowed.elem.kind === "f64") ||
+      (narrowed.kind === "bytes" && narrowed.elem === "u8")) ||
+    lowerer.armTag(lowered.source.type.unionId, narrowed) < 0
+  ) {
+    lowerer.unsupported("SC1090", call.arguments[0]!, "a Buffer constructor argument whose narrowed type is not a stored source arm");
+  }
+  const helper = lowerer.narrowedArmHelper(lowered.source.type.unionId, narrowed, lowered.source.loc);
+  if (!helper) {
+    lowerer.unsupported("SC1090", call.arguments[0]!, "a Buffer constructor argument whose narrowed type is not a stored source arm");
+  }
+  return {
+    ...lowered,
+    source: { kind: "call", callee: helper, args: [lowered.source], type: narrowed, loc: lowered.source.loc },
+  };
 }
 
 function lowerOptionalNumberDefault(

@@ -6895,6 +6895,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3021-buffer-union-narrow-callback.ts": {
+   "order": [
+    "<repo>/tests/corpus/3021-buffer-union-narrow-callback.ts"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"
