@@ -47,7 +47,7 @@ const localized = (1234.5).toLocaleString();
 // Unlowered call FORMS of lowered members. (push is fully variadic now —
 // no fenced form remains to pin.)
 const nums = [1, 2, 3];
-const found = nums.indexOf(2, 1);
+const found = nums.indexOf(2, 1); // the fromIndex overload lowers
 const joined = nums.join();
 nums.forEach((x) => console.log(x), { unused: true }); // thisArg stays fenced
 const pos = "abc".includes("b", 1); // the position form lowers now (indexOf's clamp)

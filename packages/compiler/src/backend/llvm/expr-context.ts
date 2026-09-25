@@ -4,6 +4,7 @@
 import type { IrBytesElem, IrExpr, IrFfiImport, IrFunction, IrLibFn, IrLocal, IrModule, IrRecordShape, IrStmt, IrType, IrUnionDef, SrcLoc } from "../../ir/ir.js";
 import type { FfiCallbackAdapter } from "../ffi-callbacks.js";
 import type { ConstantNumericTable } from "../../ir/constant-tables.js";
+import type { IntegerRanges } from "../../ir/integer-ranges.js";
 import type { BlockBuilder } from "./blocks.js";
 import type { LlClassMeta } from "./classes.js";
 import type { LlDyn } from "./dyn.js";
@@ -56,6 +57,7 @@ export interface LlvmEmitterContext extends ShapeHost {
   cstr(text: string): string;
   currentGenerator: { yieldT: IrType; nextT: IrType; } | null;
   constantNumericTables: ReadonlyMap<string, ConstantNumericTable>;
+  integerRanges: IntegerRanges;
   currentWasiCoro: { kind: "async" | "generator"; id: string; handle: string; self: string; finalLabel: string; cleanupLabel: string; suspendLabel: string; } | null;
   declare(decl: string): void;
   dyn: LlDyn;
@@ -74,7 +76,7 @@ export interface LlvmEmitterContext extends ShapeHost {
   emitBytesIntrinsic(e: IrExpr & { kind: "bytesIntrinsic" }): LlValue;
   emitBytesLength(elem: IrBytesElem, receiver: string, bytes: boolean): LlValue;
   emitStableReceiver(receiver: IrExpr, following: IrExpr[]): LlValue;
-  emitToUint32(value: string): string;
+  emitToUint32(value: string, expr?: IrExpr): string;
   emitCallExpr(e: ExprOf<"call" | "ffiCall" | "closure" | "callValue" | "selfRef" | "new" | "classRef" | "newValue" | "instanceOfValue" | "promiseVoidWiden" | "upcast" | "downcast" | "instanceOf" | "virtualCall">): LlValue;
   emitChildProcessLibCall(e: LibCallExpr): LlValue;
   emitContainerExpr(e: ExprOf<"arrayLit" | "arrayNewLen" | "arrayGet" | "arrayHas" | "arrayState" | "arrIntrinsic" | "bytesNew" | "bytesIntrinsic" | "mapNew" | "mapIntrinsic" | "setIntrinsic" | "setNew">): LlValue;

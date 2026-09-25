@@ -11,6 +11,7 @@ import { boxAccess, cDecl, cStringLiteral, elemAccess, vAdapters } from "./types
 import { OVERFLOW_MEMBER } from "./shapes.js";
 import { emitStableReceiver } from "./exprs.js";
 import { matchIntegerBytesForLoop } from "../../ir/integer-loops.js";
+import { analyzeIntegerRanges } from "../../ir/integer-ranges.js";
 import { endsWithJump, matchStringSelfConcat } from "../../ir/analysis.js";
 
 
@@ -32,6 +33,7 @@ export function emitFunction(emitter: CEmitter, fn: IrFunction): void {
     emitter.currentLocals = new Map(fn.locals.map((l) => [l.id, l]));
     emitter.captureIds = new Set((fn.captures ?? []).map((c) => c.localId));
     emitter.integerLoopBindings.clear();
+    emitter.integerRanges = analyzeIntegerRanges(fn);
 
     emitter.line(`${emitter.signature(fn)} {${emitter.srcComment(fn.loc)}`);
     emitter.indent++;

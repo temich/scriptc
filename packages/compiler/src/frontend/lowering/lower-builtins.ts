@@ -4783,6 +4783,9 @@ export function lowerForkCall(lowerer: Lowerer, expr: ts.CallExpression, loc: Sr
     }
     if (member === "stringify") {
       const indent = stringifySpaceIndent(lowerer, call);
+      if (call.arguments.length === 0) {
+        return lowerer.wrappedUndefined(lowerer.withUndefinedArm(STRING), loc)!;
+      }
       const argNode = call.arguments[0]!;
       const value = lowerer.lowerExpr(argNode);
       const optionalString = lowerOptionalStringifyRoot(lowerer, value, indent, loc);
@@ -8518,7 +8521,7 @@ const DATE_METHOD_HINT =
     if (name === "toISOString") {
       return { kind: "libCall", fn: "date.toISOStringValue", args: [receiver], type: STRING, loc };
     }
-    const fn = DATE_GETTER_FNS[name];
+    const fn = own(DATE_GETTER_FNS, name);
     if (fn !== undefined) {
       return { kind: "libCall", fn, args: [receiver], type: F64, loc };
     }

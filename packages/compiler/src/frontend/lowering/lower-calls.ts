@@ -35,6 +35,7 @@ import { npmStaticPackageOfPath } from "../npm-static.js";
 import { countedFor, varRef } from "../../ir/build.js";
 import { rejectStaticThis } from "./static-this.js";
 import { fenceNodeModuleMutationCall, lowerRequireCacheKeys } from "./lower-node-module.js";
+import { lowerOptionalArgument } from "./optional-arguments.js";
 
 /** How a parameter participates in CALL-SITE COMPLETION (the frontend
  * completes every call to the one full signature, so the IR and backends
@@ -7655,9 +7656,10 @@ export function lowerPromiseMethodCall(lowerer: Lowerer, call: ts.CallExpression
     if (receiver.type.kind !== "bigint") return null;
     if (name === "valueOf" && call.arguments.length === 0) return receiver;
     if (name === "toString" && call.arguments.length <= 1) {
+      const defaultRadix: IrExpr = { kind: "numLit", value: 10, type: F64, loc };
       const radix: IrExpr = call.arguments[0]
-        ? lowerer.lowerExprExpecting(call.arguments[0], F64)
-        : { kind: "numLit", value: 10, type: F64, loc };
+        ? lowerOptionalArgument(lowerer, call.arguments[0], F64, defaultRadix)
+        : defaultRadix;
       return { kind: "libCall", fn: "bigint.toString", args: [receiver, radix], type: STRING, loc };
     }
     return null;

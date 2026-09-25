@@ -2931,6 +2931,11 @@ export class Lowerer {
       if (isArrayRead(e)) return true;
       if (ts.isCallExpression(e) && this.runtimeOptionalReduceTypes.has(e)) return true;
       if (
+        ts.isCallExpression(e) && e.arguments.length === 0 &&
+        ts.isPropertyAccessExpression(e.expression) &&
+        e.expression.name.text === "stringify" && this.isStdlibGlobal(e.expression.expression, "JSON")
+      ) return true;
+      if (
         ts.isCallExpression(e) &&
         ts.isPropertyAccessExpression(e.expression) &&
         (e.expression.name.text === "pop" || e.expression.name.text === "shift") &&
