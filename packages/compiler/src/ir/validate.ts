@@ -1355,6 +1355,7 @@ export const LIB_FN_SIGS: Record<IrLibFn, { argTypes: (IrType | null)[]; result:
   // form) — checked in the libCall case.
   "string.fromCharCode": { argTypes: [null], result: STRING },
   "string.lastIndexOf": { argTypes: [STRING, STRING], result: F64 },
+  "string.lastIndexOfFrom": { argTypes: [STRING, STRING, F64], result: F64 },
   "string.raw": { argTypes: [arrayOf(STRING), arrayOf(STRING)], result: STRING },
 };
 

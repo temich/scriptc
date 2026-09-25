@@ -318,6 +318,8 @@ static void sparse_index_asserts(void) {
       sidx_fail("positioned indexOf result");
     if (scr_str_last_index_of(s, face) != (double)((REPS - 1) * 6 + 2))
       sidx_fail("lastIndexOf result");
+    if (scr_str_last_index_of_from(s, face, (double)(base + 3)) != (double)(base + 2))
+      sidx_fail("positioned lastIndexOf result");
   }
   /* Each query maps at most a handful of locations. A mapping walks no
    * farther than the 4 KiB interval plus a small UTF-8-boundary margin. */

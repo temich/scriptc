@@ -4417,18 +4417,15 @@ export type IrLibFn =
    * yields the undefined arm, exactly Node's missing `.columns`. Never
    * throws. */
   | "process.columns"
-  /** String surface with scr_lib.c implementations. fromCharCode takes
-   * ONE f64[] arg (the frontend packs plain arguments into an array
-   * literal, or forwards a whole-array spread — the path.join
-   * convention) and builds the string from UTF-16 code units: each code
-   * goes through ToUint16, adjacent surrogate pairs combine into one
-   * code point, and LONE surrogates become U+FFFD (divergence 1's
-   * storage policy — printed output still matches Node byte-for-byte).
-   * lastIndexOf is the one-argument form: the LAST occurrence as a
-   * UTF-16 index (-1 when absent; the empty needle finds the length,
-   * per spec). Borrowed args; +1 string / plain f64; neither throws. */
+  /** fromCharCode takes one packed f64[] or bytes arg and builds a string
+   * from UTF-16 code units. Adjacent surrogate pairs combine; lone
+   * surrogates follow the runtime's replacement policy. */
   | "string.fromCharCode"
+  /** lastIndexOf returns the last UTF-16 start index, or -1. The two-arg
+   * form searches at or before its numeric position; NaN starts at the end.
+   * String arguments are borrowed and neither form throws. */
   | "string.lastIndexOf"
+  | "string.lastIndexOfFrom"
   /** String.raw(template, ...subs): the raw literals array (a string[]
    * read off the template record) interleaved with the PRE-STRINGIFIED
    * substitutions (the frontend applies the static ToString and packs

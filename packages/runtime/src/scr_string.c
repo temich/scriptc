@@ -853,21 +853,29 @@ static const char *scr_byte_find(const char *hay, size_t hay_len,
   return NULL;
 }
 
-/* lastIndexOf(needle), the one-argument form: last occurrence as a UTF-16
- * index, -1 when absent; the empty needle finds the length. A byte-wise
- * reverse scan is boundary-safe because a well-formed needle's first byte
- * is never a continuation byte. Its result routes through the same sparse
- * byte→unit mapper as indexOf rather than re-counting the whole prefix. */
-double scr_str_last_index_of(ScrStr *s, ScrStr *needle) {
+/* Search backwards from a clamped UTF-16 position. A low-surrogate position
+ * maps to its scalar's first byte, so that scalar remains searchable. */
+double scr_str_last_index_of_from(ScrStr *s, ScrStr *needle, double position) {
   ScrSidx *e = scr_sidx(s);
-  if (needle->len == 0) return (double)scr_sidx_len(s, e);
+  size_t len16 = scr_sidx_len(s, e);
+  size_t start16 = isnan(position) || position >= (double)len16 ? len16
+                   : position <= 0 ? 0 : (size_t)trunc(position);
+  if (needle->len == 0) return (double)start16;
   if (needle->len > s->len) return -1.0;
-  for (size_t i = s->len - needle->len + 1; i-- > 0;) {
+  bool mid;
+  size_t start_byte = scr_u16_to_byte_c(s, e, start16, &mid);
+  size_t max_start = s->len - needle->len;
+  if (start_byte < max_start) max_start = start_byte;
+  for (size_t i = max_start + 1; i-- > 0;) {
     if (memcmp(s->data + i, needle->data, needle->len) == 0) {
       return (double)scr_byte_to_u16_c(s, e, i);
     }
   }
   return -1.0;
+}
+
+double scr_str_last_index_of(ScrStr *s, ScrStr *needle) {
+  return scr_str_last_index_of_from(s, needle, INFINITY);
 }
 
 double scr_str_utf16_len(ScrStr *s) {

@@ -5435,6 +5435,8 @@ function emitPrimitiveLibCall(state: LibCallState): Temp {
             );
           case "string.lastIndexOf":
             return finish(`scr_str_last_index_of(${arg(0)}, ${arg(1)})`);
+          case "string.lastIndexOfFrom":
+            return finish(`scr_str_last_index_of_from(${arg(0)}, ${arg(1)}, ${arg(2)})`);
           case "string.raw":
             // Raw literals + pre-stringified substitutions; +1 string.
             return finish(`scr_str_raw(${arg(0)}, ${arg(1)})`);

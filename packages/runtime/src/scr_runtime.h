@@ -657,6 +657,10 @@ double scr_str_index_of(ScrStr *s, ScrStr *needle, double fromIndex);
  * UTF-16 index, or -1. Empty needle returns length. */
 double scr_str_last_index_of(ScrStr *s, ScrStr *needle);
 
+/* lastIndexOf(needle, position): search at or before the clamped UTF-16
+ * position. NaN starts at the end, including for an empty needle. */
+double scr_str_last_index_of_from(ScrStr *s, ScrStr *needle, double position);
+
 /* includes(needle) — no position argument. Empty needle → true. */
 bool scr_str_includes(ScrStr *s, ScrStr *needle);
 

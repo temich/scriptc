@@ -32,7 +32,7 @@ import {
 import { lowerAbsenceProbe } from "./lower-exprs.js";
 import { conditionalSpreadOf, lowerDynObjectLiteral } from "./expressions/object-literals.js";
 import { isSafeToDiscard } from "./expressions/evaluation-safety.js";
-import { defaultAfterUndefined, lowerStaticallyUndefinedArgument } from "./optional-arguments.js";
+import { defaultAfterUndefined, lowerOptionalArgument, lowerStaticallyUndefinedArgument } from "./optional-arguments.js";
 import { HTTP2_CONSTANTS } from "./http2-constants.js";
 import { CRYPTO_CIPHERS, CRYPTO_CONSTANTS, CRYPTO_CURVES, CRYPTO_HASHES } from "./crypto-tables.js";
 import { generatorMeta, timerStyleCallback, type ParamShape } from "./lower-calls.js";
@@ -8925,11 +8925,10 @@ function staticTextDecoderEncoding(label: string): StaticTextDecoderEncoding | n
     return { kind: "libCall", fn: "string.fromCharCode", args: [packed], type: STRING, loc };
   }
 
-/** `s.lastIndexOf(needle)` on string receivers — a libCall rather than a
-   * strIntrinsic, but the same UTF-16 index semantics as
-   * indexOf. The lib's fromIndex parameter has no lowering (Node clamps
-   * it with ToIntegerOrInfinity; nothing in the corpus wants it) and
-   * fences per site. Null for non-string receivers / other members. */
+/** `s.lastIndexOf(needle, position?)` on string receivers, using UTF-16
+   * indices. Omitted or undefined positions clamp to the string's end;
+   * MAX_SAFE_INTEGER has the same effect for every representable string.
+   * Null for non-string receivers and other members. */
   export function lowerStringLastIndexOfCall(lowerer: Lowerer, call: ts.CallExpression,
     access: ts.PropertyAccessExpression,): IrExpr | null {
     if (call.questionDotToken || access.questionDotToken) return null;
@@ -8937,16 +8936,21 @@ function staticTextDecoderEncoding(label: string): StaticTextDecoderEncoding | n
     if (lowerer.mapTypeOf(lowerer.typeOf(access.expression))?.kind !== "string") return null;
     if (!lowerer.isStdlibMember(access)) return null;
     const loc = locOf(call);
-    if (call.arguments.length !== 1) {
+    if (call.arguments.length < 1 || call.arguments.length > 2 || call.arguments.some(ts.isSpreadElement)) {
       lowerer.noLowering(
-        "lastIndexOf with a fromIndex argument",
+        "lastIndexOf with this argument shape",
         call,
-        "the one-argument form lowers",
+        "pass a string needle and an optional numeric position",
       );
     }
     const receiver = lowerer.lowerExprExpecting(access.expression, STRING);
     const needle = lowerer.lowerExprExpecting(call.arguments[0]!, STRING);
-    return { kind: "libCall", fn: "string.lastIndexOf", args: [receiver, needle], type: F64, loc };
+    const positionNode = call.arguments[1];
+    if (!positionNode) {
+      return { kind: "libCall", fn: "string.lastIndexOf", args: [receiver, needle], type: F64, loc };
+    }
+    const position = lowerOptionalArgument(lowerer, positionNode, F64, numLit(Number.MAX_SAFE_INTEGER, loc));
+    return { kind: "libCall", fn: "string.lastIndexOfFrom", args: [receiver, needle, position], type: F64, loc };
   }
 
 /** `Promise.race([...])` on THE Promise global: the entries lower
