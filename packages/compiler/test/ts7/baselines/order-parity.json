@@ -6913,6 +6913,12 @@
    ],
    "diags": []
   },
+  "<repo>/tests/corpus/3024-string-search-position-coercion.js": {
+   "order": [
+    "<repo>/tests/corpus/3024-string-search-position-coercion.js"
+   ],
+   "diags": []
+  },
   "<repo>/tests/corpus/303-break-continue.ts": {
    "order": [
     "<repo>/tests/corpus/303-break-continue.ts"
