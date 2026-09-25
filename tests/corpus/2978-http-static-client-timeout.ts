@@ -1,7 +1,11 @@
 import * as http from "node:http";
 
+let releaseResponse: (() => void) | undefined;
+let timedOut = false;
 const server = http.createServer((_incoming, outgoing) => {
-  setTimeout(() => outgoing.end("late"), 120);
+  const fallback = setTimeout(() => { outgoing.end("late"); }, 2000);
+  releaseResponse = () => { clearTimeout(fallback); outgoing.end("late"); };
+  if (timedOut) releaseResponse();
 });
 
 server.listen(0, "127.0.0.1", () => {
@@ -16,6 +20,10 @@ server.listen(0, "127.0.0.1", () => {
   console.log("destroyed initially", client.destroyed);
   client.on("close", () => console.log("destroyed on close", client.destroyed));
   client.setTimeout(1000);
-  console.log("same request", client.setTimeout(20, () => console.log("timeout")) === client);
+  console.log("same request", client.setTimeout(20, () => {
+    console.log("timeout");
+    timedOut = true;
+    if (releaseResponse) releaseResponse();
+  }) === client);
   client.end();
 });
