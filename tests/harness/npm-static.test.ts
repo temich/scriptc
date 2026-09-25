@@ -410,6 +410,23 @@ describe(`npm-static pilots${sanitize ? " (sanitized)" : ""}`, () => {
     expect(nativeRes.exitCode).toBe(nodeRes.exitCode);
   }, 180_000);
 
+  test.for([
+    ["purebarrel", "purebarrel-cli.ts"],
+    ["statefulbarrel", "statefulbarrel-cli.ts"],
+    ["statefulbarrel", "statefulbarrel-empty-cli.ts"],
+  ] as const)("%s namespace re-exports byte-match Node", async ([pkg, file]) => {
+    const entry = join(pilotRoot, file);
+    const { coverage } = analyze(entry, { npmStatic: [pkg] });
+    expect(coverage.npmStatic).toEqual([{ package: pkg, status: "static" }]);
+    expect(coverage.preflightFailed).toBe(false);
+    expect(coverage.diagnostics).toHaveLength(0);
+    const binary = await buildStatic(entry, [pkg]);
+    const [nodeRes, nativeRes] = await Promise.all([runBinary("node", [entry]), runBinary(binary, [])]);
+    expect(nativeRes.stdout).toEqual(nodeRes.stdout);
+    expect(comparableStderr(nativeRes.stderr)).toEqual(nodeRes.stderr);
+    expect(nativeRes.exitCode).toBe(nodeRes.exitCode);
+  }, 180_000);
+
   // WORKSPACE-LINKED packages: node_modules/wslinked is a symlink whose
   // realpath lies outside every node_modules (the monorepo-internal
   // install every workspace tool produces). The opt-in compiles its

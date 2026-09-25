@@ -53,6 +53,7 @@ import {
 import { isNodeModulesPath, nearestInvalidPackageJsonPath, nearestPackageType, nearestPkgJsonPath, projectDtsRuntimeSibling, resolveBareModule, resolveProjectModule, resolveTypeDirective, setProjectPathMappings, setProjectRealm } from "./resolve.js";
 import { probeNodeImportRefusal, probeNodeRequireRefusal } from "./npm.js";
 import { isNpmStaticPackage, npmStaticActive, npmStaticFsShadow, npmStaticPackageOfPath, reportNpmStaticOffender, setNpmStaticDeclarationOverloads, setNpmStaticPackages } from "./npm-static.js";
+import { isPrunedNpmReexport, planNpmStaticReexports } from "./npm-static-prune.js";
 import { npmStaticDeclarationReexports, npmStaticRuntimeClassTargets, parseNpmStaticDeclarationOverloads, parseNpmStaticDeclarationProperties } from "./npm-static-declarations.js";
 import type { NpmStaticDeclarationOverloads, NpmStaticDeclarationProperties, NpmStaticOverloadSignature } from "./npm-static-declarations.js";
 import { provenanceEntryFor, provenancePaths } from "./provenance-registry.js";
@@ -2091,15 +2092,22 @@ function preflight7(load: LoadResult): {
         (!isNodeModulesPath(sf.fileName) || npmStaticPackageOfPath(sf.fileName) !== null) &&
         !islandJsFile(sf.fileName),
     );
-  program.getTypeChecker().prefetchSourceFileStructures(programFiles);
+  const userFiles = npmStaticActive()
+    ? planNpmStaticReexports(
+        program,
+        entry,
+        programFiles,
+        [...createRequireProgramRoots7(program), ...forkTargetPaths(program, program.getSourceFiles())],
+        (sf, spec) => resolveImport7(program, sf, spec) ?? npmStaticDepSf7(program, sf, spec),
+      )
+    : programFiles;
+  program.getTypeChecker().prefetchSourceFileStructures(userFiles);
 
   // node_modules JS that no --npm-static opt-in claims is NOT program
   // source even when maxNodeModuleJsDepth pulled it into the checker's
   // program (see nodeModulesJsSuppressed above): its execution home is the
   // island, so preflight's statement walks skip it — no import fences, no
   // module edges, no statement counts from files the lowering never lowers.
-  const userFiles = programFiles;
-
   // Node stops at the nearest package.json even when it is malformed, and
   // an explicit CommonJS scope (or .cjs/.cts extension) disables ambiguous-
   // file syntax detection entirely. TypeScript's bundler checker models
@@ -2213,7 +2221,7 @@ function preflight7(load: LoadResult): {
         continue;
       }
       if (ts.isExportDeclaration(stmt)) {
-        if (stmt.isTypeOnly || erasedTypeOnlyReexport(stmt)) continue;
+        if (stmt.isTypeOnly || erasedTypeOnlyReexport(stmt) || isPrunedNpmReexport(program, stmt)) continue;
         if (!stmt.moduleSpecifier) continue;
         const fromSpec = ts.isStringLiteral(stmt.moduleSpecifier) ? stmt.moduleSpecifier.text : "";
         if (load.externalTypes.has(fromSpec)) {
@@ -2889,6 +2897,7 @@ function cjsNamedImportLinkCheck(
     visited.add(sf);
     for (const stmt of sf.statements) {
       if (!ts.isImportDeclaration(stmt) && !(ts.isExportDeclaration(stmt) && !stmt.isTypeOnly)) continue;
+      if (ts.isExportDeclaration(stmt) && isPrunedNpmReexport(program, stmt)) continue;
       if (ts.isImportDeclaration(stmt) && stmt.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword) continue;
       const specNode = stmt.moduleSpecifier;
       if (specNode === undefined || !ts.isStringLiteral(specNode)) continue;
@@ -3136,6 +3145,7 @@ function analyzeEsmNamedImportLinks(
     visited.add(sf);
     for (const stmt of sf.statements) {
       if (!ts.isImportDeclaration(stmt) && !(ts.isExportDeclaration(stmt) && !stmt.isTypeOnly)) continue;
+      if (ts.isExportDeclaration(stmt) && isPrunedNpmReexport(program, stmt)) continue;
       if (ts.isImportDeclaration(stmt) && stmt.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword) continue;
       const moduleSpecifier = stmt.moduleSpecifier;
       if (moduleSpecifier === undefined || !ts.isStringLiteral(moduleSpecifier)) continue;
@@ -3366,6 +3376,7 @@ export function orderedImportsOf(
 ): { stmt: ts.Statement; dep: ts.SourceFile | null }[] {
   const out: { stmt: ts.Statement; dep: ts.SourceFile | null }[] = [];
   for (const stmt of sf.statements) {
+    if (ts.isExportDeclaration(stmt) && isPrunedNpmReexport(program, stmt)) continue;
     if (ts.isExportDeclaration(stmt) && (stmt.isTypeOnly || erasedTypeOnlyReexport(stmt) || !stmt.moduleSpecifier)) continue;
     if (!ts.isImportDeclaration(stmt) && !ts.isExportDeclaration(stmt)) continue;
     if (ts.isImportDeclaration(stmt) && erasedTypeOnlyImport(stmt)) continue;
